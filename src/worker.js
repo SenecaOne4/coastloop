@@ -241,45 +241,21 @@ async function proof(request, env) {
   const screen = await validateDevice(env, b.device_id, b.device_key);
   if (!screen || !b.media_id) return json({ error: "invalid proof" }, 401);
 
-  const day = new Date().toISOString().slice(0, 10);
-  const campaignFilter = b.campaign_id
-    ? `campaign_id=eq.${b.campaign_id}`
-    : "campaign_id=is.null";
-
-  const rows = await sb(
-    env,
-    `playback_daily?play_date=eq.${day}&screen_id=eq.${screen.id}&media_asset_id=eq.${b.media_id}&${campaignFilter}&select=*`
-  );
-
-  const seconds = Math.max(0, Number(b.seconds || 0));
   const stamp = new Date().toISOString();
+  const seconds = Math.max(0, Number(b.seconds || 0));
 
-  if (rows?.[0]) {
-    const r = rows[0];
-    await sb(env, `playback_daily?id=eq.${r.id}`, {
-      method: "PATCH",
-      body: JSON.stringify({
-        play_count: Number(r.play_count || 0) + 1,
-        seconds_played: Number(r.seconds_played || 0) + seconds,
-        last_played_at: stamp,
-      }),
-    });
-  } else {
-    await sb(env, "playback_daily", {
-      method: "POST",
-      body: JSON.stringify({
-        organization_id: ORG_ID,
-        play_date: day,
-        screen_id: screen.id,
-        media_asset_id: b.media_id,
-        campaign_id: b.campaign_id || null,
-        play_count: 1,
-        seconds_played: seconds,
-        first_played_at: stamp,
-        last_played_at: stamp,
-      }),
-    });
-  }
+  await sb(env, "rpc/record_playback_atomic", {
+    method: "POST",
+    body: JSON.stringify({
+      p_organization_id: ORG_ID,
+      p_play_date: stamp.slice(0, 10),
+      p_screen_id: screen.id,
+      p_media_asset_id: b.media_id,
+      p_campaign_id: b.campaign_id || null,
+      p_seconds: seconds,
+      p_stamp: stamp,
+    }),
+  });
 
   return json({ ok: true });
 }
@@ -845,7 +821,7 @@ export default {
 
     try {
       if (url.pathname === "/api/health")
-        return json({ ok: true, service: "coastloop", version: "0.7.0" });
+        return json({ ok: true, service: "coastloop", version: "0.8.0" });
 
       if (url.pathname === "/api/player/boot" && request.method === "POST")
         return bootPlayer(request, env);
