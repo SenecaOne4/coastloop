@@ -56,3 +56,7 @@ th,td { text-align:left; padding:12px 8px; border-bottom:1px solid var(--line); 
 .public-form-message{margin-top:18px;font-weight:700}.public-hp{position:absolute!important;left:-10000px!important}
 .public-footer{border-top:1px solid rgba(23,20,18,.13);padding:34px clamp(24px,8vw,120px);display:flex;justify-content:space-between;color:#655e58}
 @media(max-width:760px){.public-nav nav a:not(.public-nav-cta){display:none}.public-hero{padding-top:72px;min-height:auto}.public-proof,.public-cards,.public-form-grid{grid-template-columns:1fr}.public-proof{margin-top:60px}.public-section{padding-top:75px;padding-bottom:75px}.public-footer{gap:10px;flex-direction:column}}
+
+.leaflet-container{font:14px/1.4 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+#prospectMap .leaflet-popup-content{min-width:180px}
+#prospectMap .leaflet-popup-content a{color:#7b243c;font-weight:800}

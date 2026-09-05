@@ -553,6 +553,90 @@ async function createPublicLead(request, env) {
   return json({ ok: true, id: rows?.[0]?.id });
 }
 
+
+async function geocodeUS(address) {
+  if (!address) return null;
+  try {
+    const u = new URL("https://geocoding.geo.census.gov/geocoder/locations/onelineaddress");
+    u.searchParams.set("address", address);
+    u.searchParams.set("benchmark", "Public_AR_Current");
+    u.searchParams.set("format", "json");
+
+    const res = await fetch(u.toString(), {
+      headers: { "user-agent": "CoastLoop/0.5 (coastloop.site)" }
+    });
+    if (!res.ok) return null;
+
+    const d = await res.json();
+    const c = d?.result?.addressMatches?.[0]?.coordinates;
+    if (!c || !Number.isFinite(Number(c.x)) || !Number.isFinite(Number(c.y)))
+      return null;
+
+    return { latitude: Number(c.y), longitude: Number(c.x) };
+  } catch {
+    return null;
+  }
+}
+
+async function createAdminProspect(request, env) {
+  const b = await bodyJson(request);
+  const name = String(b.name || "").trim().slice(0, 180);
+
+  if (!name)
+    return json({ error: "business name required" }, 400);
+
+  const addressLine1 = String(b.address_line1 || "").trim().slice(0, 200) || null;
+  const city = String(b.city || "").trim().slice(0, 120) || null;
+  const state = String(b.state || "").trim().slice(0, 40) || null;
+  const postalCode = String(b.postal_code || "").trim().slice(0, 20) || null;
+
+  let latitude = Number(b.latitude);
+  let longitude = Number(b.longitude);
+
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    latitude = null;
+    longitude = null;
+
+    const address = [addressLine1, city, state, postalCode].filter(Boolean).join(", ");
+    if (addressLine1 && city && state) {
+      const geo = await geocodeUS(address);
+      if (geo) {
+        latitude = geo.latitude;
+        longitude = geo.longitude;
+      }
+    }
+  }
+
+  const rows = await sb(env, "prospects", {
+    method: "POST",
+    headers: { Prefer: "return=representation" },
+    body: JSON.stringify({
+      organization_id: ORG_ID,
+      name,
+      category: String(b.category || "").trim().slice(0, 120) || null,
+      stage: "new",
+      host_interest: Boolean(b.host_interest),
+      advertiser_interest: b.advertiser_interest !== false,
+      score: b.score === undefined || b.score === "" ? null : Math.max(0, Math.min(100, Math.round(Number(b.score) || 0))),
+      contact_name: String(b.contact_name || "").trim().slice(0, 180) || null,
+      phone: String(b.phone || "").trim().slice(0, 80) || null,
+      email: String(b.email || "").trim().slice(0, 180) || null,
+      website: String(b.website || "").trim().slice(0, 240) || null,
+      address_line1: addressLine1,
+      city,
+      state,
+      postal_code: postalCode,
+      latitude,
+      longitude,
+      source: String(b.source || "field").trim().slice(0, 120),
+      notes: String(b.notes || "").trim().slice(0, 4000) || null,
+      updated_at: new Date().toISOString(),
+    }),
+  });
+
+  return json({ ok: true, prospect: rows?.[0] || null });
+}
+
 async function adminProspects(env) {
   return await sb(
     env,
@@ -621,7 +705,7 @@ export default {
 
     try {
       if (url.pathname === "/api/health")
-        return json({ ok: true, service: "coastloop", version: "0.4.0" });
+        return json({ ok: true, service: "coastloop", version: "0.5.0" });
 
       if (url.pathname === "/api/player/boot" && request.method === "POST")
         return bootPlayer(request, env);
@@ -653,6 +737,9 @@ export default {
 
         if (url.pathname === "/api/admin/prospects" && request.method === "GET")
           return json(await adminProspects(env));
+
+        if (url.pathname === "/api/admin/prospects" && request.method === "POST")
+          return createAdminProspect(request, env);
 
         const prospect = url.pathname.match(/^\/api\/admin\/prospects\/([^/]+)$/);
         if (prospect && request.method === "PUT")

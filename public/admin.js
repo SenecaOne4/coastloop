@@ -12,6 +12,75 @@ async function api(path, options={}) {
 function esc(v=''){ return String(v).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function online(ts){ return ts && (Date.now() - new Date(ts).getTime()) < 120000; }
 
+let prospectMap=null;
+let prospectLayer=null;
+
+function prospectAddress(p){
+  return [p.address_line1,p.city,p.state,p.postal_code].filter(Boolean).join(', ');
+}
+
+function renderProspectMap(){
+  if(!window.L || !document.querySelector('#prospectMap')) return;
+
+  if(!prospectMap){
+    prospectMap=L.map('prospectMap').setView([33.816,-78.680],11);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+      maxZoom:19,
+      attribution:'&copy; OpenStreetMap'
+    }).addTo(prospectMap);
+    prospectLayer=L.layerGroup().addTo(prospectMap);
+  }
+
+  prospectLayer.clearLayers();
+  const points=[];
+
+  state.prospects.forEach(p=>{
+    const lat=Number(p.latitude), lon=Number(p.longitude);
+    if(!Number.isFinite(lat)||!Number.isFinite(lon)) return;
+
+    const marker=L.marker([lat,lon]).addTo(prospectLayer);
+    marker.bindPopup(
+      `<strong>${esc(p.name)}</strong><br>`+
+      `${esc(prospectAddress(p))}<br>`+
+      `<span class="pill">${esc(p.stage)}</span> Score ${p.score??'—'}<br>`+
+      `<a target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(lat+','+lon)}">Navigate</a>`
+    );
+    points.push([lat,lon]);
+  });
+
+  if(points.length===1) prospectMap.setView(points[0],14);
+  if(points.length>1) prospectMap.fitBounds(points,{padding:[30,30]});
+
+  setTimeout(()=>prospectMap.invalidateSize(),50);
+}
+
+function routeProspects(){
+  const chosen=state.prospects
+    .filter(p=>p.stage==='hot'||p.stage==='follow_up'||Number(p.score)>=70)
+    .slice(0,10);
+
+  if(!chosen.length){
+    $('#error').textContent='Mark prospects hot, follow-up, or score them 70+ first.';
+    return;
+  }
+
+  const places=chosen.map(p=>{
+    if(Number.isFinite(Number(p.latitude))&&Number.isFinite(Number(p.longitude)))
+      return `${p.latitude},${p.longitude}`;
+    return prospectAddress(p);
+  }).filter(Boolean);
+
+  if(!places.length){
+    $('#error').textContent='Selected prospects need addresses or map coordinates.';
+    return;
+  }
+
+  const destination=places.pop();
+  let url=`https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=${encodeURIComponent(destination)}`;
+  if(places.length) url+=`&waypoints=${encodeURIComponent(places.join('|'))}`;
+  window.open(url,'_blank','noopener');
+}
+
 async function load(){
   if(!state.token) return;
   $('#error').textContent='';
@@ -20,6 +89,7 @@ async function load(){
     Object.assign(state,{screens,media,playlists,prospects});
     $('#mScreens').textContent=stats.screens; $('#mOnline').textContent=stats.online; $('#mMedia').textContent=stats.media; $('#mPlays').textContent=stats.plays_24h; $('#mProspects').textContent=prospects.length;
     render();
+    renderProspectMap();
   } catch(e){ $('#error').textContent=e.message; }
 }
 
@@ -90,3 +160,49 @@ document.addEventListener('click', async e=>{
 });
 
 load(); setInterval(load,30000);
+
+
+$('#routeHot').onclick=routeProspects;
+
+$('#useLocation').onclick=()=>{
+  const msg=$('#prospectMessage');
+  if(!navigator.geolocation){
+    msg.textContent='Location is not available in this browser.';
+    return;
+  }
+  msg.textContent='Getting location…';
+  navigator.geolocation.getCurrentPosition(pos=>{
+    const form=$('#newProspect');
+    form.elements.latitude.value=pos.coords.latitude;
+    form.elements.longitude.value=pos.coords.longitude;
+    msg.textContent='Current location attached.';
+  },()=>{ msg.textContent='Could not access your location.'; },{
+    enableHighAccuracy:true,timeout:10000,maximumAge:30000
+  });
+};
+
+$('#newProspect').onsubmit=async e=>{
+  e.preventDefault();
+  const form=e.target;
+  const fd=new FormData(form);
+  const body=Object.fromEntries(fd.entries());
+  body.advertiser_interest=form.elements.advertiser_interest.checked;
+  body.host_interest=form.elements.host_interest.checked;
+
+  try{
+    $('#prospectMessage').textContent='Saving…';
+    await api('/api/admin/prospects',{
+      method:'POST',
+      headers:{'content-type':'application/json'},
+      body:JSON.stringify(body)
+    });
+    form.reset();
+    form.elements.city.value='North Myrtle Beach';
+    form.elements.state.value='SC';
+    form.elements.advertiser_interest.checked=true;
+    $('#prospectMessage').textContent='Prospect added.';
+    await load();
+  }catch(err){
+    $('#prospectMessage').textContent=err.message;
+  }
+};

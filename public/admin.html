@@ -1,10 +1,47 @@
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CoastLoop Admin</title><link rel="stylesheet" href="/styles.css"></head>
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CoastLoop Admin</title><link rel="stylesheet" href="/styles.css"><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"></head>
 <body><main class="shell">
 <div class="topbar"><div><div class="brand">CoastLoop <small>ADMIN</small></div><p class="muted">Network control plane.</p></div><div class="row" style="max-width:430px"><input id="token" type="password" placeholder="Admin token"><button id="saveToken">Unlock</button></div></div>
 <div id="error" class="error"></div>
 <div class="grid"><div class="card"><div id="mScreens" class="metric">-</div><div class="muted">Screens</div></div><div class="card"><div id="mOnline" class="metric">-</div><div class="muted">Online</div></div><div class="card"><div id="mMedia" class="metric">-</div><div class="muted">Media</div></div><div class="card"><div id="mPlays" class="metric">-</div><div class="muted">Plays / 24h</div></div></div>
+<section class="card">
+<div class="row"><div><h2>Field sales map</h2><p class="muted">Prospects, hot leads and today’s route.</p></div><button id="routeHot" class="secondary">Route hot leads</button></div>
+<div id="prospectMap" style="height:430px;border-radius:12px;overflow:hidden;margin-top:14px"></div>
+</section>
+
+<section class="card">
+<h2>Add field prospect</h2>
+<form id="newProspect">
+<div class="row">
+<input name="name" placeholder="Business name" required>
+<input name="category" placeholder="Restaurant, salon, auto…">
+<input name="contact_name" placeholder="Contact name">
+</div>
+<div class="row">
+<input name="phone" placeholder="Phone">
+<input name="email" type="email" placeholder="Email">
+<input name="website" placeholder="Website">
+</div>
+<div class="row">
+<input name="address_line1" placeholder="Street address">
+<input name="city" value="North Myrtle Beach" placeholder="City">
+<input name="state" value="SC" placeholder="State">
+<input name="postal_code" placeholder="ZIP">
+</div>
+<div class="row">
+<label style="display:flex;align-items:center;gap:8px"><input name="advertiser_interest" type="checkbox" checked> Advertiser</label>
+<label style="display:flex;align-items:center;gap:8px"><input name="host_interest" type="checkbox"> Host</label>
+<input name="score" type="number" min="0" max="100" placeholder="Score 0–100">
+<button type="button" id="useLocation" class="secondary">Use my location</button>
+<button>Add prospect</button>
+</div>
+<input name="latitude" type="hidden">
+<input name="longitude" type="hidden">
+</form>
+<div id="prospectMessage" class="muted"></div>
+</section>
+
 <section class="card"><div class="row"><div><h2>Sales pipeline</h2><p class="muted">New inquiries and local prospects.</p></div><div id="mProspects" class="metric">-</div></div><div style="overflow:auto"><table><thead><tr><th>Business</th><th>Interest</th><th>Contact</th><th>Stage</th><th>Score</th><th>Follow-up</th><th></th></tr></thead><tbody id="prospects"></tbody></table></div></section>
 <section class="card"><h2>Screens</h2><p class="muted">Open <code>/player.html</code> on a device. Its pairing code appears here.</p><div style="overflow:auto"><table><thead><tr><th>Status</th><th>Pair</th><th>Name</th><th>Location</th><th>Playlist</th><th></th></tr></thead><tbody id="screens"></tbody></table></div></section>
 <section class="card"><h2>Media library</h2><form id="upload" class="row"><input name="file" type="file" accept="image/*,video/*" required><input name="duration_seconds" type="number" value="15" min="1" max="300" placeholder="Seconds"><button>Upload</button></form><div id="media" class="media-list"></div></section>
 <section class="card"><h2>Playlists</h2><form id="newPlaylist" class="row"><input name="name" placeholder="South Strand Demo" required><button>Create playlist</button></form><div id="playlists" class="playlist-list"></div></section>
-</main><script type="module" src="/admin.js"></script></body></html>
+</main><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script type="module" src="/admin.js"></script></body></html>
