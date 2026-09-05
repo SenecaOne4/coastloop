@@ -4,7 +4,7 @@ const stage = $('#stage');
 const DEVICE_ID_KEY = 'coastloopDeviceId';
 const DEVICE_SECRET_KEY = 'coastloopDeviceKey';
 const CONFIG_KEY = 'coastloopCachedConfig';
-const PLAYER_VERSION = '0.13.0';
+const PLAYER_VERSION = '0.15.1';
 
 const deviceId = localStorage.getItem(DEVICE_ID_KEY) || crypto.randomUUID();
 localStorage.setItem(DEVICE_ID_KEY, deviceId);
@@ -31,8 +31,8 @@ async function boot() {
     device_id: deviceId,
     device_key: deviceKey || null,
     app_version: PLAYER_VERSION,
-    width: screen.width,
-    height: screen.height
+    width: Math.round(screen.width * (window.devicePixelRatio || 1)),
+    height: Math.round(screen.height * (window.devicePixelRatio || 1))
   });
 
   if (!res?.ok) return null;
@@ -112,49 +112,86 @@ function showPair(code) {
 }
 
 async function playItem(item) {
-  const response = await cachedResponse(item.url);
+  let mediaId = item.media_id;
+  let mediaUrl = item.url;
+  let response = await cachedResponse(mediaUrl);
+
+  if (!response && item.fallback_url) {
+    mediaId = item.fallback_media_id || mediaId;
+    mediaUrl = item.fallback_url;
+    response = await cachedResponse(mediaUrl);
+  }
+
   if (!response) {
     await sleep(1500);
     return;
   }
 
-  const blob = await response.blob();
-  const objectUrl = URL.createObjectURL(blob);
+  let blob = await response.blob();
+  let objectUrl = URL.createObjectURL(blob);
   const started = Date.now();
   const seconds = Math.max(1, Number(item.duration_seconds || 15));
+  let delivered = false;
 
   try {
     if (item.media_type === 'video') {
-      stage.innerHTML = '';
-      const video = document.createElement('video');
-      video.src = objectUrl;
-      video.autoplay = true;
-      video.muted = true;
-      video.playsInline = true;
-      video.style.cssText = 'width:100%;height:100%;object-fit:cover';
-      stage.appendChild(video);
+      async function runVideo(url) {
+        stage.innerHTML = '';
+        const video = document.createElement('video');
+        video.src = url;
+        video.autoplay = true;
+        video.muted = true;
+        video.playsInline = true;
+        video.style.cssText = 'width:100%;height:100%;object-fit:cover';
+        stage.appendChild(video);
 
-      await new Promise(resolve => {
-        const timer = setTimeout(resolve, Math.max(seconds * 1000, 30000));
-        video.onended = () => { clearTimeout(timer); resolve(); };
-        video.onerror = () => { clearTimeout(timer); resolve(); };
-        video.play().catch(() => {});
-      });
+        return await new Promise(resolve => {
+          let startedPlayback = false;
+          const timer = setTimeout(() => resolve(startedPlayback), Math.max(seconds * 1000, 30000));
+
+          video.onplaying = () => { startedPlayback = true; };
+          video.onended = () => { clearTimeout(timer); resolve(startedPlayback); };
+          video.onerror = () => { clearTimeout(timer); resolve(false); };
+
+          video.play().catch(() => {
+            clearTimeout(timer);
+            resolve(false);
+          });
+        });
+      }
+
+      delivered = await runVideo(objectUrl);
+
+      if (!delivered && item.fallback_url && mediaUrl !== item.fallback_url) {
+        URL.revokeObjectURL(objectUrl);
+
+        const fallback = await cachedResponse(item.fallback_url);
+        if (fallback) {
+          blob = await fallback.blob();
+          objectUrl = URL.createObjectURL(blob);
+          mediaId = item.fallback_media_id || mediaId;
+          mediaUrl = item.fallback_url;
+          delivered = await runVideo(objectUrl);
+        }
+      }
     } else {
       stage.innerHTML = `<img src="${objectUrl}" style="width:100%;height:100%;object-fit:contain">`;
       await sleep(seconds * 1000);
+      delivered = true;
     }
   } finally {
     URL.revokeObjectURL(objectUrl);
   }
 
-  post('/api/player/proof', {
-    device_id: deviceId,
-    device_key: deviceKey,
-    media_id: item.media_id,
-    campaign_id: item.campaign_id || null,
-    seconds: Math.max(1, (Date.now() - started) / 1000)
-  });
+  if (delivered) {
+    post('/api/player/proof', {
+      device_id: deviceId,
+      device_key: deviceKey,
+      media_id: mediaId,
+      campaign_id: item.campaign_id || null,
+      seconds: Math.max(1, (Date.now() - started) / 1000)
+    });
+  }
 }
 
 async function loop() {
