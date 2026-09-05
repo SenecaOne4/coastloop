@@ -1,0 +1,588 @@
+const ORG_ID = "28ad55e4-d32d-423b-80b5-481bd15dec9e";
+
+const json = (data, status = 200, headers = {}) =>
+  new Response(JSON.stringify(data), {
+    status,
+    headers: { "content-type": "application/json; charset=utf-8", ...headers },
+  });
+
+async function bodyJson(request) {
+  try { return await request.json(); } catch { return {}; }
+}
+
+function requireAdmin(request, env) {
+  const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+  return Boolean(env.ADMIN_TOKEN && token === env.ADMIN_TOKEN);
+}
+
+async function sb(env, path, options = {}) {
+  const headers = {
+    apikey: env.SUPABASE_SECRET_KEY,
+    "content-type": "application/json",
+    ...(options.headers || {}),
+  };
+
+  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/${path}`, {
+    ...options,
+    headers,
+  });
+
+  const text = await res.text();
+  let data = null;
+  try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+
+  if (!res.ok) {
+    console.error("SUPABASE", res.status, path);
+    throw new Error(data?.message || `Supabase ${res.status}`);
+  }
+  return data;
+}
+
+async function sha256Hex(value) {
+  const bytes = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return [...new Uint8Array(digest)].map(x => x.toString(16).padStart(2, "0")).join("");
+}
+
+function randomHex(bytes = 32) {
+  const a = new Uint8Array(bytes);
+  crypto.getRandomValues(a);
+  return [...a].map(x => x.toString(16).padStart(2, "0")).join("");
+}
+
+function pairCode() {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const a = new Uint8Array(6);
+  crypto.getRandomValues(a);
+  return [...a].map(x => alphabet[x % alphabet.length]).join("");
+}
+
+async function getScreen(env, deviceId) {
+  const rows = await sb(
+    env,
+    `screens?device_id=eq.${encodeURIComponent(deviceId)}&select=*`
+  );
+  return rows?.[0] || null;
+}
+
+async function validateDevice(env, deviceId, deviceKey) {
+  if (!deviceId || !deviceKey) return null;
+  const screen = await getScreen(env, deviceId);
+  if (!screen?.device_key_hash) return null;
+  const hash = await sha256Hex(deviceKey);
+  return hash === screen.device_key_hash ? screen : null;
+}
+
+async function bootPlayer(request, env) {
+  const b = await bodyJson(request);
+  if (!b.device_id) return json({ error: "device_id required" }, 400);
+
+  let screen = await getScreen(env, b.device_id);
+
+  if (!screen) {
+    const deviceKey = randomHex(32);
+    const code = pairCode();
+    const created = await sb(env, "screens", {
+      method: "POST",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify({
+        organization_id: ORG_ID,
+        name: "Unpaired screen",
+        status: "unpaired",
+        pairing_code: code,
+        pairing_expires_at: new Date(Date.now() + 7 * 86400000).toISOString(),
+        device_key_hash: await sha256Hex(deviceKey),
+        last_seen_at: new Date().toISOString(),
+        app_version: b.app_version || "0.3.0",
+        display_width: Number.isFinite(b.width) ? b.width : null,
+        display_height: Number.isFinite(b.height) ? b.height : null,
+        device_id: b.device_id,
+      }),
+    });
+
+    screen = created[0];
+    return json({
+      screen_id: screen.id,
+      paired: false,
+      pair_code: screen.pairing_code,
+      name: screen.name,
+      status: screen.status,
+      device_key: deviceKey,
+    });
+  }
+
+  if (!b.device_key || await sha256Hex(b.device_key) !== screen.device_key_hash)
+    return json({ error: "invalid device key" }, 401);
+
+  const updated = await sb(env, `screens?id=eq.${screen.id}`, {
+    method: "PATCH",
+    headers: { Prefer: "return=representation" },
+    body: JSON.stringify({
+      last_seen_at: new Date().toISOString(),
+      app_version: b.app_version || screen.app_version,
+      display_width: Number.isFinite(b.width) ? b.width : screen.display_width,
+      display_height: Number.isFinite(b.height) ? b.height : screen.display_height,
+    }),
+  });
+
+  screen = updated[0] || screen;
+
+  return json({
+    screen_id: screen.id,
+    paired: Boolean(screen.paired_at),
+    pair_code: screen.pairing_code,
+    name: screen.name,
+    status: screen.status,
+  });
+}
+
+async function playerConfig(url, env) {
+  const deviceId = url.searchParams.get("device_id");
+  const deviceKey = url.searchParams.get("device_key");
+  const screen = await validateDevice(env, deviceId, deviceKey);
+
+  if (!screen) return json({ error: "invalid device" }, 401);
+
+  await sb(env, `screens?id=eq.${screen.id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ last_seen_at: new Date().toISOString() }),
+  });
+
+  if (!screen.paired_at)
+    return json({ paired: false, pair_code: screen.pairing_code, items: [] });
+
+  const assignments = await sb(
+    env,
+    `screen_playlist_assignments?screen_id=eq.${screen.id}&select=*&order=priority.desc,created_at.desc`
+  );
+
+  const now = Date.now();
+  const assignment = (assignments || []).find(a =>
+    (!a.starts_at || new Date(a.starts_at).getTime() <= now) &&
+    (!a.ends_at || new Date(a.ends_at).getTime() > now)
+  );
+
+  if (!assignment)
+    return json({
+      paired: true,
+      screen: { id: screen.id, name: screen.name },
+      playlist: null,
+      items: [],
+    });
+
+  const playlists = await sb(
+    env,
+    `playlists?id=eq.${assignment.playlist_id}&select=*`
+  );
+  const playlist = playlists?.[0];
+
+  if (!playlist)
+    return json({ paired: true, playlist: null, items: [] });
+
+  const items = await sb(
+    env,
+    `playlist_items?playlist_id=eq.${playlist.id}&active=eq.true&select=*&order=position.asc`
+  );
+  const media = await sb(
+    env,
+    `media_assets?organization_id=eq.${ORG_ID}&status=eq.ready&select=*`
+  );
+  const mediaMap = new Map((media || []).map(m => [m.id, m]));
+
+  const activeItems = (items || [])
+    .filter(i =>
+      (!i.starts_at || new Date(i.starts_at).getTime() <= now) &&
+      (!i.ends_at || new Date(i.ends_at).getTime() > now)
+    )
+    .map(i => {
+      const m = mediaMap.get(i.media_asset_id);
+      if (!m) return null;
+      return {
+        item_id: i.id,
+        position: i.position,
+        duration_seconds: i.display_seconds || m.duration_seconds || 15,
+        media_id: m.id,
+        name: m.title,
+        media_type: m.kind,
+        mime_type: m.mime_type,
+        campaign_id: i.campaign_id,
+        url: `/media/${m.id}`,
+      };
+    })
+    .filter(Boolean);
+
+  return json({
+    paired: true,
+    screen: { id: screen.id, name: screen.name },
+    playlist: {
+      id: playlist.id,
+      name: playlist.name,
+      revision: playlist.version,
+    },
+    items: activeItems,
+  }, 200, { "cache-control": "no-store" });
+}
+
+async function heartbeat(request, env) {
+  const b = await bodyJson(request);
+  const screen = await validateDevice(env, b.device_id, b.device_key);
+  if (!screen) return json({ error: "invalid device" }, 401);
+
+  await sb(env, `screens?id=eq.${screen.id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ last_seen_at: new Date().toISOString() }),
+  });
+  return json({ ok: true });
+}
+
+async function proof(request, env) {
+  const b = await bodyJson(request);
+  const screen = await validateDevice(env, b.device_id, b.device_key);
+  if (!screen || !b.media_id) return json({ error: "invalid proof" }, 401);
+
+  const day = new Date().toISOString().slice(0, 10);
+  const campaignFilter = b.campaign_id
+    ? `campaign_id=eq.${b.campaign_id}`
+    : "campaign_id=is.null";
+
+  const rows = await sb(
+    env,
+    `playback_daily?play_date=eq.${day}&screen_id=eq.${screen.id}&media_asset_id=eq.${b.media_id}&${campaignFilter}&select=*`
+  );
+
+  const seconds = Math.max(0, Number(b.seconds || 0));
+  const stamp = new Date().toISOString();
+
+  if (rows?.[0]) {
+    const r = rows[0];
+    await sb(env, `playback_daily?id=eq.${r.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        play_count: Number(r.play_count || 0) + 1,
+        seconds_played: Number(r.seconds_played || 0) + seconds,
+        last_played_at: stamp,
+      }),
+    });
+  } else {
+    await sb(env, "playback_daily", {
+      method: "POST",
+      body: JSON.stringify({
+        organization_id: ORG_ID,
+        play_date: day,
+        screen_id: screen.id,
+        media_asset_id: b.media_id,
+        campaign_id: b.campaign_id || null,
+        play_count: 1,
+        seconds_played: seconds,
+        first_played_at: stamp,
+        last_played_at: stamp,
+      }),
+    });
+  }
+
+  return json({ ok: true });
+}
+
+async function mediaLookup(env, mediaId) {
+  const rows = await sb(
+    env,
+    `media_assets?id=eq.${mediaId}&organization_id=eq.${ORG_ID}&select=*`
+  );
+  return rows?.[0] || null;
+}
+
+async function serveMedia(env, mediaId) {
+  const row = await mediaLookup(env, mediaId);
+  if (!row?.storage_key) return new Response("Not found", { status: 404 });
+
+  const object = await env.MEDIA.get(row.storage_key);
+  if (!object) return new Response("Not found", { status: 404 });
+
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set("etag", object.httpEtag);
+  headers.set("cache-control", "public, max-age=31536000, immutable");
+  return new Response(object.body, { headers });
+}
+
+async function adminScreens(env) {
+  const screens = await sb(
+    env,
+    `screens?organization_id=eq.${ORG_ID}&select=*&order=last_seen_at.desc.nullslast`
+  );
+  const assignments = await sb(
+    env,
+    `screen_playlist_assignments?organization_id=eq.${ORG_ID}&select=*&order=priority.desc,created_at.desc`
+  );
+  const playlists = await sb(
+    env,
+    `playlists?organization_id=eq.${ORG_ID}&select=id,name`
+  );
+  const pmap = new Map((playlists || []).map(p => [p.id, p.name]));
+
+  return (screens || []).map(s => {
+    const a = (assignments || []).find(x => x.screen_id === s.id);
+    return {
+      ...s,
+      pair_code: s.pairing_code,
+      location: "",
+      playlist_id: a?.playlist_id || null,
+      playlist_name: a ? pmap.get(a.playlist_id) : null,
+    };
+  });
+}
+
+async function adminMedia(env) {
+  const rows = await sb(
+    env,
+    `media_assets?organization_id=eq.${ORG_ID}&select=*&order=created_at.desc`
+  );
+  return (rows || []).map(m => ({
+    ...m,
+    name: m.title,
+    media_type: m.kind,
+    bytes: m.byte_size || 0,
+  }));
+}
+
+async function uploadMedia(request, env) {
+  const form = await request.formData();
+  const file = form.get("file");
+  if (!(file instanceof File)) return json({ error: "file required" }, 400);
+
+  const kind = file.type.startsWith("video/")
+    ? "video"
+    : file.type.startsWith("image/")
+      ? "image"
+      : null;
+
+  if (!kind) return json({ error: "only image/video files supported" }, 400);
+
+  const id = crypto.randomUUID();
+  const ext = (file.name.split(".").pop() || "bin")
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .toLowerCase();
+  const key = `media/${id}.${ext}`;
+
+  await env.MEDIA.put(key, file.stream(), {
+    httpMetadata: { contentType: file.type },
+  });
+
+  const duration = Math.max(
+    1,
+    Math.min(300, Number(form.get("duration_seconds") || (kind === "image" ? 15 : 30)))
+  );
+
+  const rows = await sb(env, "media_assets", {
+    method: "POST",
+    headers: { Prefer: "return=representation" },
+    body: JSON.stringify({
+      organization_id: ORG_ID,
+      title: file.name,
+      kind,
+      storage_key: key,
+      original_filename: file.name,
+      mime_type: file.type,
+      byte_size: file.size,
+      duration_seconds: duration,
+      status: "ready",
+    }),
+  });
+
+  return json({ ok: true, id: rows?.[0]?.id });
+}
+
+async function listPlaylists(env) {
+  const playlists = await sb(
+    env,
+    `playlists?organization_id=eq.${ORG_ID}&select=*&order=updated_at.desc`
+  );
+  const items = await sb(
+    env,
+    `playlist_items?organization_id=eq.${ORG_ID}&select=*&order=position.asc`
+  );
+  const media = await adminMedia(env);
+  const mmap = new Map(media.map(m => [m.id, m]));
+
+  return (playlists || []).map(p => ({
+    ...p,
+    revision: p.version,
+    items: (items || [])
+      .filter(i => i.playlist_id === p.id)
+      .map(i => {
+        const m = mmap.get(i.media_asset_id);
+        return {
+          ...i,
+          media_id: i.media_asset_id,
+          name: m?.name || "Missing media",
+          media_type: m?.media_type || "unknown",
+          duration_seconds: i.display_seconds || m?.duration_seconds,
+        };
+      }),
+  }));
+}
+
+async function createPlaylist(request, env) {
+  const b = await bodyJson(request);
+  const name = String(b.name || "").trim();
+  if (!name) return json({ error: "name required" }, 400);
+
+  const rows = await sb(env, "playlists", {
+    method: "POST",
+    headers: { Prefer: "return=representation" },
+    body: JSON.stringify({
+      organization_id: ORG_ID,
+      name,
+      status: "active",
+    }),
+  });
+
+  return json({ ok: true, id: rows?.[0]?.id });
+}
+
+async function setPlaylistItems(request, env, playlistId) {
+  const b = await bodyJson(request);
+  const items = Array.isArray(b.items) ? b.items : [];
+
+  await sb(env, `playlist_items?playlist_id=eq.${playlistId}`, {
+    method: "DELETE",
+  });
+
+  if (items.length) {
+    await sb(env, "playlist_items", {
+      method: "POST",
+      body: JSON.stringify(items.map((item, position) => ({
+        organization_id: ORG_ID,
+        playlist_id: playlistId,
+        media_asset_id: item.media_id,
+        position,
+        display_seconds: item.duration_seconds || null,
+        active: true,
+      }))),
+    });
+  }
+
+  const p = await sb(env, `playlists?id=eq.${playlistId}&select=version`);
+  await sb(env, `playlists?id=eq.${playlistId}`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      version: Number(p?.[0]?.version || 1) + 1,
+      updated_at: new Date().toISOString(),
+    }),
+  });
+
+  return json({ ok: true });
+}
+
+async function assignScreen(request, env, screenId) {
+  const b = await bodyJson(request);
+
+  await sb(env, `screens?id=eq.${screenId}`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      name: String(b.name || "CoastLoop Screen").trim(),
+      status: "active",
+      paired_at: new Date().toISOString(),
+    }),
+  });
+
+  await sb(env, `screen_playlist_assignments?screen_id=eq.${screenId}`, {
+    method: "DELETE",
+  });
+
+  if (b.playlist_id) {
+    await sb(env, "screen_playlist_assignments", {
+      method: "POST",
+      body: JSON.stringify({
+        organization_id: ORG_ID,
+        screen_id: screenId,
+        playlist_id: b.playlist_id,
+        priority: 100,
+      }),
+    });
+  }
+
+  return json({ ok: true });
+}
+
+async function stats(env) {
+  const [screens, media, plays] = await Promise.all([
+    sb(env, `screens?organization_id=eq.${ORG_ID}&select=id,last_seen_at`),
+    sb(env, `media_assets?organization_id=eq.${ORG_ID}&status=eq.ready&select=id`),
+    sb(env, `playback_daily?organization_id=eq.${ORG_ID}&select=play_count,last_played_at`),
+  ]);
+
+  const cutoff = Date.now() - 120000;
+  const dayCutoff = Date.now() - 86400000;
+
+  return {
+    screens: screens?.length || 0,
+    online: (screens || []).filter(s => s.last_seen_at && new Date(s.last_seen_at).getTime() > cutoff).length,
+    media: media?.length || 0,
+    plays_24h: (plays || [])
+      .filter(p => p.last_played_at && new Date(p.last_played_at).getTime() > dayCutoff)
+      .reduce((n, p) => n + Number(p.play_count || 0), 0),
+  };
+}
+
+export default {
+  async fetch(request, env) {
+    const url = new URL(request.url);
+
+    try {
+      if (url.pathname === "/api/health")
+        return json({ ok: true, service: "coastloop", version: "0.3.0" });
+
+      if (url.pathname === "/api/player/boot" && request.method === "POST")
+        return bootPlayer(request, env);
+
+      if (url.pathname === "/api/player/config" && request.method === "GET")
+        return playerConfig(url, env);
+
+      if (url.pathname === "/api/player/heartbeat" && request.method === "POST")
+        return heartbeat(request, env);
+
+      if (url.pathname === "/api/player/proof" && request.method === "POST")
+        return proof(request, env);
+
+      if (url.pathname.startsWith("/media/") && request.method === "GET")
+        return serveMedia(env, url.pathname.split("/").pop());
+
+      if (url.pathname.startsWith("/api/admin/")) {
+        if (!requireAdmin(request, env))
+          return json({ error: "unauthorized" }, 401);
+
+        if (url.pathname === "/api/admin/stats" && request.method === "GET")
+          return json(await stats(env));
+
+        if (url.pathname === "/api/admin/screens" && request.method === "GET")
+          return json(await adminScreens(env));
+
+        if (url.pathname === "/api/admin/media" && request.method === "GET")
+          return json(await adminMedia(env));
+
+        if (url.pathname === "/api/admin/media" && request.method === "POST")
+          return uploadMedia(request, env);
+
+        if (url.pathname === "/api/admin/playlists" && request.method === "GET")
+          return json(await listPlaylists(env));
+
+        if (url.pathname === "/api/admin/playlists" && request.method === "POST")
+          return createPlaylist(request, env);
+
+        const assign = url.pathname.match(/^\/api\/admin\/screens\/([^/]+)\/assign$/);
+        if (assign && request.method === "PUT")
+          return assignScreen(request, env, assign[1]);
+
+        const items = url.pathname.match(/^\/api\/admin\/playlists\/([^/]+)\/items$/);
+        if (items && request.method === "PUT")
+          return setPlaylistItems(request, env, items[1]);
+      }
+
+      return json({ error: "not found" }, 404);
+    } catch (error) {
+      console.error(error);
+      return json({ error: "server error", detail: String(error?.message || error) }, 500);
+    }
+  },
+};

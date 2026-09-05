@@ -1,0 +1,9 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CoastLoop Admin</title><link rel="stylesheet" href="/styles.css"></head>
+<body><main class="shell">
+<div class="topbar"><div><div class="brand">CoastLoop <small>ADMIN</small></div><p class="muted">Network control plane.</p></div><div class="row" style="max-width:430px"><input id="token" type="password" placeholder="Admin token"><button id="saveToken">Unlock</button></div></div>
+<div id="error" class="error"></div>
+<div class="grid"><div class="card"><div id="mScreens" class="metric">-</div><div class="muted">Screens</div></div><div class="card"><div id="mOnline" class="metric">-</div><div class="muted">Online</div></div><div class="card"><div id="mMedia" class="metric">-</div><div class="muted">Media</div></div><div class="card"><div id="mPlays" class="metric">-</div><div class="muted">Plays / 24h</div></div></div>
+<section class="card"><h2>Screens</h2><p class="muted">Open <code>/player.html</code> on a device. Its pairing code appears here.</p><div style="overflow:auto"><table><thead><tr><th>Status</th><th>Pair</th><th>Name</th><th>Location</th><th>Playlist</th><th></th></tr></thead><tbody id="screens"></tbody></table></div></section>
+<section class="card"><h2>Media library</h2><form id="upload" class="row"><input name="file" type="file" accept="image/*,video/*" required><input name="duration_seconds" type="number" value="15" min="1" max="300" placeholder="Seconds"><button>Upload</button></form><div id="media" class="media-list"></div></section>
+<section class="card"><h2>Playlists</h2><form id="newPlaylist" class="row"><input name="name" placeholder="South Strand Demo" required><button>Create playlist</button></form><div id="playlists" class="playlist-list"></div></section>
+</main><script type="module" src="/admin.js"></script></body></html>
