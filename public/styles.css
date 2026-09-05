@@ -114,3 +114,19 @@ th,td { text-align:left; padding:12px 8px; border-bottom:1px solid var(--line); 
   .report-panel{break-inside:avoid}
   .report-metrics article,.report-breakdown-row,.report-table-wrap{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
+
+
+/* CoastLoop identity */
+.coastloop-lockup{display:inline-flex;align-items:center;gap:11px}
+.coastloop-lockup .coastloop-mark{width:37px;height:auto;display:block;flex:0 0 auto}
+.coastloop-lockup>span{display:inline-block}
+.public-logo.coastloop-lockup{letter-spacing:.18em}
+.public-logo .coastloop-mark{width:39px}
+.admin-lockup{letter-spacing:.08em}
+.admin-lockup .coastloop-mark{width:34px}
+.report-brand.coastloop-lockup{letter-spacing:.19em}
+.report-brand .coastloop-mark{width:38px}
+@media(max-width:520px){
+  .coastloop-lockup{gap:8px}
+  .public-logo .coastloop-mark{width:33px}
+}

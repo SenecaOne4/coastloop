@@ -4,6 +4,7 @@ const stage = $('#stage');
 const DEVICE_ID_KEY = 'coastloopDeviceId';
 const DEVICE_SECRET_KEY = 'coastloopDeviceKey';
 const CONFIG_KEY = 'coastloopCachedConfig';
+const PLAYER_VERSION = '0.13.0';
 
 const deviceId = localStorage.getItem(DEVICE_ID_KEY) || crypto.randomUUID();
 localStorage.setItem(DEVICE_ID_KEY, deviceId);
@@ -29,7 +30,7 @@ async function boot() {
   const res = await post('/api/player/boot', {
     device_id: deviceId,
     device_key: deviceKey || null,
-    app_version: '0.2.0',
+    app_version: PLAYER_VERSION,
     width: screen.width,
     height: screen.height
   });
@@ -85,12 +86,28 @@ async function warm(items = []) {
   }
 }
 
+function brandedState(label, detail='') {
+  stage.innerHTML = `
+    <div class="pair">
+      <img class="player-mark" src="/brand/coastloop-mark.svg" alt="">
+      <div class="player-wordmark">COASTLOOP</div>
+      <div class="pair-rule"></div>
+      <div class="pair-label">${label}</div>
+      ${detail ? `<div class="muted" style="margin-top:2.5vh">${detail}</div>` : ''}
+      <div class="pair-foot">LOCAL MEDIA · VERIFIED DELIVERY</div>
+    </div>`;
+}
+
 function showPair(code) {
   stage.innerHTML = `
     <div class="pair">
-      <div class="muted">PAIR THIS SCREEN</div>
+      <img class="player-mark" src="/brand/coastloop-mark.svg" alt="">
+      <div class="player-wordmark">COASTLOOP</div>
+      <div class="pair-rule"></div>
+      <div class="pair-label">PAIR THIS SCREEN</div>
       <div class="code">${code || '------'}</div>
-      <div class="muted">Open the CoastLoop admin dashboard and name this display.</div>
+      <div class="muted">Enter this code in CoastLoop Admin to activate this display.</div>
+      <div class="pair-foot">LOCAL MEDIA · VERIFIED DELIVERY</div>
     </div>`;
 }
 
@@ -149,7 +166,7 @@ async function loop() {
     }
 
     if (!config?.items?.length) {
-      stage.innerHTML = '<div class="pair"><h1>Ready.</h1><div class="muted">No ads assigned yet.</div></div>';
+      brandedState('READY', 'Preparing this screen’s CoastLoop media.');
       await sleep(4000);
       continue;
     }
@@ -171,7 +188,7 @@ async function refresh() {
   const b = await boot();
 
   if (!b) {
-    stage.innerHTML = '<div class="pair"><h1>CoastLoop</h1><div class="muted">Unable to reach control plane.</div></div>';
+    brandedState('OFFLINE', 'Continuing locally when cached media is available.');
     return;
   }
 

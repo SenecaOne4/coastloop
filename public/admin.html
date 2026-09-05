@@ -1,6 +1,9 @@
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CoastLoop Admin</title><link rel="stylesheet" href="/styles.css"><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"></head>
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CoastLoop Admin</title><link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/styles.css"><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"></head>
 <body><main class="shell">
-<div class="topbar"><div><div class="brand">CoastLoop <small>ADMIN</small></div><p class="muted">Network control plane.</p></div><div class="row" style="max-width:430px"><input id="token" type="password" placeholder="Admin token"><button id="saveToken">Unlock</button></div></div>
+<div class="topbar"><div><div class="brand coastloop-lockup admin-lockup">
+      <img class="coastloop-mark" src="/brand/coastloop-mark.svg" alt="">
+      <span>COASTLOOP <small>ADMIN</small></span>
+    </div><p class="muted">Network control plane.</p></div><div class="row" style="max-width:430px"><input id="token" type="password" placeholder="Admin token"><button id="saveToken">Unlock</button></div></div>
 <div id="error" class="error"></div>
 <div class="grid"><div class="card"><div id="mScreens" class="metric">-</div><div class="muted">Screens</div></div><div class="card"><div id="mOnline" class="metric">-</div><div class="muted">Online</div></div><div class="card"><div id="mMedia" class="metric">-</div><div class="muted">Media</div></div><div class="card"><div id="mPlays" class="metric">-</div><div class="muted">Plays / 24h</div></div></div>
 <section class="card">
