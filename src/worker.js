@@ -136,7 +136,7 @@ async function bootPlayer(request, env) {
   });
 }
 
-async function playlistPayload(env, playlistId, now) {
+async function playlistPayload(env, playlistId, now, screen = null) {
   const playlists = await sb(
     env,
     `playlists?id=eq.${playlistId}&organization_id=eq.${ORG_ID}&status=eq.active&select=*`
@@ -179,7 +179,7 @@ async function playlistPayload(env, playlistId, now) {
     })
     .filter(Boolean);
 
-  return {
+  const payload = {
     playlist: {
       id: playlist.id,
       name: playlist.name,
@@ -187,9 +187,43 @@ async function playlistPayload(env, playlistId, now) {
     },
     items: activeItems,
   };
+
+  if (playlist.name === "CoastLoop House Loop" && screen) {
+    const w = Number(screen.display_width || 0);
+    const h = Number(screen.display_height || 0);
+    const is4k = Math.max(w, h) >= 3000 && Math.min(w, h) >= 1700;
+
+    if (is4k) {
+      const masters = await sb(
+        env,
+        `media_assets?organization_id=eq.${ORG_ID}&title=eq.${encodeURIComponent("coastloop-house-v2-master-4k.mp4")}&status=eq.ready&select=*&limit=1`
+      );
+      const master = masters?.[0];
+      const base = payload.items?.[0];
+
+      if (master && base) {
+        payload.items[0] = {
+          ...base,
+          media_id: master.id,
+          name: master.title,
+          media_type: master.kind,
+          mime_type: master.mime_type,
+          duration_seconds: master.duration_seconds || 15,
+          url: `/media/${master.id}`,
+          fallback_media_id: base.media_id,
+          fallback_url: base.url,
+          delivery_tier: "4k",
+        };
+      }
+    } else if (payload.items?.[0]) {
+      payload.items[0].delivery_tier = "1080p";
+    }
+  }
+
+  return payload;
 }
 
-async function fallbackPayload(env, now) {
+async function fallbackPayload(env, now, screen = null) {
   const rows = await sb(
     env,
     `playlists?organization_id=eq.${ORG_ID}&name=eq.${encodeURIComponent("CoastLoop House Loop")}&status=eq.active&select=id&limit=1`
@@ -197,7 +231,7 @@ async function fallbackPayload(env, now) {
   const id = rows?.[0]?.id;
   if (!id) return null;
 
-  const payload = await playlistPayload(env, id, now);
+  const payload = await playlistPayload(env, id, now, screen);
   if (!payload?.items?.length) return null;
 
   return {
@@ -238,11 +272,11 @@ async function playerConfig(request, env) {
   let fallbackReason = null;
 
   if (assignment) {
-    payload = await playlistPayload(env, assignment.playlist_id, now);
+    payload = await playlistPayload(env, assignment.playlist_id, now, screen);
 
     if (payload?.items?.length &&
         payload?.playlist?.name !== "CoastLoop House Loop") {
-      const house = await fallbackPayload(env, now);
+      const house = await fallbackPayload(env, now, screen);
       const houseItem = house?.items?.[0];
 
       if (houseItem &&
@@ -263,7 +297,7 @@ async function playerConfig(request, env) {
   }
 
   if (!payload?.items?.length) {
-    const fallback = await fallbackPayload(env, now);
+    const fallback = await fallbackPayload(env, now, screen);
     if (fallback) {
       payload = {
         ...fallback,
@@ -1092,7 +1126,7 @@ export default {
 
     try {
       if (url.pathname === "/api/health")
-        return json({ ok: true, service: "coastloop", version: "0.13.0" });
+        return json({ ok: true, service: "coastloop", version: "0.14.0" });
 
       if (url.pathname === "/api/player/boot" && request.method === "POST")
         return bootPlayer(request, env);
