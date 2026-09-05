@@ -196,7 +196,7 @@ async function playlistPayload(env, playlistId, now, screen = null) {
     if (is4k) {
       const masters = await sb(
         env,
-        `media_assets?organization_id=eq.${ORG_ID}&title=eq.${encodeURIComponent("coastloop-house-v2-master-4k.mp4")}&status=eq.ready&select=*&limit=1`
+        `media_assets?organization_id=eq.${ORG_ID}&title=eq.${encodeURIComponent("coastloop-house-v3-master-4k.mp4")}&status=eq.ready&select=*&limit=1`
       );
       const master = masters?.[0];
       const base = payload.items?.[0];
@@ -1126,7 +1126,7 @@ export default {
 
     try {
       if (url.pathname === "/api/health")
-        return json({ ok: true, service: "coastloop", version: "0.14.0" });
+        return json({ ok: true, service: "coastloop", version: "0.15.0" });
 
       if (url.pathname === "/api/player/boot" && request.method === "POST")
         return bootPlayer(request, env);
