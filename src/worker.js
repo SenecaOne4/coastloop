@@ -679,6 +679,145 @@ async function updateProspect(request, env, prospectId) {
   return json({ ok: true });
 }
 
+
+async function adminBusinesses(env) {
+  const businesses = await sb(
+    env,
+    `businesses?organization_id=eq.${ORG_ID}&select=*&order=created_at.desc`
+  );
+  const locations = await sb(
+    env,
+    `locations?organization_id=eq.${ORG_ID}&select=*&order=created_at.desc`
+  );
+
+  return (businesses || []).map(b => ({
+    ...b,
+    locations: (locations || []).filter(l => l.business_id === b.id),
+  }));
+}
+
+async function promoteProspect(request, env, prospectId) {
+  const rows = await sb(
+    env,
+    `prospects?id=eq.${prospectId}&organization_id=eq.${ORG_ID}&select=*`
+  );
+  const prospect = rows?.[0];
+  if (!prospect) return json({ error: "prospect not found" }, 404);
+
+  let existing = await sb(
+    env,
+    `businesses?organization_id=eq.${ORG_ID}&source_prospect_id=eq.${prospectId}&select=*`
+  );
+
+  let business = existing?.[0];
+
+  if (!business) {
+    const created = await sb(env, "businesses", {
+      method: "POST",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify({
+        organization_id: ORG_ID,
+        source_prospect_id: prospect.id,
+        name: prospect.name,
+        category: prospect.category,
+        contact_name: prospect.contact_name,
+        phone: prospect.phone,
+        email: prospect.email,
+        website: prospect.website,
+        notes: prospect.notes,
+      }),
+    });
+    business = created?.[0];
+  }
+
+  let location = null;
+
+  if (business && prospect.host_interest && prospect.address_line1) {
+    const found = await sb(
+      env,
+      `locations?organization_id=eq.${ORG_ID}&business_id=eq.${business.id}&address_line1=eq.${encodeURIComponent(prospect.address_line1)}&select=*`
+    );
+
+    location = found?.[0];
+
+    if (!location) {
+      const created = await sb(env, "locations", {
+        method: "POST",
+        headers: { Prefer: "return=representation" },
+        body: JSON.stringify({
+          organization_id: ORG_ID,
+          business_id: business.id,
+          name: prospect.name,
+          address_line1: prospect.address_line1,
+          city: prospect.city,
+          state: prospect.state,
+          postal_code: prospect.postal_code,
+          latitude: prospect.latitude,
+          longitude: prospect.longitude,
+          host_status: "negotiating",
+        }),
+      });
+      location = created?.[0];
+    }
+  }
+
+  await sb(env, `prospects?id=eq.${prospect.id}&organization_id=eq.${ORG_ID}`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      stage: "won",
+      updated_at: new Date().toISOString(),
+    }),
+  });
+
+  return json({ ok: true, business, location });
+}
+
+async function adminCampaigns(env) {
+  return await sb(
+    env,
+    `campaigns?organization_id=eq.${ORG_ID}&select=*&order=created_at.desc`
+  );
+}
+
+async function createCampaign(request, env) {
+  const b = await bodyJson(request);
+  const businessId = String(b.advertiser_business_id || "").trim();
+  const name = String(b.name || "").trim().slice(0, 180);
+
+  if (!businessId || !name)
+    return json({ error: "advertiser business and campaign name required" }, 400);
+
+  const business = await sb(
+    env,
+    `businesses?id=eq.${businessId}&organization_id=eq.${ORG_ID}&select=id`
+  );
+  if (!business?.[0])
+    return json({ error: "business not found" }, 404);
+
+  const allowed = new Set(["draft","scheduled","active","paused","completed","canceled"]);
+  const status = allowed.has(b.status) ? b.status : "draft";
+
+  const rows = await sb(env, "campaigns", {
+    method: "POST",
+    headers: { Prefer: "return=representation" },
+    body: JSON.stringify({
+      organization_id: ORG_ID,
+      advertiser_business_id: businessId,
+      name,
+      status,
+      starts_at: b.starts_at || null,
+      ends_at: b.ends_at || null,
+      price_cents: b.price_cents === undefined || b.price_cents === ""
+        ? null : Math.max(0, Math.round(Number(b.price_cents) || 0)),
+      billing_notes: String(b.billing_notes || "").slice(0, 2000) || null,
+      notes: String(b.notes || "").slice(0, 4000) || null,
+      updated_at: new Date().toISOString(),
+    }),
+  });
+
+  return json({ ok: true, campaign: rows?.[0] || null });
+}
+
 async function stats(env) {
   const [screens, media, plays] = await Promise.all([
     sb(env, `screens?organization_id=eq.${ORG_ID}&select=id,last_seen_at`),
@@ -705,7 +844,7 @@ export default {
 
     try {
       if (url.pathname === "/api/health")
-        return json({ ok: true, service: "coastloop", version: "0.5.0" });
+        return json({ ok: true, service: "coastloop", version: "0.6.0" });
 
       if (url.pathname === "/api/player/boot" && request.method === "POST")
         return bootPlayer(request, env);
@@ -741,9 +880,22 @@ export default {
         if (url.pathname === "/api/admin/prospects" && request.method === "POST")
           return createAdminProspect(request, env);
 
+        const promote = url.pathname.match(/^\/api\/admin\/prospects\/([^/]+)\/promote$/);
+        if (promote && request.method === "POST")
+          return promoteProspect(request, env, promote[1]);
+
         const prospect = url.pathname.match(/^\/api\/admin\/prospects\/([^/]+)$/);
         if (prospect && request.method === "PUT")
           return updateProspect(request, env, prospect[1]);
+
+        if (url.pathname === "/api/admin/businesses" && request.method === "GET")
+          return json(await adminBusinesses(env));
+
+        if (url.pathname === "/api/admin/campaigns" && request.method === "GET")
+          return json(await adminCampaigns(env));
+
+        if (url.pathname === "/api/admin/campaigns" && request.method === "POST")
+          return createCampaign(request, env);
 
         if (url.pathname === "/api/admin/media" && request.method === "GET")
           return json(await adminMedia(env));
