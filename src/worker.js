@@ -869,32 +869,69 @@ async function createCampaign(request, env) {
 
 
 async function adminCampaignReports(env) {
-  const [campaigns, businesses, plays] = await Promise.all([
+  const [campaigns, businesses, plays, media, screens, locations, playlistItems] = await Promise.all([
     sb(env, `campaigns?organization_id=eq.${ORG_ID}&select=*&order=created_at.desc`),
     sb(env, `businesses?organization_id=eq.${ORG_ID}&select=id,name`),
-    sb(env, `playback_daily?organization_id=eq.${ORG_ID}&campaign_id=not.is.null&select=campaign_id,screen_id,play_date,play_count,seconds_played,first_played_at,last_played_at&order=play_date.asc`)
+    sb(env, `playback_daily?organization_id=eq.${ORG_ID}&campaign_id=not.is.null&select=campaign_id,screen_id,media_asset_id,play_date,play_count,seconds_played,first_played_at,last_played_at&order=play_date.asc`),
+    sb(env, `media_assets?organization_id=eq.${ORG_ID}&select=id,title,kind`),
+    sb(env, `screens?organization_id=eq.${ORG_ID}&select=id,name,location_id`),
+    sb(env, `locations?organization_id=eq.${ORG_ID}&select=id,business_id,name,address_line1,city,state`),
+    sb(env, `playlist_items?organization_id=eq.${ORG_ID}&campaign_id=not.is.null&select=campaign_id,media_asset_id`)
   ]);
 
-  const businessMap = new Map((businesses || []).map(b => [b.id, b]));
+  const businessMap = new Map((businesses || []).map(x => [x.id, x]));
+  const mediaMap = new Map((media || []).map(x => [x.id, x]));
+  const screenMap = new Map((screens || []).map(x => [x.id, x]));
+  const locationMap = new Map((locations || []).map(x => [x.id, x]));
   const grouped = new Map();
 
-  for (const row of plays || []) {
-    if (!row.campaign_id) continue;
-
-    if (!grouped.has(row.campaign_id)) {
-      grouped.set(row.campaign_id, {
+  function ensureGroup(campaignId) {
+    if (!grouped.has(campaignId)) {
+      grouped.set(campaignId, {
         plays: 0,
         seconds: 0,
         screens: new Set(),
         first_played_at: null,
         last_played_at: null,
         daily: new Map(),
+        creatives: new Map(),
+        locations: new Map(),
       });
     }
+    return grouped.get(campaignId);
+  }
 
-    const g = grouped.get(row.campaign_id);
-    g.plays += Number(row.play_count || 0);
-    g.seconds += Number(row.seconds_played || 0);
+  function ensureCreative(g, mediaId) {
+    if (!g.creatives.has(mediaId)) {
+      const m = mediaMap.get(mediaId);
+      g.creatives.set(mediaId, {
+        media_id: mediaId,
+        creative_name: m?.title || "Unknown creative",
+        media_type: m?.kind || "unknown",
+        plays: 0,
+        seconds_played: 0,
+        screens: new Set(),
+        first_played_at: null,
+        last_played_at: null,
+      });
+    }
+    return g.creatives.get(mediaId);
+  }
+
+  for (const item of playlistItems || []) {
+    if (!item.campaign_id || !item.media_asset_id) continue;
+    ensureCreative(ensureGroup(item.campaign_id), item.media_asset_id);
+  }
+
+  for (const row of plays || []) {
+    if (!row.campaign_id) continue;
+
+    const g = ensureGroup(row.campaign_id);
+    const count = Number(row.play_count || 0);
+    const seconds = Number(row.seconds_played || 0);
+
+    g.plays += count;
+    g.seconds += seconds;
     if (row.screen_id) g.screens.add(row.screen_id);
 
     if (row.first_played_at &&
@@ -907,20 +944,71 @@ async function adminCampaignReports(env) {
 
     const day = row.play_date;
     const d = g.daily.get(day) || { date: day, plays: 0, seconds: 0 };
-    d.plays += Number(row.play_count || 0);
-    d.seconds += Number(row.seconds_played || 0);
+    d.plays += count;
+    d.seconds += seconds;
     g.daily.set(day, d);
+
+    if (row.media_asset_id) {
+      const c = ensureCreative(g, row.media_asset_id);
+      c.plays += count;
+      c.seconds_played += seconds;
+      if (row.screen_id) c.screens.add(row.screen_id);
+
+      if (row.first_played_at &&
+          (!c.first_played_at || new Date(row.first_played_at) < new Date(c.first_played_at)))
+        c.first_played_at = row.first_played_at;
+
+      if (row.last_played_at &&
+          (!c.last_played_at || new Date(row.last_played_at) > new Date(c.last_played_at)))
+        c.last_played_at = row.last_played_at;
+    }
+
+    if (row.screen_id) {
+      const screen = screenMap.get(row.screen_id);
+      const location = screen?.location_id ? locationMap.get(screen.location_id) : null;
+      const locationKey = location?.id || `screen:${row.screen_id}`;
+
+      if (!g.locations.has(locationKey)) {
+        const host = location?.business_id ? businessMap.get(location.business_id) : null;
+        g.locations.set(locationKey, {
+          location_id: location?.id || null,
+          location_name: location?.name || screen?.name || "Unassigned screen",
+          business_name: host?.name || null,
+          address: location
+            ? [location.address_line1, location.city, location.state].filter(Boolean).join(", ")
+            : null,
+          plays: 0,
+          seconds_played: 0,
+          screens: new Set(),
+          first_played_at: null,
+          last_played_at: null,
+        });
+      }
+
+      const l = g.locations.get(locationKey);
+      l.plays += count;
+      l.seconds_played += seconds;
+      l.screens.add(row.screen_id);
+
+      if (row.first_played_at &&
+          (!l.first_played_at || new Date(row.first_played_at) < new Date(l.first_played_at)))
+        l.first_played_at = row.first_played_at;
+
+      if (row.last_played_at &&
+          (!l.last_played_at || new Date(row.last_played_at) > new Date(l.last_played_at)))
+        l.last_played_at = row.last_played_at;
+    }
   }
 
   return (campaigns || []).map(c => {
     const g = grouped.get(c.id);
-    const business = businessMap.get(c.advertiser_business_id);
+    const advertiser = businessMap.get(c.advertiser_business_id);
 
     return {
       campaign_id: c.id,
       campaign_name: c.name,
       advertiser_business_id: c.advertiser_business_id,
-      advertiser_name: business?.name || null,
+      advertiser_name: advertiser?.name || null,
       status: c.status,
       price_cents: c.price_cents,
       starts_at: c.starts_at,
@@ -930,7 +1018,32 @@ async function adminCampaignReports(env) {
       screen_count: g?.screens?.size || 0,
       first_played_at: g?.first_played_at || null,
       last_played_at: g?.last_played_at || null,
-      daily: g ? Array.from(g.daily.values()) : [],
+      daily: g ? Array.from(g.daily.values()).sort((a,b) => String(a.date).localeCompare(String(b.date))) : [],
+      creatives: g ? Array.from(g.creatives.values())
+        .map(x => ({
+          media_id: x.media_id,
+          creative_name: x.creative_name,
+          media_type: x.media_type,
+          plays: x.plays,
+          seconds_played: x.seconds_played,
+          screen_count: x.screens.size,
+          first_played_at: x.first_played_at,
+          last_played_at: x.last_played_at,
+        }))
+        .sort((a,b) => b.plays - a.plays) : [],
+      locations: g ? Array.from(g.locations.values())
+        .map(x => ({
+          location_id: x.location_id,
+          location_name: x.location_name,
+          business_name: x.business_name,
+          address: x.address,
+          plays: x.plays,
+          seconds_played: x.seconds_played,
+          screen_count: x.screens.size,
+          first_played_at: x.first_played_at,
+          last_played_at: x.last_played_at,
+        }))
+        .sort((a,b) => b.plays - a.plays) : [],
     };
   });
 }
@@ -961,7 +1074,7 @@ export default {
 
     try {
       if (url.pathname === "/api/health")
-        return json({ ok: true, service: "coastloop", version: "0.11.0" });
+        return json({ ok: true, service: "coastloop", version: "0.12.0" });
 
       if (url.pathname === "/api/player/boot" && request.method === "POST")
         return bootPlayer(request, env);
