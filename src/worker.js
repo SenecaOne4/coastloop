@@ -795,6 +795,74 @@ async function createCampaign(request, env) {
   return json({ ok: true, campaign: rows?.[0] || null });
 }
 
+
+async function adminCampaignReports(env) {
+  const [campaigns, businesses, plays] = await Promise.all([
+    sb(env, `campaigns?organization_id=eq.${ORG_ID}&select=*&order=created_at.desc`),
+    sb(env, `businesses?organization_id=eq.${ORG_ID}&select=id,name`),
+    sb(env, `playback_daily?organization_id=eq.${ORG_ID}&campaign_id=not.is.null&select=campaign_id,screen_id,play_date,play_count,seconds_played,first_played_at,last_played_at&order=play_date.asc`)
+  ]);
+
+  const businessMap = new Map((businesses || []).map(b => [b.id, b]));
+  const grouped = new Map();
+
+  for (const row of plays || []) {
+    if (!row.campaign_id) continue;
+
+    if (!grouped.has(row.campaign_id)) {
+      grouped.set(row.campaign_id, {
+        plays: 0,
+        seconds: 0,
+        screens: new Set(),
+        first_played_at: null,
+        last_played_at: null,
+        daily: new Map(),
+      });
+    }
+
+    const g = grouped.get(row.campaign_id);
+    g.plays += Number(row.play_count || 0);
+    g.seconds += Number(row.seconds_played || 0);
+    if (row.screen_id) g.screens.add(row.screen_id);
+
+    if (row.first_played_at &&
+        (!g.first_played_at || new Date(row.first_played_at) < new Date(g.first_played_at)))
+      g.first_played_at = row.first_played_at;
+
+    if (row.last_played_at &&
+        (!g.last_played_at || new Date(row.last_played_at) > new Date(g.last_played_at)))
+      g.last_played_at = row.last_played_at;
+
+    const day = row.play_date;
+    const d = g.daily.get(day) || { date: day, plays: 0, seconds: 0 };
+    d.plays += Number(row.play_count || 0);
+    d.seconds += Number(row.seconds_played || 0);
+    g.daily.set(day, d);
+  }
+
+  return (campaigns || []).map(c => {
+    const g = grouped.get(c.id);
+    const business = businessMap.get(c.advertiser_business_id);
+
+    return {
+      campaign_id: c.id,
+      campaign_name: c.name,
+      advertiser_business_id: c.advertiser_business_id,
+      advertiser_name: business?.name || null,
+      status: c.status,
+      price_cents: c.price_cents,
+      starts_at: c.starts_at,
+      ends_at: c.ends_at,
+      plays: g?.plays || 0,
+      seconds_played: g?.seconds || 0,
+      screen_count: g?.screens?.size || 0,
+      first_played_at: g?.first_played_at || null,
+      last_played_at: g?.last_played_at || null,
+      daily: g ? Array.from(g.daily.values()) : [],
+    };
+  });
+}
+
 async function stats(env) {
   const [screens, media, plays] = await Promise.all([
     sb(env, `screens?organization_id=eq.${ORG_ID}&select=id,last_seen_at`),
@@ -821,7 +889,7 @@ export default {
 
     try {
       if (url.pathname === "/api/health")
-        return json({ ok: true, service: "coastloop", version: "0.8.0" });
+        return json({ ok: true, service: "coastloop", version: "0.9.0" });
 
       if (url.pathname === "/api/player/boot" && request.method === "POST")
         return bootPlayer(request, env);
@@ -870,6 +938,9 @@ export default {
 
         if (url.pathname === "/api/admin/campaigns" && request.method === "GET")
           return json(await adminCampaigns(env));
+
+        if (url.pathname === "/api/admin/reports/campaigns" && request.method === "GET")
+          return json(await adminCampaignReports(env));
 
         if (url.pathname === "/api/admin/campaigns" && request.method === "POST")
           return createCampaign(request, env);

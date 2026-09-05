@@ -1,5 +1,5 @@
 const $ = s => document.querySelector(s);
-const state = { token: sessionStorage.getItem('adminToken') || '', screens:[], media:[], playlists:[], prospects:[], businesses:[], campaigns:[] };
+const state = { token: sessionStorage.getItem('adminToken') || '', screens:[], media:[], playlists:[], prospects:[], businesses:[], campaigns:[], campaignReports:[] };
 $('#token').value = state.token;
 
 function authHeaders(extra={}) { return { authorization:`Bearer ${state.token}`, ...extra }; }
@@ -85,16 +85,17 @@ async function load(){
   if(!state.token) return;
   $('#error').textContent='';
   try {
-    const [stats,screens,media,playlists,prospects,businesses,campaigns] = await Promise.all([
+    const [stats,screens,media,playlists,prospects,businesses,campaigns,campaignReports] = await Promise.all([
       api('/api/admin/stats'),
       api('/api/admin/screens'),
       api('/api/admin/media'),
       api('/api/admin/playlists'),
       api('/api/admin/prospects'),
       api('/api/admin/businesses'),
-      api('/api/admin/campaigns')
+      api('/api/admin/campaigns'),
+      api('/api/admin/reports/campaigns')
     ]);
-    Object.assign(state,{screens,media,playlists,prospects,businesses,campaigns});
+    Object.assign(state,{screens,media,playlists,prospects,businesses,campaigns,campaignReports});
     $('#mScreens').textContent=stats.screens; $('#mOnline').textContent=stats.online; $('#mMedia').textContent=stats.media; $('#mPlays').textContent=stats.plays_24h; $('#mProspects').textContent=prospects.length; $('#mBusinesses').textContent=businesses.length;
     render();
     renderProspectMap();
@@ -143,8 +144,23 @@ function render(){
 
   $('#campaigns').innerHTML = state.campaigns.map(c=>{
     const b=state.businesses.find(x=>x.id===c.advertiser_business_id);
+    const r=state.campaignReports.find(x=>x.campaign_id===c.id) || {};
     const price=c.price_cents==null?'—':('$'+(Number(c.price_cents)/100).toLocaleString());
-    return `<div class="media-item"><div class="row"><div><strong>${esc(c.name)}</strong><div class="muted">${esc(b?.name||'Unknown advertiser')}</div></div><div><span class="pill">${esc(c.status)}</span> <strong>${price}</strong></div></div></div>`;
+    const seconds=Number(r.seconds_played||0);
+    const delivered=seconds>=3600 ? `${(seconds/3600).toFixed(1)} hr` : `${Math.round(seconds/60)} min`;
+    const last=r.last_played_at ? new Date(r.last_played_at).toLocaleString() : 'Not yet';
+    return `<div class="media-item">
+      <div class="row">
+        <div><strong>${esc(c.name)}</strong><div class="muted">${esc(b?.name||'Unknown advertiser')}</div></div>
+        <div><span class="pill">${esc(c.status)}</span> <strong>${price}</strong></div>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <div><strong>${Number(r.plays||0).toLocaleString()}</strong><div class="muted">plays</div></div>
+        <div><strong>${Number(r.screen_count||0)}</strong><div class="muted">screens</div></div>
+        <div><strong>${delivered}</strong><div class="muted">delivered</div></div>
+        <div><strong>${esc(last)}</strong><div class="muted">last play</div></div>
+      </div>
+    </div>`;
   }).join('') || '<div class="muted">No campaigns yet.</div>';
 
   $('#screens').innerHTML = state.screens.map(s=>`<tr data-id="${s.id}"><td><span class="pill ${online(s.last_seen_at)?'online':'offline'}">${online(s.last_seen_at)?'ONLINE':'OFFLINE'}</span></td><td><strong>${esc(s.pair_code)}</strong></td><td><input class="s-name" value="${esc(s.name||'')}"></td><td><input class="s-location" value="${esc(s.location||'')}"></td><td><select class="s-playlist">${playlistOptions(s.playlist_id)}</select></td><td><button class="save-screen">Save</button></td></tr>`).join('');
@@ -299,4 +315,37 @@ $('#newCampaign').onsubmit=async e=>{
   }catch(err){
     $('#error').textContent=err.message;
   }
+};
+
+
+$('#downloadCampaignReport').onclick=()=>{
+  const rows=[[
+    'Advertiser','Campaign','Status','Price','Plays','Screens',
+    'Seconds Delivered','First Play','Last Play'
+  ]];
+
+  state.campaignReports.forEach(r=>{
+    rows.push([
+      r.advertiser_name||'',
+      r.campaign_name||'',
+      r.status||'',
+      r.price_cents==null ? '' : (Number(r.price_cents)/100).toFixed(2),
+      r.plays||0,
+      r.screen_count||0,
+      Number(r.seconds_played||0).toFixed(1),
+      r.first_played_at||'',
+      r.last_played_at||''
+    ]);
+  });
+
+  const csv=rows.map(row=>row.map(v=>`"${String(v).replaceAll('"','""')}"`).join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download=`coastloop-campaign-report-${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 };
