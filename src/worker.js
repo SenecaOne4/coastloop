@@ -136,9 +136,10 @@ async function bootPlayer(request, env) {
   });
 }
 
-async function playerConfig(url, env) {
-  const deviceId = url.searchParams.get("device_id");
-  const deviceKey = url.searchParams.get("device_key");
+async function playerConfig(request, env) {
+  const b = await bodyJson(request);
+  const deviceId = String(b.device_id || "").trim();
+  const deviceKey = String(b.device_key || "");
   const screen = await validateDevice(env, deviceId, deviceKey);
 
   if (!screen) return json({ error: "invalid device" }, 401);
@@ -536,8 +537,8 @@ export default {
       if (url.pathname === "/api/player/boot" && request.method === "POST")
         return bootPlayer(request, env);
 
-      if (url.pathname === "/api/player/config" && request.method === "GET")
-        return playerConfig(url, env);
+      if (url.pathname === "/api/player/config" && request.method === "POST")
+        return playerConfig(request, env);
 
       if (url.pathname === "/api/player/heartbeat" && request.method === "POST")
         return heartbeat(request, env);

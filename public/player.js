@@ -47,11 +47,15 @@ async function boot() {
 async function fetchConfig() {
   if (!deviceKey) return null;
   try {
-    const qs = new URLSearchParams({
-      device_id: deviceId,
-      device_key: deviceKey
+    const res = await fetch('/api/player/config', {
+      method: 'POST',
+      cache: 'no-store',
+      headers: {'content-type':'application/json'},
+      body: JSON.stringify({
+        device_id: deviceId,
+        device_key: deviceKey
+      })
     });
-    const res = await fetch(`/api/player/config?${qs}`, {cache:'no-store'});
     if (!res.ok) throw new Error('config');
     const next = await res.json();
     localStorage.setItem(CONFIG_KEY, JSON.stringify(next));
