@@ -136,6 +136,77 @@ async function bootPlayer(request, env) {
   });
 }
 
+async function playlistPayload(env, playlistId, now) {
+  const playlists = await sb(
+    env,
+    `playlists?id=eq.${playlistId}&organization_id=eq.${ORG_ID}&status=eq.active&select=*`
+  );
+  const playlist = playlists?.[0];
+  if (!playlist) return null;
+
+  const [items, media] = await Promise.all([
+    sb(
+      env,
+      `playlist_items?playlist_id=eq.${playlist.id}&active=eq.true&select=*&order=position.asc`
+    ),
+    sb(
+      env,
+      `media_assets?organization_id=eq.${ORG_ID}&status=eq.ready&select=*`
+    )
+  ]);
+
+  const mediaMap = new Map((media || []).map(m => [m.id, m]));
+
+  const activeItems = (items || [])
+    .filter(i =>
+      (!i.starts_at || new Date(i.starts_at).getTime() <= now) &&
+      (!i.ends_at || new Date(i.ends_at).getTime() > now)
+    )
+    .map(i => {
+      const m = mediaMap.get(i.media_asset_id);
+      if (!m) return null;
+      return {
+        item_id: i.id,
+        position: i.position,
+        duration_seconds: i.display_seconds || m.duration_seconds || 15,
+        media_id: m.id,
+        name: m.title,
+        media_type: m.kind,
+        mime_type: m.mime_type,
+        campaign_id: i.campaign_id,
+        url: `/media/${m.id}`,
+      };
+    })
+    .filter(Boolean);
+
+  return {
+    playlist: {
+      id: playlist.id,
+      name: playlist.name,
+      revision: playlist.version,
+    },
+    items: activeItems,
+  };
+}
+
+async function fallbackPayload(env, now) {
+  const rows = await sb(
+    env,
+    `playlists?organization_id=eq.${ORG_ID}&name=eq.${encodeURIComponent("CoastLoop House Loop")}&status=eq.active&select=id&limit=1`
+  );
+  const id = rows?.[0]?.id;
+  if (!id) return null;
+
+  const payload = await playlistPayload(env, id, now);
+  if (!payload?.items?.length) return null;
+
+  return {
+    ...payload,
+    fallback: true,
+    fallback_reason: "house",
+  };
+}
+
 async function playerConfig(request, env) {
   const b = await bodyJson(request);
   const deviceId = String(b.device_id || "").trim();
@@ -163,64 +234,39 @@ async function playerConfig(request, env) {
     (!a.ends_at || new Date(a.ends_at).getTime() > now)
   );
 
-  if (!assignment)
-    return json({
-      paired: true,
-      screen: { id: screen.id, name: screen.name },
+  let payload = null;
+  let fallbackReason = null;
+
+  if (assignment) {
+    payload = await playlistPayload(env, assignment.playlist_id, now);
+    if (!payload?.items?.length) fallbackReason = "assigned_playlist_empty";
+  } else {
+    fallbackReason = "no_assignment";
+  }
+
+  if (!payload?.items?.length) {
+    const fallback = await fallbackPayload(env, now);
+    if (fallback) {
+      payload = {
+        ...fallback,
+        fallback_reason: fallbackReason || fallback.fallback_reason,
+      };
+    }
+  }
+
+  if (!payload) {
+    payload = {
       playlist: null,
       items: [],
-    });
-
-  const playlists = await sb(
-    env,
-    `playlists?id=eq.${assignment.playlist_id}&select=*`
-  );
-  const playlist = playlists?.[0];
-
-  if (!playlist)
-    return json({ paired: true, playlist: null, items: [] });
-
-  const items = await sb(
-    env,
-    `playlist_items?playlist_id=eq.${playlist.id}&active=eq.true&select=*&order=position.asc`
-  );
-  const media = await sb(
-    env,
-    `media_assets?organization_id=eq.${ORG_ID}&status=eq.ready&select=*`
-  );
-  const mediaMap = new Map((media || []).map(m => [m.id, m]));
-
-  const activeItems = (items || [])
-    .filter(i =>
-      (!i.starts_at || new Date(i.starts_at).getTime() <= now) &&
-      (!i.ends_at || new Date(i.ends_at).getTime() > now)
-    )
-    .map(i => {
-      const m = mediaMap.get(i.media_asset_id);
-      if (!m) return null;
-      return {
-        item_id: i.id,
-        position: i.position,
-        duration_seconds: i.display_seconds || m.duration_seconds || 15,
-        media_id: m.id,
-        name: m.title,
-        media_type: m.kind,
-        mime_type: m.mime_type,
-        campaign_id: i.campaign_id,
-        url: `/media/${m.id}`,
-      };
-    })
-    .filter(Boolean);
+      fallback: true,
+      fallback_reason: fallbackReason || "house_unavailable",
+    };
+  }
 
   return json({
     paired: true,
     screen: { id: screen.id, name: screen.name },
-    playlist: {
-      id: playlist.id,
-      name: playlist.name,
-      revision: playlist.version,
-    },
-    items: activeItems,
+    ...payload,
   }, 200, { "cache-control": "no-store" });
 }
 
@@ -915,7 +961,7 @@ export default {
 
     try {
       if (url.pathname === "/api/health")
-        return json({ ok: true, service: "coastloop", version: "0.10.0" });
+        return json({ ok: true, service: "coastloop", version: "0.11.0" });
 
       if (url.pathname === "/api/player/boot" && request.method === "POST")
         return bootPlayer(request, env);
