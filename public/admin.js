@@ -1,5 +1,5 @@
 const $ = s => document.querySelector(s);
-const state = { token: sessionStorage.getItem('adminToken') || '', screens:[], media:[], playlists:[], prospects:[] };
+const state = { token: sessionStorage.getItem('adminToken') || '', screens:[], media:[], playlists:[], prospects:[], businesses:[], campaigns:[] };
 $('#token').value = state.token;
 
 function authHeaders(extra={}) { return { authorization:`Bearer ${state.token}`, ...extra }; }
@@ -85,9 +85,17 @@ async function load(){
   if(!state.token) return;
   $('#error').textContent='';
   try {
-    const [stats,screens,media,playlists,prospects] = await Promise.all([api('/api/admin/stats'),api('/api/admin/screens'),api('/api/admin/media'),api('/api/admin/playlists'),api('/api/admin/prospects')]);
-    Object.assign(state,{screens,media,playlists,prospects});
-    $('#mScreens').textContent=stats.screens; $('#mOnline').textContent=stats.online; $('#mMedia').textContent=stats.media; $('#mPlays').textContent=stats.plays_24h; $('#mProspects').textContent=prospects.length;
+    const [stats,screens,media,playlists,prospects,businesses,campaigns] = await Promise.all([
+      api('/api/admin/stats'),
+      api('/api/admin/screens'),
+      api('/api/admin/media'),
+      api('/api/admin/playlists'),
+      api('/api/admin/prospects'),
+      api('/api/admin/businesses'),
+      api('/api/admin/campaigns')
+    ]);
+    Object.assign(state,{screens,media,playlists,prospects,businesses,campaigns});
+    $('#mScreens').textContent=stats.screens; $('#mOnline').textContent=stats.online; $('#mMedia').textContent=stats.media; $('#mPlays').textContent=stats.plays_24h; $('#mProspects').textContent=prospects.length; $('#mBusinesses').textContent=businesses.length;
     render();
     renderProspectMap();
   } catch(e){ $('#error').textContent=e.message; }
@@ -115,8 +123,30 @@ function render(){
     <td><select class="p-stage">${stageOptions(p.stage)}</select></td>
     <td><input class="p-score" type="number" min="0" max="100" value="${p.score??''}" style="width:76px"></td>
     <td><input class="p-follow" type="datetime-local" value="${p.next_follow_up_at ? new Date(p.next_follow_up_at).toISOString().slice(0,16) : ''}"></td>
-    <td><button class="save-prospect">Save</button></td>
+    <td><div class="row"><button class="save-prospect">Save</button>${p.stage==='won'?'':`<button class="secondary promote-prospect">Promote</button>`}</div></td>
   </tr>`).join('') || '<tr><td colspan="7" class="muted">No prospects yet.</td></tr>';
+  $('#businesses').innerHTML = state.businesses.map(b=>`
+    <div class="media-item">
+      <div class="row">
+        <div>
+          <strong>${esc(b.name)}</strong>
+          <span class="pill">${esc(b.category||'business')}</span>
+          <div class="muted">${esc(b.contact_name||'')}${b.phone?' · '+esc(b.phone):''}${b.email?' · '+esc(b.email):''}</div>
+        </div>
+        <div class="muted">${(b.locations||[]).length} location${(b.locations||[]).length===1?'':'s'}</div>
+      </div>
+      ${(b.locations||[]).map(l=>`<div class="muted">${esc([l.address_line1,l.city,l.state].filter(Boolean).join(', '))} · ${esc(l.host_status||'')}</div>`).join('')}
+    </div>`).join('') || '<div class="muted">No customers yet. Promote a prospect when they convert.</div>';
+
+  $('#campaignBusiness').innerHTML = '<option value="">Choose advertiser…</option>' +
+    state.businesses.map(b=>`<option value="${b.id}">${esc(b.name)}</option>`).join('');
+
+  $('#campaigns').innerHTML = state.campaigns.map(c=>{
+    const b=state.businesses.find(x=>x.id===c.advertiser_business_id);
+    const price=c.price_cents==null?'—':('$'+(Number(c.price_cents)/100).toLocaleString());
+    return `<div class="media-item"><div class="row"><div><strong>${esc(c.name)}</strong><div class="muted">${esc(b?.name||'Unknown advertiser')}</div></div><div><span class="pill">${esc(c.status)}</span> <strong>${price}</strong></div></div></div>`;
+  }).join('') || '<div class="muted">No campaigns yet.</div>';
+
   $('#screens').innerHTML = state.screens.map(s=>`<tr data-id="${s.id}"><td><span class="pill ${online(s.last_seen_at)?'online':'offline'}">${online(s.last_seen_at)?'ONLINE':'OFFLINE'}</span></td><td><strong>${esc(s.pair_code)}</strong></td><td><input class="s-name" value="${esc(s.name||'')}"></td><td><input class="s-location" value="${esc(s.location||'')}"></td><td><select class="s-playlist">${playlistOptions(s.playlist_id)}</select></td><td><button class="save-screen">Save</button></td></tr>`).join('');
   $('#media').innerHTML = state.media.map(m=>`<div class="media-item"><strong>${esc(m.name)}</strong> <span class="pill">${m.media_type}</span><div class="muted">${m.duration_seconds}s · ${(m.bytes/1024/1024).toFixed(2)} MB · ${m.id}</div></div>`).join('') || '<div class="muted">No media yet.</div>';
   $('#playlists').innerHTML = state.playlists.map(p=>`<div class="playlist" data-id="${p.id}"><div class="row"><div><strong>${esc(p.name)}</strong><div class="muted">Revision ${p.revision}</div></div><button class="secondary add-media">Add selected media</button></div><select class="media-picker" style="margin-top:10px">${state.media.map(m=>`<option value="${m.id}">${esc(m.name)}</option>`).join('')}</select><ol>${(p.items||[]).map(i=>`<li>${esc(i.name)} <button class="secondary remove-item" data-media="${i.media_id}" style="padding:4px 7px">remove</button></li>`).join('')}</ol></div>`).join('') || '<div class="muted">No playlists yet.</div>';
@@ -127,6 +157,17 @@ $('#upload').onsubmit=async e=>{ e.preventDefault(); try { await api('/api/admin
 $('#newPlaylist').onsubmit=async e=>{ e.preventDefault(); const name=new FormData(e.target).get('name'); try { await api('/api/admin/playlists',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name})}); e.target.reset(); await load(); } catch(err){ $('#error').textContent=err.message; } };
 
 document.addEventListener('click', async e=>{
+  if(e.target.matches('.promote-prospect')){
+    const row=e.target.closest('tr');
+    e.target.disabled=true;
+    try{
+      await api(`/api/admin/prospects/${row.dataset.id}/promote`,{method:'POST'});
+      await load();
+    }catch(err){
+      $('#error').textContent=err.message;
+      e.target.disabled=false;
+    }
+  }
   if(e.target.matches('.save-prospect')){
     const row=e.target.closest('tr');
     const follow=row.querySelector('.p-follow').value;
@@ -204,5 +245,30 @@ $('#newProspect').onsubmit=async e=>{
     await load();
   }catch(err){
     $('#prospectMessage').textContent=err.message;
+  }
+};
+
+
+$('#newCampaign').onsubmit=async e=>{
+  e.preventDefault();
+  const f=e.target;
+  const fd=new FormData(f);
+  const dollars=fd.get('price_dollars');
+  const body={
+    advertiser_business_id:fd.get('advertiser_business_id'),
+    name:fd.get('name'),
+    status:fd.get('status'),
+    price_cents:dollars===''?null:Math.round(Number(dollars)*100)
+  };
+  try{
+    await api('/api/admin/campaigns',{
+      method:'POST',
+      headers:{'content-type':'application/json'},
+      body:JSON.stringify(body)
+    });
+    f.reset();
+    await load();
+  }catch(err){
+    $('#error').textContent=err.message;
   }
 };

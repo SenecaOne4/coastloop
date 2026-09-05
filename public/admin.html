@@ -41,6 +41,30 @@
 </section>
 
 <section class="card"><div class="row"><div><h2>Sales pipeline</h2><p class="muted">New inquiries and local prospects.</p></div><div id="mProspects" class="metric">-</div></div><div style="overflow:auto"><table><thead><tr><th>Business</th><th>Interest</th><th>Contact</th><th>Stage</th><th>Score</th><th>Follow-up</th><th></th></tr></thead><tbody id="prospects"></tbody></table></div></section>
+<section class="card">
+<div class="row"><div><h2>Customers</h2><p class="muted">Promoted advertisers and host businesses.</p></div><div id="mBusinesses" class="metric">-</div></div>
+<div id="businesses" class="business-list"></div>
+</section>
+
+<section class="card">
+<h2>Campaigns</h2>
+<form id="newCampaign">
+<div class="row">
+<select name="advertiser_business_id" id="campaignBusiness" required></select>
+<input name="name" placeholder="Campaign name" required>
+<select name="status">
+<option value="draft">Draft</option>
+<option value="scheduled">Scheduled</option>
+<option value="active">Active</option>
+<option value="paused">Paused</option>
+</select>
+<input name="price_dollars" type="number" min="0" step="1" placeholder="Price $">
+<button>Create campaign</button>
+</div>
+</form>
+<div id="campaigns" class="campaign-list"></div>
+</section>
+
 <section class="card"><h2>Screens</h2><p class="muted">Open <code>/player.html</code> on a device. Its pairing code appears here.</p><div style="overflow:auto"><table><thead><tr><th>Status</th><th>Pair</th><th>Name</th><th>Location</th><th>Playlist</th><th></th></tr></thead><tbody id="screens"></tbody></table></div></section>
 <section class="card"><h2>Media library</h2><form id="upload" class="row"><input name="file" type="file" accept="image/*,video/*" required><input name="duration_seconds" type="number" value="15" min="1" max="300" placeholder="Seconds"><button>Upload</button></form><div id="media" class="media-list"></div></section>
 <section class="card"><h2>Playlists</h2><form id="newPlaylist" class="row"><input name="name" placeholder="South Strand Demo" required><button>Create playlist</button></form><div id="playlists" class="playlist-list"></div></section>
