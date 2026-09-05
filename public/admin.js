@@ -172,7 +172,11 @@ function render(){
     return `<div class="media-item">
       <div class="row">
         <div><strong>${esc(c.name)}</strong><div class="muted">${esc(b?.name||'Unknown advertiser')}</div></div>
-        <div><span class="pill">${esc(c.status)}</span> <strong>${price}</strong></div>
+        <div style="display:flex;gap:8px;align-items:center;justify-content:flex-end">
+          <span class="pill">${esc(c.status)}</span>
+          <strong>${price}</strong>
+          <button class="secondary view-report" data-campaign="${c.id}" type="button">View report</button>
+        </div>
       </div>
       <div class="row" style="margin-top:12px">
         <div><strong>${Number(r.plays||0).toLocaleString()}</strong><div class="muted">plays</div></div>
@@ -368,6 +372,14 @@ $('#newCampaign').onsubmit=async e=>{
   }
 };
 
+
+
+document.addEventListener('click', e=>{
+  const btn=e.target.closest('.view-report');
+  if(!btn) return;
+  const id=btn.dataset.campaign;
+  if(id) window.open(`/report.html?campaign=${encodeURIComponent(id)}`,'_blank','noopener');
+});
 
 $('#downloadCampaignReport').onclick=()=>{
   const rows=[[

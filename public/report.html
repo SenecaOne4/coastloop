@@ -1,0 +1,81 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>CoastLoop Delivery Report</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body class="report-site">
+  <main class="report-shell">
+    <header class="report-header">
+      <div>
+        <a class="report-brand" href="/admin">COASTLOOP</a>
+        <div class="report-label">CAMPAIGN DELIVERY REPORT</div>
+      </div>
+      <div class="report-actions">
+        <button id="printReport" class="report-button secondary">Print / Save PDF</button>
+        <a href="/admin" class="report-button">Back to Admin</a>
+      </div>
+    </header>
+
+    <section id="reportHero" class="report-hero">
+      <div class="report-eyebrow">VERIFIED DELIVERY</div>
+      <h1 id="campaignName">Loading campaign…</h1>
+      <p id="advertiserName" class="report-advertiser"></p>
+      <div id="campaignWindow" class="report-window"></div>
+    </section>
+
+    <section class="report-metrics">
+      <article><span>Verified plays</span><strong id="plays">—</strong></article>
+      <article><span>Locations reached</span><strong id="locationsCount">—</strong></article>
+      <article><span>Screens reached</span><strong id="screens">—</strong></article>
+      <article><span>Delivered airtime</span><strong id="airtime">—</strong></article>
+    </section>
+
+    <section class="report-panel">
+      <div class="report-section-head">
+        <div>
+          <div class="report-eyebrow">CREATIVE DELIVERY</div>
+          <h2>What played</h2>
+        </div>
+      </div>
+      <div id="creatives" class="report-breakdown"></div>
+    </section>
+
+    <section class="report-panel">
+      <div class="report-section-head">
+        <div>
+          <div class="report-eyebrow">NETWORK DELIVERY</div>
+          <h2>Where it played</h2>
+        </div>
+      </div>
+      <div id="locations" class="report-breakdown"></div>
+    </section>
+
+    <section class="report-panel">
+      <div class="report-section-head">
+        <div>
+          <div class="report-eyebrow">DAILY PROOF OF PLAY</div>
+          <h2>Delivery history</h2>
+        </div>
+        <div id="lastPlayed" class="report-last"></div>
+      </div>
+      <div class="report-table-wrap">
+        <table class="report-table">
+          <thead><tr><th>Date</th><th>Verified plays</th><th>Delivered airtime</th></tr></thead>
+          <tbody id="daily"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <footer class="report-footer">
+      <strong>COASTLOOP</strong>
+      <span>Verified local screen delivery · coastloop.site</span>
+    </footer>
+
+    <div id="reportError" class="report-error"></div>
+  </main>
+  <script type="module" src="/report.js"></script>
+</body>
+</html>
