@@ -239,6 +239,24 @@ async function playerConfig(request, env) {
 
   if (assignment) {
     payload = await playlistPayload(env, assignment.playlist_id, now);
+
+    if (payload?.items?.length &&
+        payload?.playlist?.name !== "CoastLoop House Loop") {
+      const house = await fallbackPayload(env, now);
+      const houseItem = house?.items?.[0];
+
+      if (houseItem &&
+          !payload.items.some(item => item.media_id === houseItem.media_id)) {
+        payload.items.push({
+          ...houseItem,
+          position: payload.items.length,
+          campaign_id: null,
+          system_house: true,
+        });
+        payload.house_injected = true;
+      }
+    }
+
     if (!payload?.items?.length) fallbackReason = "assigned_playlist_empty";
   } else {
     fallbackReason = "no_assignment";
@@ -1074,7 +1092,7 @@ export default {
 
     try {
       if (url.pathname === "/api/health")
-        return json({ ok: true, service: "coastloop", version: "0.12.0" });
+        return json({ ok: true, service: "coastloop", version: "0.13.0" });
 
       if (url.pathname === "/api/player/boot" && request.method === "POST")
         return bootPlayer(request, env);
