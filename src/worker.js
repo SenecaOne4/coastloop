@@ -456,6 +456,7 @@ async function setPlaylistItems(request, env, playlistId) {
         organization_id: ORG_ID,
         playlist_id: playlistId,
         media_asset_id: item.media_id,
+        campaign_id: item.campaign_id || null,
         position,
         display_seconds: item.duration_seconds || null,
         active: true,
@@ -844,7 +845,7 @@ export default {
 
     try {
       if (url.pathname === "/api/health")
-        return json({ ok: true, service: "coastloop", version: "0.6.0" });
+        return json({ ok: true, service: "coastloop", version: "0.7.0" });
 
       if (url.pathname === "/api/player/boot" && request.method === "POST")
         return bootPlayer(request, env);

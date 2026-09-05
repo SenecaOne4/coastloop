@@ -149,7 +149,28 @@ function render(){
 
   $('#screens').innerHTML = state.screens.map(s=>`<tr data-id="${s.id}"><td><span class="pill ${online(s.last_seen_at)?'online':'offline'}">${online(s.last_seen_at)?'ONLINE':'OFFLINE'}</span></td><td><strong>${esc(s.pair_code)}</strong></td><td><input class="s-name" value="${esc(s.name||'')}"></td><td><input class="s-location" value="${esc(s.location||'')}"></td><td><select class="s-playlist">${playlistOptions(s.playlist_id)}</select></td><td><button class="save-screen">Save</button></td></tr>`).join('');
   $('#media').innerHTML = state.media.map(m=>`<div class="media-item"><strong>${esc(m.name)}</strong> <span class="pill">${m.media_type}</span><div class="muted">${m.duration_seconds}s · ${(m.bytes/1024/1024).toFixed(2)} MB · ${m.id}</div></div>`).join('') || '<div class="muted">No media yet.</div>';
-  $('#playlists').innerHTML = state.playlists.map(p=>`<div class="playlist" data-id="${p.id}"><div class="row"><div><strong>${esc(p.name)}</strong><div class="muted">Revision ${p.revision}</div></div><button class="secondary add-media">Add selected media</button></div><select class="media-picker" style="margin-top:10px">${state.media.map(m=>`<option value="${m.id}">${esc(m.name)}</option>`).join('')}</select><ol>${(p.items||[]).map(i=>`<li>${esc(i.name)} <button class="secondary remove-item" data-media="${i.media_id}" style="padding:4px 7px">remove</button></li>`).join('')}</ol></div>`).join('') || '<div class="muted">No playlists yet.</div>';
+  $('#playlists').innerHTML = state.playlists.map(p=>`<div class="playlist" data-id="${p.id}">
+    <div class="row">
+      <div><strong>${esc(p.name)}</strong><div class="muted">Revision ${p.revision}</div></div>
+      <button class="secondary add-media">Add selected media</button>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <select class="media-picker">${state.media.map(m=>`<option value="${m.id}">${esc(m.name)}</option>`).join('')}</select>
+      <select class="campaign-picker">
+        <option value="">House / no campaign</option>
+        ${state.campaigns.filter(c=>!['completed','canceled'].includes(c.status)).map(c=>{
+          const b=state.businesses.find(x=>x.id===c.advertiser_business_id);
+          return `<option value="${c.id}">${esc(b?.name||'Advertiser')} — ${esc(c.name)}</option>`;
+        }).join('')}
+      </select>
+    </div>
+    <ol>${(p.items||[]).map(i=>{
+      const c=state.campaigns.find(x=>x.id===i.campaign_id);
+      const b=c ? state.businesses.find(x=>x.id===c.advertiser_business_id) : null;
+      const label=c ? `${b?.name||'Advertiser'} — ${c.name}` : 'House';
+      return `<li>${esc(i.name)} <span class="pill">${esc(label)}</span> <button class="secondary remove-item" data-media="${i.media_id}" data-item="${i.id}" style="padding:4px 7px">remove</button></li>`;
+    }).join('')}</ol>
+  </div>`).join('') || '<div class="muted">No playlists yet.</div>';
 }
 
 $('#saveToken').onclick=()=>{ state.token=$('#token').value.trim(); sessionStorage.setItem('adminToken',state.token); load(); };
@@ -188,14 +209,21 @@ document.addEventListener('click', async e=>{
     await load();
   }
   if(e.target.matches('.add-media')){
-    const box=e.target.closest('.playlist'), p=state.playlists.find(x=>x.id===box.dataset.id), mediaId=box.querySelector('.media-picker').value;
+    const box=e.target.closest('.playlist'), p=state.playlists.find(x=>x.id===box.dataset.id), mediaId=box.querySelector('.media-picker').value, campaignId=box.querySelector('.campaign-picker').value;
     if(!mediaId) return;
-    const items=[...(p.items||[]).map(i=>({media_id:i.media_id,duration_seconds:i.duration_seconds})),{media_id:mediaId}];
+    const items=[
+      ...(p.items||[]).map(i=>({media_id:i.media_id,duration_seconds:i.duration_seconds,campaign_id:i.campaign_id||null})),
+      {media_id:mediaId,campaign_id:campaignId||null}
+    ];
     await api(`/api/admin/playlists/${p.id}/items`,{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({items})}); await load();
   }
   if(e.target.matches('.remove-item')){
-    const box=e.target.closest('.playlist'), p=state.playlists.find(x=>x.id===box.dataset.id), target=e.target.dataset.media;
-    let removed=false; const items=(p.items||[]).filter(i=>{ if(!removed && i.media_id===target){removed=true;return false;} return true; }).map(i=>({media_id:i.media_id,duration_seconds:i.duration_seconds}));
+    const box=e.target.closest('.playlist'), p=state.playlists.find(x=>x.id===box.dataset.id), targetItem=e.target.dataset.item;
+    const items=(p.items||[]).filter(i=>i.id!==targetItem).map(i=>({
+      media_id:i.media_id,
+      duration_seconds:i.duration_seconds,
+      campaign_id:i.campaign_id||null
+    }));
     await api(`/api/admin/playlists/${p.id}/items`,{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({items})}); await load();
   }
 });
