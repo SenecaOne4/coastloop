@@ -1,5 +1,5 @@
 const $ = s => document.querySelector(s);
-const state = { token: sessionStorage.getItem('adminToken') || '', screens:[], media:[], playlists:[] };
+const state = { token: sessionStorage.getItem('adminToken') || '', screens:[], media:[], playlists:[], prospects:[] };
 $('#token').value = state.token;
 
 function authHeaders(extra={}) { return { authorization:`Bearer ${state.token}`, ...extra }; }
@@ -16,9 +16,9 @@ async function load(){
   if(!state.token) return;
   $('#error').textContent='';
   try {
-    const [stats,screens,media,playlists] = await Promise.all([api('/api/admin/stats'),api('/api/admin/screens'),api('/api/admin/media'),api('/api/admin/playlists')]);
-    Object.assign(state,{screens,media,playlists});
-    $('#mScreens').textContent=stats.screens; $('#mOnline').textContent=stats.online; $('#mMedia').textContent=stats.media; $('#mPlays').textContent=stats.plays_24h;
+    const [stats,screens,media,playlists,prospects] = await Promise.all([api('/api/admin/stats'),api('/api/admin/screens'),api('/api/admin/media'),api('/api/admin/playlists'),api('/api/admin/prospects')]);
+    Object.assign(state,{screens,media,playlists,prospects});
+    $('#mScreens').textContent=stats.screens; $('#mOnline').textContent=stats.online; $('#mMedia').textContent=stats.media; $('#mPlays').textContent=stats.plays_24h; $('#mProspects').textContent=prospects.length;
     render();
   } catch(e){ $('#error').textContent=e.message; }
 }
@@ -26,7 +26,27 @@ async function load(){
 function playlistOptions(selected=''){
   return `<option value="">No playlist</option>` + state.playlists.map(p=>`<option value="${p.id}" ${p.id===selected?'selected':''}>${esc(p.name)}</option>`).join('');
 }
+function prospectInterest(p){
+  const bits=[];
+  if(p.advertiser_interest) bits.push('AD');
+  if(p.host_interest) bits.push('HOST');
+  return bits.join(' + ') || '—';
+}
+function stageOptions(selected='new'){
+  return ['new','researched','contacted','follow_up','hot','won','lost','do_not_contact']
+    .map(v=>`<option value="${v}" ${v===selected?'selected':''}>${v.replaceAll('_',' ')}</option>`).join('');
+}
+
 function render(){
+  $('#prospects').innerHTML = state.prospects.map(p=>`<tr data-id="${p.id}">
+    <td><strong>${esc(p.name)}</strong><div class="muted">${esc(p.city||'')}${p.state?', '+esc(p.state):''}</div></td>
+    <td><span class="pill">${prospectInterest(p)}</span></td>
+    <td>${esc(p.contact_name||'')}<div class="muted">${esc(p.phone||p.email||'')}</div></td>
+    <td><select class="p-stage">${stageOptions(p.stage)}</select></td>
+    <td><input class="p-score" type="number" min="0" max="100" value="${p.score??''}" style="width:76px"></td>
+    <td><input class="p-follow" type="datetime-local" value="${p.next_follow_up_at ? new Date(p.next_follow_up_at).toISOString().slice(0,16) : ''}"></td>
+    <td><button class="save-prospect">Save</button></td>
+  </tr>`).join('') || '<tr><td colspan="7" class="muted">No prospects yet.</td></tr>';
   $('#screens').innerHTML = state.screens.map(s=>`<tr data-id="${s.id}"><td><span class="pill ${online(s.last_seen_at)?'online':'offline'}">${online(s.last_seen_at)?'ONLINE':'OFFLINE'}</span></td><td><strong>${esc(s.pair_code)}</strong></td><td><input class="s-name" value="${esc(s.name||'')}"></td><td><input class="s-location" value="${esc(s.location||'')}"></td><td><select class="s-playlist">${playlistOptions(s.playlist_id)}</select></td><td><button class="save-screen">Save</button></td></tr>`).join('');
   $('#media').innerHTML = state.media.map(m=>`<div class="media-item"><strong>${esc(m.name)}</strong> <span class="pill">${m.media_type}</span><div class="muted">${m.duration_seconds}s · ${(m.bytes/1024/1024).toFixed(2)} MB · ${m.id}</div></div>`).join('') || '<div class="muted">No media yet.</div>';
   $('#playlists').innerHTML = state.playlists.map(p=>`<div class="playlist" data-id="${p.id}"><div class="row"><div><strong>${esc(p.name)}</strong><div class="muted">Revision ${p.revision}</div></div><button class="secondary add-media">Add selected media</button></div><select class="media-picker" style="margin-top:10px">${state.media.map(m=>`<option value="${m.id}">${esc(m.name)}</option>`).join('')}</select><ol>${(p.items||[]).map(i=>`<li>${esc(i.name)} <button class="secondary remove-item" data-media="${i.media_id}" style="padding:4px 7px">remove</button></li>`).join('')}</ol></div>`).join('') || '<div class="muted">No playlists yet.</div>';
@@ -37,6 +57,20 @@ $('#upload').onsubmit=async e=>{ e.preventDefault(); try { await api('/api/admin
 $('#newPlaylist').onsubmit=async e=>{ e.preventDefault(); const name=new FormData(e.target).get('name'); try { await api('/api/admin/playlists',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name})}); e.target.reset(); await load(); } catch(err){ $('#error').textContent=err.message; } };
 
 document.addEventListener('click', async e=>{
+  if(e.target.matches('.save-prospect')){
+    const row=e.target.closest('tr');
+    const follow=row.querySelector('.p-follow').value;
+    await api(`/api/admin/prospects/${row.dataset.id}`,{
+      method:'PUT',
+      headers:{'content-type':'application/json'},
+      body:JSON.stringify({
+        stage:row.querySelector('.p-stage').value,
+        score:row.querySelector('.p-score').value || 0,
+        next_follow_up_at:follow ? new Date(follow).toISOString() : null
+      })
+    });
+    await load();
+  }
   if(e.target.matches('.save-screen')){
     const row=e.target.closest('tr');
     await api(`/api/admin/screens/${row.dataset.id}/assign`,{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({name:row.querySelector('.s-name').value,location:row.querySelector('.s-location').value,playlist_id:row.querySelector('.s-playlist').value||null})});

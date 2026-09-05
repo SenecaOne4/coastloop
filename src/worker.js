@@ -506,6 +506,95 @@ async function assignScreen(request, env, screenId) {
   return json({ ok: true });
 }
 
+
+async function createPublicLead(request, env) {
+  const b = await bodyJson(request);
+
+  // Honeypot: bots can fill this; humans never see it.
+  if (String(b.company_fax || "").trim())
+    return json({ ok: true });
+
+  const name = String(b.business_name || b.name || "").trim().slice(0, 180);
+  const contactName = String(b.contact_name || "").trim().slice(0, 180);
+  const phone = String(b.phone || "").trim().slice(0, 80);
+  const email = String(b.email || "").trim().slice(0, 180);
+  const notes = String(b.notes || "").trim().slice(0, 2000);
+  const interest = String(b.interest || "advertiser").toLowerCase();
+
+  if (!name || (!phone && !email))
+    return json({ error: "business name and phone or email required" }, 400);
+
+  const hostInterest = interest === "host" || interest === "both";
+  const advertiserInterest = interest === "advertiser" || interest === "both";
+
+  const rows = await sb(env, "prospects", {
+    method: "POST",
+    headers: { Prefer: "return=representation" },
+    body: JSON.stringify({
+      organization_id: ORG_ID,
+      name,
+      category: String(b.category || "").trim().slice(0, 120) || null,
+      stage: "new",
+      host_interest: hostInterest,
+      advertiser_interest: advertiserInterest,
+      contact_name: contactName || null,
+      phone: phone || null,
+      email: email || null,
+      website: String(b.website || "").trim().slice(0, 240) || null,
+      city: String(b.city || "").trim().slice(0, 120) || null,
+      state: String(b.state || "").trim().slice(0, 40) || null,
+      postal_code: String(b.postal_code || "").trim().slice(0, 20) || null,
+      source: "coastloop.site",
+      notes: notes || null,
+      updated_at: new Date().toISOString(),
+    }),
+  });
+
+  return json({ ok: true, id: rows?.[0]?.id });
+}
+
+async function adminProspects(env) {
+  return await sb(
+    env,
+    `prospects?organization_id=eq.${ORG_ID}&select=*&order=created_at.desc`
+  );
+}
+
+async function updateProspect(request, env, prospectId) {
+  const b = await bodyJson(request);
+  const patch = { updated_at: new Date().toISOString() };
+
+  if (b.stage !== undefined) {
+    const allowed = new Set([
+      "new","researched","contacted","follow_up","hot",
+      "won","lost","do_not_contact"
+    ]);
+    if (!allowed.has(b.stage))
+      return json({ error: "invalid stage" }, 400);
+    patch.stage = b.stage;
+  }
+
+  if (b.score !== undefined) {
+    const n = Number(b.score);
+    if (!Number.isFinite(n) || n < 0 || n > 100)
+      return json({ error: "invalid score" }, 400);
+    patch.score = Math.round(n);
+  }
+
+  if (b.notes !== undefined)
+    patch.notes = String(b.notes || "").slice(0, 4000) || null;
+
+  if (b.next_follow_up_at !== undefined)
+    patch.next_follow_up_at = b.next_follow_up_at || null;
+
+  await sb(env, `prospects?id=eq.${prospectId}&organization_id=eq.${ORG_ID}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
+
+  return json({ ok: true });
+}
+
 async function stats(env) {
   const [screens, media, plays] = await Promise.all([
     sb(env, `screens?organization_id=eq.${ORG_ID}&select=id,last_seen_at`),
@@ -532,7 +621,7 @@ export default {
 
     try {
       if (url.pathname === "/api/health")
-        return json({ ok: true, service: "coastloop", version: "0.3.0" });
+        return json({ ok: true, service: "coastloop", version: "0.4.0" });
 
       if (url.pathname === "/api/player/boot" && request.method === "POST")
         return bootPlayer(request, env);
@@ -549,6 +638,9 @@ export default {
       if (url.pathname.startsWith("/media/") && request.method === "GET")
         return serveMedia(env, url.pathname.split("/").pop());
 
+      if (url.pathname === "/api/public/lead" && request.method === "POST")
+        return createPublicLead(request, env);
+
       if (url.pathname.startsWith("/api/admin/")) {
         if (!requireAdmin(request, env))
           return json({ error: "unauthorized" }, 401);
@@ -558,6 +650,13 @@ export default {
 
         if (url.pathname === "/api/admin/screens" && request.method === "GET")
           return json(await adminScreens(env));
+
+        if (url.pathname === "/api/admin/prospects" && request.method === "GET")
+          return json(await adminProspects(env));
+
+        const prospect = url.pathname.match(/^\/api\/admin\/prospects\/([^/]+)$/);
+        if (prospect && request.method === "PUT")
+          return updateProspect(request, env, prospect[1]);
 
         if (url.pathname === "/api/admin/media" && request.method === "GET")
           return json(await adminMedia(env));
