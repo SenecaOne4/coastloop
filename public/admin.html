@@ -65,7 +65,30 @@
 <div id="campaigns" class="campaign-list"></div>
 </section>
 
-<section class="card"><h2>Screens</h2><p class="muted">Open <code>/player.html</code> on a device. Its pairing code appears here.</p><div style="overflow:auto"><table><thead><tr><th>Status</th><th>Pair</th><th>Name</th><th>Location</th><th>Playlist</th><th></th></tr></thead><tbody id="screens"></tbody></table></div></section>
+<section class="card">
+<div class="row">
+  <div><h2>Screens</h2><p class="muted">Live device health and actual proof-of-play totals.</p></div>
+</div>
+<div style="overflow:auto">
+<table>
+<thead><tr>
+  <th>Status</th>
+  <th>Screen</th>
+  <th>Location</th>
+  <th>Playlist</th>
+  <th>Today</th>
+  <th>Delivered</th>
+  <th>Total plays</th>
+  <th>Last play</th>
+  <th>Last seen</th>
+  <th>Device</th>
+  <th>Pair</th>
+  <th></th>
+</tr></thead>
+<tbody id="screens"></tbody>
+</table>
+</div>
+</section>
 <section class="card"><h2>Media library</h2><form id="upload" class="row"><input name="file" type="file" accept="image/*,video/*" required><input name="duration_seconds" type="number" value="15" min="1" max="300" placeholder="Seconds"><button>Upload</button></form><div id="media" class="media-list"></div></section>
 <section class="card"><h2>Playlists</h2><form id="newPlaylist" class="row"><input name="name" placeholder="South Strand Demo" required><button>Create playlist</button></form><div id="playlists" class="playlist-list"></div></section>
 </main><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script type="module" src="/admin.js"></script></body></html>

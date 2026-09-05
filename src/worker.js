@@ -283,28 +283,54 @@ async function serveMedia(env, mediaId) {
 }
 
 async function adminScreens(env) {
-  const screens = await sb(
-    env,
-    `screens?organization_id=eq.${ORG_ID}&select=*&order=last_seen_at.desc.nullslast`
-  );
-  const assignments = await sb(
-    env,
-    `screen_playlist_assignments?organization_id=eq.${ORG_ID}&select=*&order=priority.desc,created_at.desc`
-  );
-  const playlists = await sb(
-    env,
-    `playlists?organization_id=eq.${ORG_ID}&select=id,name`
-  );
-  const pmap = new Map((playlists || []).map(p => [p.id, p.name]));
+  const [screens, assignments, playlists, plays, locations, businesses] = await Promise.all([
+    sb(env, `screens?organization_id=eq.${ORG_ID}&select=*&order=last_seen_at.desc.nullslast`),
+    sb(env, `screen_playlist_assignments?organization_id=eq.${ORG_ID}&select=*&order=priority.desc,created_at.desc`),
+    sb(env, `playlists?organization_id=eq.${ORG_ID}&select=id,name`),
+    sb(env, `playback_daily?organization_id=eq.${ORG_ID}&select=screen_id,play_date,play_count,seconds_played,first_played_at,last_played_at`),
+    sb(env, `locations?organization_id=eq.${ORG_ID}&select=id,business_id,name,address_line1,city,state`),
+    sb(env, `businesses?organization_id=eq.${ORG_ID}&select=id,name`)
+  ]);
 
-  return (screens || []).map(s => {
-    const a = (assignments || []).find(x => x.screen_id === s.id);
+  const pmap = new Map((playlists || []).map(p => [p.id, p.name]));
+  const lmap = new Map((locations || []).map(l => [l.id, l]));
+  const bmap = new Map((businesses || []).map(b => [b.id, b]));
+  const today = new Date().toISOString().slice(0, 10);
+
+  return (screens || []).map(screen => {
+    const assignment = (assignments || []).find(x => x.screen_id === screen.id);
+    const location = screen.location_id ? lmap.get(screen.location_id) : null;
+    const business = location?.business_id ? bmap.get(location.business_id) : null;
+    const rows = (plays || []).filter(p => p.screen_id === screen.id);
+    const todayRows = rows.filter(p => p.play_date === today);
+
+    const sum = (list, key) =>
+      list.reduce((n, row) => n + Number(row[key] || 0), 0);
+
+    const lastPlay = rows.reduce((latest, row) => {
+      if (!row.last_played_at) return latest;
+      if (!latest || new Date(row.last_played_at) > new Date(latest))
+        return row.last_played_at;
+      return latest;
+    }, null);
+
     return {
-      ...s,
-      pair_code: s.pairing_code,
-      location: "",
-      playlist_id: a?.playlist_id || null,
-      playlist_name: a ? pmap.get(a.playlist_id) : null,
+      ...screen,
+      pair_code: screen.pairing_code,
+      playlist_id: assignment?.playlist_id || null,
+      playlist_name: assignment ? pmap.get(assignment.playlist_id) : null,
+
+      location_name: location?.name || business?.name || null,
+      business_name: business?.name || null,
+      address: location
+        ? [location.address_line1, location.city, location.state].filter(Boolean).join(", ")
+        : null,
+
+      plays_today: sum(todayRows, "play_count"),
+      seconds_today: sum(todayRows, "seconds_played"),
+      plays_total: sum(rows, "play_count"),
+      seconds_total: sum(rows, "seconds_played"),
+      last_played_at: lastPlay,
     };
   });
 }
@@ -889,7 +915,7 @@ export default {
 
     try {
       if (url.pathname === "/api/health")
-        return json({ ok: true, service: "coastloop", version: "0.9.0" });
+        return json({ ok: true, service: "coastloop", version: "0.10.0" });
 
       if (url.pathname === "/api/player/boot" && request.method === "POST")
         return bootPlayer(request, env);

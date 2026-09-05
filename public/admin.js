@@ -12,6 +12,26 @@ async function api(path, options={}) {
 function esc(v=''){ return String(v).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function online(ts){ return ts && (Date.now() - new Date(ts).getTime()) < 120000; }
 
+function age(ts){
+  if(!ts) return 'Never';
+  const sec=Math.max(0,Math.floor((Date.now()-new Date(ts).getTime())/1000));
+  if(sec<60) return `${sec}s ago`;
+  if(sec<3600) return `${Math.floor(sec/60)}m ago`;
+  if(sec<86400) return `${Math.floor(sec/3600)}h ago`;
+  return `${Math.floor(sec/86400)}d ago`;
+}
+function duration(seconds){
+  const s=Math.round(Number(seconds||0));
+  if(s<60) return `${s}s`;
+  if(s<3600) return `${Math.floor(s/60)}m ${s%60}s`;
+  const h=Math.floor(s/3600), m=Math.floor((s%3600)/60);
+  return `${h}h ${m}m`;
+}
+function resolution(s){
+  return s.display_width && s.display_height ? `${s.display_width}×${s.display_height}` : '—';
+}
+
+
 let prospectMap=null;
 let prospectLayer=null;
 
@@ -163,7 +183,38 @@ function render(){
     </div>`;
   }).join('') || '<div class="muted">No campaigns yet.</div>';
 
-  $('#screens').innerHTML = state.screens.map(s=>`<tr data-id="${s.id}"><td><span class="pill ${online(s.last_seen_at)?'online':'offline'}">${online(s.last_seen_at)?'ONLINE':'OFFLINE'}</span></td><td><strong>${esc(s.pair_code)}</strong></td><td><input class="s-name" value="${esc(s.name||'')}"></td><td><input class="s-location" value="${esc(s.location||'')}"></td><td><select class="s-playlist">${playlistOptions(s.playlist_id)}</select></td><td><button class="save-screen">Save</button></td></tr>`).join('');
+  $('#screens').innerHTML = state.screens.map(s=>`<tr data-id="${s.id}">
+    <td><span class="pill ${online(s.last_seen_at)?'online':'offline'}">${online(s.last_seen_at)?'ONLINE':'OFFLINE'}</span></td>
+    <td><input class="s-name" value="${esc(s.name||'')}" style="min-width:165px"></td>
+    <td>
+      <strong>${esc(s.location_name||'Unassigned')}</strong>
+      <div class="muted">${esc(s.address||'No physical location linked')}</div>
+    </td>
+    <td><select class="s-playlist">${playlistOptions(s.playlist_id)}</select></td>
+    <td>
+      <strong>${Number(s.plays_today||0).toLocaleString()}</strong>
+      <div class="muted">plays</div>
+    </td>
+    <td>
+      <strong>${duration(s.seconds_today)}</strong>
+      <div class="muted">today</div>
+    </td>
+    <td>
+      <strong>${Number(s.plays_total||0).toLocaleString()}</strong>
+      <div class="muted">${duration(s.seconds_total)} delivered</div>
+    </td>
+    <td>${age(s.last_played_at)}</td>
+    <td>
+      <strong>${age(s.last_seen_at)}</strong>
+      <div class="muted">${esc(s.app_version||'unknown version')}</div>
+    </td>
+    <td>
+      <strong>${resolution(s)}</strong>
+      <div class="muted">${esc(s.orientation||'')}</div>
+    </td>
+    <td><strong>${esc(s.pair_code||'—')}</strong></td>
+    <td><button class="save-screen">Save</button></td>
+  </tr>`).join('');
   $('#media').innerHTML = state.media.map(m=>`<div class="media-item"><strong>${esc(m.name)}</strong> <span class="pill">${m.media_type}</span><div class="muted">${m.duration_seconds}s · ${(m.bytes/1024/1024).toFixed(2)} MB · ${m.id}</div></div>`).join('') || '<div class="muted">No media yet.</div>';
   $('#playlists').innerHTML = state.playlists.map(p=>`<div class="playlist" data-id="${p.id}">
     <div class="row">
@@ -221,7 +272,7 @@ document.addEventListener('click', async e=>{
   }
   if(e.target.matches('.save-screen')){
     const row=e.target.closest('tr');
-    await api(`/api/admin/screens/${row.dataset.id}/assign`,{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({name:row.querySelector('.s-name').value,location:row.querySelector('.s-location').value,playlist_id:row.querySelector('.s-playlist').value||null})});
+    await api(`/api/admin/screens/${row.dataset.id}/assign`,{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({name:row.querySelector('.s-name').value,playlist_id:row.querySelector('.s-playlist').value||null})});
     await load();
   }
   if(e.target.matches('.add-media')){
