@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<component name="MainScene" extends="Scene">
+    <children>
+        <Rectangle
+            id="background"
+            width="1920"
+            height="1080"
+            color="0x080706FF" />
+
+        <Poster
+            id="poster"
+            width="1920"
+            height="1080"
+            loadDisplayMode="scaleToFit"
+            visible="false" />
+
+        <Video
+            id="video"
+            width="1920"
+            height="1080"
+            visible="false" />
+
+        <Group id="pairing">
+            <Rectangle
+                width="1920"
+                height="1080"
+                color="0x080706FF" />
+
+            <Label
+                id="brand"
+                text="COASTLOOP"
+                translation="[140,165]"
+                width="1640"
+                height="90"
+                color="0xD8C39AFF"
+                font="font:LargeBoldSystemFont" />
+
+            <Rectangle
+                translation="[140,275]"
+                width="125"
+                height="4"
+                color="0xB8924AFF" />
+
+            <Label
+                text="LOCAL MEDIA  ·  VERIFIED DELIVERY"
+                translation="[140,315]"
+                width="1640"
+                height="55"
+                color="0x8D847BFF"
+                font="font:MediumSystemFont" />
+
+            <Label
+                id="pairTitle"
+                text="PAIR THIS SCREEN"
+                translation="[140,495]"
+                width="1640"
+                height="70"
+                color="0xF4EFE7FF"
+                font="font:LargeBoldSystemFont" />
+
+            <Label
+                id="pairCode"
+                text="CONNECTING"
+                translation="[140,585]"
+                width="1640"
+                height="125"
+                color="0xD8C39AFF"
+                font="font:LargeBoldSystemFont" />
+
+            <Label
+                id="status"
+                text="Connecting to CoastLoop..."
+                translation="[140,745]"
+                width="1640"
+                height="55"
+                color="0xAAA39CFF"
+                font="font:MediumSystemFont" />
+        </Group>
+
+        <Timer id="pollTimer" duration="5" repeat="false" />
+        <Timer id="heartbeatTimer" duration="30" repeat="true" />
+        <Timer id="imageTimer" duration="15" repeat="false" />
+    </children>
+
+    <script type="text/brightscript" uri="pkg:/components/MainScene.brs" />
+</component>
