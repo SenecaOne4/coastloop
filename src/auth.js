@@ -556,3 +556,94 @@ export async function portalOverview(request, env) {
     businesses: result,
   });
 }
+
+
+export async function updateUserAccess(request, env, adminAuth, userId) {
+  const b = await bodyJson(request);
+  const allowedInternal = new Set(["owner","admin","sales","creative","viewer"]);
+  const allowedBusiness = new Set(["owner","manager","viewer"]);
+
+  const current = await rest(
+    env,
+    `organization_members?organization_id=eq.${ORG_ID}&user_id=eq.${userId}&select=role`
+  );
+  const currentRole = current?.[0]?.role || null;
+
+  // Never let the signed-in owner accidentally remove their own ownership.
+  if (adminAuth?.user?.id === userId && currentRole === "owner" && b.internal_role !== "owner")
+    return json({ error: "You cannot remove your own owner access." }, 400);
+
+  if (b.internal_role !== undefined) {
+    if (b.internal_role === null || b.internal_role === "") {
+      await rest(
+        env,
+        `organization_members?organization_id=eq.${ORG_ID}&user_id=eq.${userId}`,
+        { method: "DELETE" }
+      );
+    } else {
+      const role = String(b.internal_role);
+      if (!allowedInternal.has(role))
+        return json({ error: "Invalid internal role" }, 400);
+
+      await rest(env, "organization_members?on_conflict=organization_id,user_id", {
+        method: "POST",
+        headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+        body: JSON.stringify({
+          organization_id: ORG_ID,
+          user_id: userId,
+          role,
+        }),
+      });
+    }
+  }
+
+  if (Array.isArray(b.businesses)) {
+    const clean = [];
+
+    for (const m of b.businesses) {
+      const businessId = String(m.business_id || "");
+      const role = String(m.role || "viewer");
+
+      if (!businessId || !allowedBusiness.has(role))
+        return json({ error: "Invalid business access" }, 400);
+
+      const exists = await rest(
+        env,
+        `businesses?id=eq.${businessId}&organization_id=eq.${ORG_ID}&select=id`
+      );
+      if (!exists?.[0])
+        return json({ error: "Business not found" }, 404);
+
+      clean.push({ business_id: businessId, user_id: userId, role });
+    }
+
+    await rest(env, `business_members?user_id=eq.${userId}`, {
+      method: "DELETE",
+    });
+
+    if (clean.length) {
+      await rest(env, "business_members", {
+        method: "POST",
+        headers: { Prefer: "return=minimal" },
+        body: JSON.stringify(clean),
+      });
+    }
+  }
+
+  return json({ ok: true });
+}
+
+export async function revokeUserInvitation(request, env, invitationId) {
+  await rest(
+    env,
+    `user_invitations?id=eq.${invitationId}&organization_id=eq.${ORG_ID}&status=eq.pending`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({
+        status: "revoked",
+        updated_at: new Date().toISOString(),
+      }),
+    }
+  );
+  return json({ ok: true });
+}

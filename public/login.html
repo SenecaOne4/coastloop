@@ -21,6 +21,17 @@
 </form>
 <div id="googleWrap" hidden><div class="auth-divider muted">or</div><button id="google" class="secondary">Continue with Google</button></div>
 <p class="muted" style="margin-top:16px"><a href="/reset-password">Forgot password?</a></p>
+
+<details id="inviteActivation" style="margin-top:22px">
+<summary>Activate an invitation</summary>
+<form id="activate" style="margin-top:14px">
+<input name="full_name" placeholder="Your name" autocomplete="name">
+<input name="email" type="email" placeholder="Invited email" autocomplete="email" required>
+<input name="password" type="password" minlength="10" placeholder="Create password (10+ characters)" required>
+<input name="confirm" type="password" minlength="10" placeholder="Confirm password" required>
+<button>Activate CoastLoop account</button>
+</form>
+</details>
 </div>
 
 <div id="bootstrap" hidden>

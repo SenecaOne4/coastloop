@@ -1,10 +1,27 @@
-const $ = s => document.querySelector(s);
-const state = { token: sessionStorage.getItem('adminToken') || '', screens:[], media:[], playlists:[], prospects:[], businesses:[], campaigns:[], campaignReports:[] };
-$('#token').value = state.token;
+import { api as sessionApi, readSession, logout as sessionLogout } from '/session.js';
 
-function authHeaders(extra={}) { return { authorization:`Bearer ${state.token}`, ...extra }; }
+const $ = s => document.querySelector(s);
+const state = {
+  token: sessionStorage.getItem('adminToken') || '',
+  screens:[], media:[], playlists:[], prospects:[], businesses:[],
+  campaigns:[], campaignReports:[],
+  userDirectory:{users:[],invitations:[]},
+  authConfig:{}
+};
+
+if($('#token')) $('#token').value = state.token;
+
+function authHeaders(extra={}) {
+  return { authorization:`Bearer ${state.token}`, ...extra };
+}
+
 async function api(path, options={}) {
-  const res = await fetch(path, { ...options, headers: authHeaders(options.headers || {}) });
+  if(!state.token) return sessionApi(path, options);
+
+  const res = await fetch(path, {
+    ...options,
+    headers: authHeaders(options.headers || {})
+  });
   const data = await res.json().catch(()=>({}));
   if (!res.ok) throw new Error(data.error || `${res.status}`);
   return data;
@@ -102,10 +119,18 @@ function routeProspects(){
 }
 
 async function load(){
-  if(!state.token) return;
+  if(!state.token && !readSession()?.access_token){
+    location.replace('/login.html');
+    return;
+  }
+
   $('#error').textContent='';
+
   try {
-    const [stats,screens,media,playlists,prospects,businesses,campaigns,campaignReports] = await Promise.all([
+    const [
+      stats,screens,media,playlists,prospects,businesses,
+      campaigns,campaignReports,userDirectory,authConfig
+    ] = await Promise.all([
       api('/api/admin/stats'),
       api('/api/admin/screens'),
       api('/api/admin/media'),
@@ -113,13 +138,44 @@ async function load(){
       api('/api/admin/prospects'),
       api('/api/admin/businesses'),
       api('/api/admin/campaigns'),
-      api('/api/admin/reports/campaigns')
+      api('/api/admin/reports/campaigns'),
+      api('/api/admin/users'),
+      fetch('/api/auth/config').then(r=>r.json())
     ]);
-    Object.assign(state,{screens,media,playlists,prospects,businesses,campaigns,campaignReports});
-    $('#mScreens').textContent=stats.screens; $('#mOnline').textContent=stats.online; $('#mMedia').textContent=stats.media; $('#mPlays').textContent=stats.plays_24h; $('#mProspects').textContent=prospects.length; $('#mBusinesses').textContent=businesses.length;
+
+    Object.assign(state,{
+      screens,media,playlists,prospects,businesses,
+      campaigns,campaignReports,userDirectory,authConfig
+    });
+
+    $('#mScreens').textContent=stats.screens;
+    $('#mOnline').textContent=stats.online;
+    $('#mMedia').textContent=stats.media;
+    $('#mPlays').textContent=stats.plays_24h;
+    $('#mProspects').textContent=prospects.length;
+    $('#mBusinesses').textContent=businesses.length;
+    $('#mUsers').textContent=(userDirectory.users||[]).length;
+
+    $('#adminMode').textContent=state.token?'RECOVERY KEY':'OWNER LOGIN';
+    $('#ownerSetup').hidden=!(authConfig.bootstrap_required && state.token);
+
+    if(!state.token && readSession()?.access_token){
+      try{
+        const me=await sessionApi('/api/auth/me');
+        $('#adminWho').textContent=me.user?.full_name||me.user?.email||'';
+      }catch{}
+    }else{
+      $('#adminWho').textContent='Bootstrap / recovery access';
+    }
+
     render();
+    renderUsers();
     renderProspectMap();
-  } catch(e){ $('#error').textContent=e.message; }
+  } catch(e){
+    $('#error').textContent=e.message;
+    if(!state.token && String(e.message).includes('401'))
+      location.replace('/login.html');
+  }
 }
 
 function playlistOptions(selected=''){
@@ -134,6 +190,85 @@ function prospectInterest(p){
 function stageOptions(selected='new'){
   return ['new','researched','contacted','follow_up','hot','won','lost','do_not_contact']
     .map(v=>`<option value="${v}" ${v===selected?'selected':''}>${v.replaceAll('_',' ')}</option>`).join('');
+}
+
+function internalRoleOptions(selected=''){
+  const roles=['','owner','admin','sales','creative','viewer'];
+  return roles.map(v=>`<option value="${v}" ${v===selected?'selected':''}>${v||'No internal access'}</option>`).join('');
+}
+
+function inviteRoleOptions(type){
+  return (type==='internal'
+    ? ['admin','sales','creative','viewer']
+    : ['owner','manager','viewer'])
+    .map(v=>`<option value="${v}">${v}</option>`).join('');
+}
+
+function refreshInviteControls(){
+  const type=$('#inviteType').value;
+  $('#inviteBusiness').disabled=type==='internal';
+  $('#inviteBusiness').style.opacity=type==='internal'?'.45':'1';
+  $('#inviteRole').innerHTML=inviteRoleOptions(type);
+}
+
+function businessAccessEditor(user){
+  const memberships=user.businesses||[];
+  return `
+    <div class="user-business-access">
+      ${state.businesses.map(b=>{
+        const m=memberships.find(x=>x.business_id===b.id);
+        return `<label style="display:flex;align-items:center;gap:6px;margin:4px 0;white-space:nowrap">
+          <input class="u-business" type="checkbox" data-business="${b.id}" style="width:auto" ${m?'checked':''}>
+          <span>${esc(b.name)}</span>
+          <select class="u-business-role" data-business="${b.id}" style="width:auto" ${m?'':'disabled'}>
+            ${['owner','manager','viewer'].map(r=>`<option value="${r}" ${(m?.role||'viewer')===r?'selected':''}>${r}</option>`).join('')}
+          </select>
+        </label>`;
+      }).join('')||'<span class="muted">No businesses yet</span>'}
+    </div>`;
+}
+
+function renderUsers(){
+  const directory=state.userDirectory||{users:[],invitations:[]};
+  const users=directory.users||[];
+  const invitations=(directory.invitations||[]).filter(x=>x.status==='pending');
+
+  $('#inviteBusiness').innerHTML=
+    '<option value="">Choose business…</option>'+
+    state.businesses.map(b=>`<option value="${b.id}">${esc(b.name)}</option>`).join('');
+  refreshInviteControls();
+
+  $('#users').innerHTML=users.map(u=>`
+    <tr data-user="${u.user_id}">
+      <td>
+        <strong>${esc(u.full_name||u.email)}</strong>
+        <div class="muted">${esc(u.email)}</div>
+      </td>
+      <td>
+        <select class="u-internal">${internalRoleOptions(u.internal_role||'')}</select>
+      </td>
+      <td>${businessAccessEditor(u)}</td>
+      <td>${age(u.last_login_at)}</td>
+      <td><button class="save-user-access">Save access</button></td>
+    </tr>
+  `).join('')||'<tr><td colspan="5" class="muted">No activated users yet.</td></tr>';
+
+  $('#invitations').innerHTML=invitations.map(i=>{
+    const b=state.businesses.find(x=>x.id===i.business_id);
+    const link=`${location.origin}/login.html?invite=${encodeURIComponent(i.email)}`;
+    return `<div class="media-item" data-invite="${i.id}">
+      <div class="row">
+        <div>
+          <strong>${esc(i.email)}</strong>
+          <div class="muted">${esc(i.account_type)} · ${esc(i.role)}${b?' · '+esc(b.name):''}</div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="secondary copy-invite" data-link="${esc(link)}">Copy activation link</button>
+          <button class="secondary revoke-invite">Revoke</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('')||'<div class="muted">No pending invitations.</div>';
 }
 
 function render(){
@@ -259,7 +394,71 @@ function render(){
   </div>`).join('') || '<div class="muted">No playlists yet.</div>';
 }
 
-$('#saveToken').onclick=()=>{ state.token=$('#token').value.trim(); sessionStorage.setItem('adminToken',state.token); load(); };
+$('#saveToken').onclick=()=>{
+  state.token=$('#token').value.trim();
+  sessionStorage.setItem('adminToken',state.token);
+  load();
+};
+
+$('#ownerSetup').onclick=()=>{
+  location.href='/login.html';
+};
+
+$('#accountButton').onclick=()=>{
+  if(state.token && state.authConfig?.bootstrap_required){
+    location.href='/login.html';
+    return;
+  }
+  location.href='/account.html';
+};
+
+$('#logoutButton').onclick=async()=>{
+  if(state.token){
+    sessionStorage.removeItem('adminToken');
+    state.token='';
+  }
+  await sessionLogout();
+  location.replace('/login.html');
+};
+
+$('#inviteType').onchange=refreshInviteControls;
+
+$('#inviteUser').onsubmit=async e=>{
+  e.preventDefault();
+  const f=new FormData(e.target);
+  const type=f.get('account_type');
+
+  try{
+    const d=await api('/api/admin/users/invite',{
+      method:'POST',
+      headers:{'content-type':'application/json'},
+      body:JSON.stringify({
+        email:f.get('email'),
+        account_type:type,
+        business_id:type==='business'?f.get('business_id'):null,
+        role:f.get('role')
+      })
+    });
+
+    const link=`${location.origin}/login.html?invite=${encodeURIComponent(f.get('email'))}`;
+    $('#inviteMessage').innerHTML=
+      d.email_sent
+        ? 'Invitation created and email sent.'
+        : `Invitation created. <button type="button" id="copyFreshInvite" class="secondary">Copy activation link</button>`;
+
+    const copy=$('#copyFreshInvite');
+    if(copy)copy.onclick=async()=>{
+      await navigator.clipboard.writeText(link);
+      copy.textContent='✓ Copied';
+    };
+
+    e.target.reset();
+    refreshInviteControls();
+    await load();
+  }catch(err){
+    $('#inviteMessage').textContent=err.message;
+  }
+};
 $('#upload').onsubmit=async e=>{ e.preventDefault(); try { await api('/api/admin/media',{method:'POST',body:new FormData(e.target)}); e.target.reset(); await load(); } catch(err){ $('#error').textContent=err.message; } };
 $('#newPlaylist').onsubmit=async e=>{ e.preventDefault(); const name=new FormData(e.target).get('name'); try { await api('/api/admin/playlists',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name})}); e.target.reset(); await load(); } catch(err){ $('#error').textContent=err.message; } };
 
@@ -311,6 +510,48 @@ async function relaunchRoku(ip, button){
 }
 
 document.addEventListener('click', async e=>{
+  if(e.target.matches('.copy-invite')){
+    await navigator.clipboard.writeText(e.target.dataset.link);
+    e.target.textContent='✓ Copied';
+    setTimeout(()=>e.target.textContent='Copy activation link',1200);
+    return;
+  }
+
+  if(e.target.matches('.revoke-invite')){
+    const box=e.target.closest('[data-invite]');
+    await api(`/api/admin/invitations/${box.dataset.invite}`,{method:'DELETE'});
+    await load();
+    return;
+  }
+
+  if(e.target.matches('.u-business')){
+    const row=e.target.closest('tr');
+    const role=row.querySelector(`.u-business-role[data-business="${e.target.dataset.business}"]`);
+    if(role)role.disabled=!e.target.checked;
+    return;
+  }
+
+  if(e.target.matches('.save-user-access')){
+    const row=e.target.closest('tr');
+    const businesses=[...row.querySelectorAll('.u-business:checked')].map(cb=>({
+      business_id:cb.dataset.business,
+      role:row.querySelector(`.u-business-role[data-business="${cb.dataset.business}"]`).value
+    }));
+
+    await api(`/api/admin/users/${row.dataset.user}/access`,{
+      method:'PUT',
+      headers:{'content-type':'application/json'},
+      body:JSON.stringify({
+        internal_role:row.querySelector('.u-internal').value||null,
+        businesses
+      })
+    });
+
+    e.target.textContent='✓ Saved';
+    await load();
+    return;
+  }
+
   if(e.target.matches('.relaunch-screen')){
     await relaunchRoku(e.target.dataset.ip,e.target);
     return;

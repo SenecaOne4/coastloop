@@ -3,6 +3,8 @@ import {
   requireAdminAccess,
   adminUserDirectory,
   createUserInvitation,
+  updateUserAccess,
+  revokeUserInvitation,
   portalOverview
 } from "./auth.js";
 
@@ -1246,7 +1248,7 @@ export default {
         return portalOverview(request, env);
 
       if (url.pathname === "/api/health")
-        return json({ ok: true, service: "coastloop", version: "0.18.0" });
+        return json({ ok: true, service: "coastloop", version: "0.19.0" });
 
       if (url.pathname === "/api/player/boot" && request.method === "POST")
         return bootPlayer(request, env);
@@ -1277,6 +1279,14 @@ export default {
 
         if (url.pathname === "/api/admin/users/invite" && request.method === "POST")
           return createUserInvitation(request, env, adminAuth);
+
+        const userAccess = url.pathname.match(/^\/api\/admin\/users\/([^/]+)\/access$/);
+        if (userAccess && request.method === "PUT")
+          return updateUserAccess(request, env, adminAuth, userAccess[1]);
+
+        const invitation = url.pathname.match(/^\/api\/admin\/invitations\/([^/]+)$/);
+        if (invitation && request.method === "DELETE")
+          return revokeUserInvitation(request, env, invitation[1]);
 
         if (url.pathname === "/api/admin/stats" && request.method === "GET")
           return json(await stats(env));

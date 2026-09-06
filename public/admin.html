@@ -3,9 +3,63 @@
 <div class="topbar"><div><div class="brand coastloop-lockup admin-lockup">
       <img class="coastloop-mark" src="/brand/coastloop-mark.svg" alt="">
       <span>COASTLOOP <small>ADMIN</small></span>
-    </div><p class="muted">Network control plane.</p></div><div class="row" style="max-width:430px"><input id="token" type="password" placeholder="Admin token"><button id="saveToken">Unlock</button></div></div>
+    </div><p class="muted">Network control plane.</p></div>
+<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
+  <span id="adminMode" class="pill">AUTH</span>
+  <span id="adminWho" class="muted"></span>
+  <button id="ownerSetup" class="secondary" hidden>Create owner login</button>
+  <button id="accountButton" class="secondary">My account</button>
+  <button id="logoutButton" class="secondary">Sign out</button>
+  <details id="legacyAccess">
+    <summary class="muted">Recovery key</summary>
+    <div class="row" style="margin-top:8px;max-width:430px">
+      <input id="token" type="password" placeholder="Legacy admin token">
+      <button id="saveToken">Use key</button>
+    </div>
+  </details>
+</div></div>
 <div id="error" class="error"></div>
 <div class="grid"><div class="card"><div id="mScreens" class="metric">-</div><div class="muted">Screens</div></div><div class="card"><div id="mOnline" class="metric">-</div><div class="muted">Online</div></div><div class="card"><div id="mMedia" class="metric">-</div><div class="muted">Media</div></div><div class="card"><div id="mPlays" class="metric">-</div><div class="muted">Plays / 24h</div></div></div>
+<section class="card">
+<div class="row">
+  <div>
+    <h2>Users & access</h2>
+    <p class="muted">CoastLoop staff, Hosts and Advertisers.</p>
+  </div>
+  <div id="mUsers" class="metric">-</div>
+</div>
+
+<form id="inviteUser" style="margin-top:16px">
+<div class="row">
+  <input name="email" type="email" placeholder="Email address" required>
+  <select name="account_type" id="inviteType">
+    <option value="business">Host / Advertiser</option>
+    <option value="internal">CoastLoop staff</option>
+  </select>
+  <select name="business_id" id="inviteBusiness"></select>
+  <select name="role" id="inviteRole"></select>
+  <button>Invite / grant access</button>
+</div>
+</form>
+<div id="inviteMessage" class="muted" style="margin-top:8px"></div>
+
+<div style="overflow:auto;margin-top:20px">
+<table>
+<thead><tr>
+  <th>User</th>
+  <th>CoastLoop role</th>
+  <th>Business access</th>
+  <th>Last login</th>
+  <th></th>
+</tr></thead>
+<tbody id="users"></tbody>
+</table>
+</div>
+
+<h3 style="margin-top:24px">Pending invitations</h3>
+<div id="invitations"></div>
+</section>
+
 <section class="card">
 <div class="row"><div><h2>Field sales map</h2><p class="muted">Prospects, hot leads and today’s route.</p></div><button id="routeHot" class="secondary">Route hot leads</button></div>
 <div id="prospectMap" style="height:430px;border-radius:12px;overflow:hidden;margin-top:14px"></div>
