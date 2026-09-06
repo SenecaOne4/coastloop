@@ -108,6 +108,12 @@ async function bootPlayer(request, env) {
         display_height: Number.isFinite(b.height) ? b.height : null,
         video_mode: String(b.video_mode || "").trim() || null,
         can_play_4k: b.can_play_4k === true,
+        device_model: String(b.device_model || "").trim() || null,
+        device_display_name: String(b.device_display_name || "").trim() || null,
+        device_type: String(b.device_type || "").trim() || null,
+        device_vendor: String(b.device_vendor || "").trim() || null,
+        device_model_number: String(b.device_model_number || "").trim() || null,
+        device_screen_size: String(b.device_screen_size || "").trim() || null,
         device_id: b.device_id,
         lan_ip: String(b.lan_ip || "").trim() || null,
       }),
@@ -143,6 +149,12 @@ async function bootPlayer(request, env) {
         display_height: Number.isFinite(b.height) ? b.height : screen.display_height,
         video_mode: String(b.video_mode || screen.video_mode || "").trim() || null,
         can_play_4k: typeof b.can_play_4k === "boolean" ? b.can_play_4k : Boolean(screen.can_play_4k),
+        device_model: String(b.device_model || screen.device_model || "").trim() || null,
+        device_display_name: String(b.device_display_name || screen.device_display_name || "").trim() || null,
+        device_type: String(b.device_type || screen.device_type || "").trim() || null,
+        device_vendor: String(b.device_vendor || screen.device_vendor || "").trim() || null,
+        device_model_number: String(b.device_model_number || screen.device_model_number || "").trim() || null,
+        device_screen_size: String(b.device_screen_size || screen.device_screen_size || "").trim() || null,
         lan_ip: String(b.lan_ip || screen.lan_ip || "").trim() || null,
       }),
     });
@@ -168,6 +180,12 @@ async function bootPlayer(request, env) {
     display_height: Number.isFinite(b.height) ? b.height : screen.display_height,
     video_mode: String(b.video_mode || screen.video_mode || "").trim() || null,
     can_play_4k: typeof b.can_play_4k === "boolean" ? b.can_play_4k : Boolean(screen.can_play_4k),
+    device_model: String(b.device_model || screen.device_model || "").trim() || null,
+    device_display_name: String(b.device_display_name || screen.device_display_name || "").trim() || null,
+    device_type: String(b.device_type || screen.device_type || "").trim() || null,
+    device_vendor: String(b.device_vendor || screen.device_vendor || "").trim() || null,
+    device_model_number: String(b.device_model_number || screen.device_model_number || "").trim() || null,
+    device_screen_size: String(b.device_screen_size || screen.device_screen_size || "").trim() || null,
     lan_ip: String(b.lan_ip || screen.lan_ip || "").trim() || null,
   };
 
@@ -398,6 +416,12 @@ async function heartbeat(request, env) {
       display_height: Number.isFinite(b.height) ? b.height : screen.display_height,
       video_mode: String(b.video_mode || screen.video_mode || "").trim() || null,
       can_play_4k: typeof b.can_play_4k === "boolean" ? b.can_play_4k : Boolean(screen.can_play_4k),
+      device_model: String(b.device_model || screen.device_model || "").trim() || null,
+      device_display_name: String(b.device_display_name || screen.device_display_name || "").trim() || null,
+      device_type: String(b.device_type || screen.device_type || "").trim() || null,
+      device_vendor: String(b.device_vendor || screen.device_vendor || "").trim() || null,
+      device_model_number: String(b.device_model_number || screen.device_model_number || "").trim() || null,
+      device_screen_size: String(b.device_screen_size || screen.device_screen_size || "").trim() || null,
       lan_ip: String(b.lan_ip || screen.lan_ip || "").trim() || null,
     }),
   });
@@ -729,6 +753,18 @@ async function setPlaylistItems(request, env, playlistId) {
 async function applyScreenAssignment(env, screen, b, markPaired = false) {
   const isTest = b.is_test !== undefined ? Boolean(b.is_test) : Boolean(screen.is_test);
   const locationId = String(b.location_id || "").trim() || null;
+  const deploymentClass = String(b.deployment_class || screen.deployment_class || "unreviewed").trim();
+  const certificationNote = String(b.certification_note ?? screen.certification_note ?? "").trim() || null;
+  const allowedDeploymentClasses = new Set(["unreviewed", "lab_only", "pilot", "production"]);
+
+  if (!allowedDeploymentClasses.has(deploymentClass))
+    return json({ error: "invalid hardware deployment class" }, 400);
+
+  if (!isTest && deploymentClass !== "production")
+    return json({ error: "production-certified hardware required for commercial screen" }, 400);
+
+  if (!isTest && !certificationNote)
+    return json({ error: "hardware certification note required for commercial screen" }, 400);
 
   if (!isTest && !locationId)
     return json({ error: "location required for commercial screen" }, 400);
@@ -746,6 +782,8 @@ async function applyScreenAssignment(env, screen, b, markPaired = false) {
     status: "active",
     location_id: locationId,
     is_test: isTest,
+    deployment_class: deploymentClass,
+    certification_note: certificationNote,
   };
 
   if (markPaired) {
@@ -1384,7 +1422,7 @@ export default {
         return portalOverview(request, env);
 
       if (url.pathname === "/api/health")
-        return json({ ok: true, service: "coastloop", version: "0.22.0" });
+        return json({ ok: true, service: "coastloop", version: "0.23.0" });
 
       if (url.pathname === "/api/player/boot" && request.method === "POST")
         return bootPlayer(request, env);

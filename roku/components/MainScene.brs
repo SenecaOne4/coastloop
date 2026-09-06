@@ -46,7 +46,7 @@ end function
 
 sub init()
     m.baseUrl = "https://coastloop.site"
-    m.playerVersion = "roku-0.1.9"
+    m.playerVersion = "roku-0.1.10"
     m.tasks = {}
     m.nextTaskId = 0
     m.retryDelay = 5
@@ -87,6 +87,20 @@ sub init()
     m.videoMode = info.GetVideoMode()
     m.canPlay4k = canPlay4K(info)
 
+    m.deviceModel = info.GetModel()
+    m.deviceDisplayName = info.GetModelDisplayName()
+    m.deviceType = info.GetModelType()
+    m.deviceVendor = ""
+    m.deviceModelNumber = ""
+    m.deviceScreenSize = ""
+
+    modelDetails = info.GetModelDetails()
+    if modelDetails <> invalid
+        if modelDetails.VendorName <> invalid then m.deviceVendor = modelDetails.VendorName
+        if modelDetails.ModelNumber <> invalid then m.deviceModelNumber = modelDetails.ModelNumber
+        if modelDetails.ScreenSize <> invalid then m.deviceScreenSize = modelDetails.ScreenSize
+    end if
+
     m.lanIp = getLanIp()
 
     reg = CreateObject("roRegistrySection", "CoastLoop")
@@ -106,6 +120,12 @@ sub boot()
         height: m.displayHeight
         video_mode: m.videoMode
         can_play_4k: m.canPlay4k
+        device_model: m.deviceModel
+        device_display_name: m.deviceDisplayName
+        device_type: m.deviceType
+        device_vendor: m.deviceVendor
+        device_model_number: m.deviceModelNumber
+        device_screen_size: m.deviceScreenSize
         lan_ip: m.lanIp
     }
 
@@ -546,6 +566,12 @@ sub onHeartbeat()
         height: m.displayHeight
         video_mode: m.videoMode
         can_play_4k: m.canPlay4k
+        device_model: m.deviceModel
+        device_display_name: m.deviceDisplayName
+        device_type: m.deviceType
+        device_vendor: m.deviceVendor
+        device_model_number: m.deviceModelNumber
+        device_screen_size: m.deviceScreenSize
         lan_ip: m.lanIp
     })
 end sub

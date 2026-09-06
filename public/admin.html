@@ -132,6 +132,13 @@
   <input name="name" placeholder="Screen name" required>
   <select name="location_id" id="pairLocation"></select>
   <select name="playlist_id" id="pairPlaylist"></select>
+  <select name="deployment_class">
+    <option value="unreviewed">UNREVIEWED HARDWARE</option>
+    <option value="lab_only">LAB ONLY</option>
+    <option value="pilot">PILOT</option>
+    <option value="production">PRODUCTION CERTIFIED</option>
+  </select>
+  <input name="certification_note" placeholder="Hardware certification note">
   <label style="display:flex;align-items:center;gap:7px;white-space:nowrap">
     <input name="is_test" type="checkbox" style="width:auto">
     <span>Test screen</span>

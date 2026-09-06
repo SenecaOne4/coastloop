@@ -50,6 +50,21 @@ function resolution(s){
   const tier=s.can_play_4k ? '4K capable' : '1080p tier';
   return `${video} · ${ui} · ${tier}`;
 }
+function hardwareLabel(s){
+  const vendor=s.device_vendor||'Unknown vendor';
+  const model=s.device_model_number||s.device_model||s.device_display_name||'unknown model';
+  const size=s.device_screen_size ? `${s.device_screen_size}"` : '';
+  return [vendor,model,size,s.device_type||''].filter(Boolean).join(' · ');
+}
+function deploymentOptions(v='unreviewed'){
+  const labels={
+    unreviewed:'UNREVIEWED',
+    lab_only:'LAB ONLY',
+    pilot:'PILOT',
+    production:'PRODUCTION'
+  };
+  return Object.entries(labels).map(([k,label])=>`<option value="${k}" ${v===k?'selected':''}>${label}</option>`).join('');
+}
 
 function allLocations(){
   return state.businesses.flatMap(b=>(b.locations||[]).map(l=>({...l,business_name:b.name})));
@@ -377,7 +392,9 @@ function render(){
     </td>
     <td>
       <strong>${resolution(s)}</strong>
-      <div class="muted">${esc(s.orientation||'')}</div>
+      <div class="muted">${esc(hardwareLabel(s))}</div>
+      <select class="s-deployment" style="margin-top:6px">${deploymentOptions(s.deployment_class||'unreviewed')}</select>
+      <input class="s-cert-note" value="${esc(s.certification_note||'')}" placeholder="Hardware certification note" style="margin-top:6px;min-width:220px">
     </td>
     <td><strong>${esc(s.pair_code||'—')}</strong></td>
     <td>
@@ -500,7 +517,9 @@ $('#pairScreen').onsubmit=async e=>{
         name:String(f.get('name')||'').trim(),
         location_id:f.get('location_id')||null,
         playlist_id:f.get('playlist_id')||null,
-        is_test:f.get('is_test')==='on'
+        is_test:f.get('is_test')==='on',
+        deployment_class:f.get('deployment_class')||'unreviewed',
+        certification_note:String(f.get('certification_note')||'').trim()
       })
     });
     e.target.reset();
@@ -645,7 +664,9 @@ document.addEventListener('click', async e=>{
         name:row.querySelector('.s-name').value,
         location_id:row.querySelector('.s-location').value||null,
         playlist_id:row.querySelector('.s-playlist').value||null,
-        is_test:row.querySelector('.s-test').checked
+        is_test:row.querySelector('.s-test').checked,
+        deployment_class:row.querySelector('.s-deployment').value,
+        certification_note:row.querySelector('.s-cert-note').value
       })});
     await load();
   }

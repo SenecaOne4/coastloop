@@ -485,6 +485,30 @@ This prevents a temporary Wi-Fi/API outage from blacking out a screen merely bec
 
 Physical reboot/Wi-Fi-loss burn-in remains pending installation of the current Roku development build using the operator-held Roku developer password.
 
+## 11E. Screen hardware certification
+
+Worker `0.23.0` / Roku `0.1.10` adds hardware identity and deployment certification.
+
+Roku now reports:
+- model
+- model display name
+- device type
+- vendor
+- model number
+- screen size
+
+Each screen now has a deployment class:
+- `unreviewed`
+- `lab_only`
+- `pilot`
+- `production`
+
+Commercial screens cannot be activated unless hardware is explicitly marked `production` and has a certification note.
+
+Current TCL 55S451 / Roku G136X lab screen is classified `lab_only`. It may be used for development, demonstrations, and controlled pilots, but it is not the CoastLoop production-standard always-on display.
+
+The synthetic secondary test screen is also `lab_only`.
+
 ## 12. Roku launch blockers / burn-in backlog
 
 Before calling hardware production-ready:
