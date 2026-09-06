@@ -453,6 +453,21 @@ Production verification:
 
 Physical long-duration Roku burn-in remains pending installation of the current developer build using the operator-held Roku developer password.
 
+## 11C. Roku launch branding
+
+Roku `0.1.8` adds launch-quality CoastLoop presentation assets.
+
+Included in the packaged channel:
+- HD and FHD channel tiles
+- SD, HD, and FHD splash screens
+- CoastLoop pairing mark
+- branded pairing instructions
+- manifest references for Roku launcher and splash artwork
+
+All six raster assets are built into `roku/build/coastloop-roku-dev.zip` at the required dimensions.
+
+Physical visual QA remains pending installation of the current Roku development build using the operator-held Roku developer password.
+
 ## 12. Roku launch blockers / burn-in backlog
 
 Before calling hardware production-ready:

@@ -46,7 +46,7 @@ end function
 
 sub init()
     m.baseUrl = "https://coastloop.site"
-    m.playerVersion = "roku-0.1.7"
+    m.playerVersion = "roku-0.1.8"
     m.tasks = {}
     m.nextTaskId = 0
     m.retryDelay = 5

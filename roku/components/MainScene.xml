@@ -26,13 +26,21 @@
                 height="1080"
                 color="0x080706FF" />
 
+            <Poster
+                id="pairMark"
+                uri="pkg:/images/pairing-mark.png"
+                translation="[140,145]"
+                width="108"
+                height="72"
+                loadDisplayMode="scaleToFit" />
+
             <Label
                 id="brand"
                 text="COASTLOOP"
-                translation="[140,165]"
-                width="1640"
+                translation="[280,165]"
+                width="1500"
                 height="90"
-                color="0xD8C39AFF"
+                color="0xF4EFE7FF"
                 font="font:LargeBoldSystemFont" />
 
             <Rectangle
@@ -68,9 +76,17 @@
                 font="font:LargeBoldSystemFont" />
 
             <Label
+                text="1  OPEN COASTLOOP ADMIN     2  CHOOSE PAIR A SCREEN     3  ENTER THIS CODE"
+                translation="[140,735]"
+                width="1640"
+                height="50"
+                color="0x8D847BFF"
+                font="font:MediumSystemFont" />
+
+            <Label
                 id="status"
                 text="Connecting to CoastLoop..."
-                translation="[140,745]"
+                translation="[140,815]"
                 width="1640"
                 height="55"
                 color="0xAAA39CFF"

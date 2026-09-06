@@ -7,7 +7,7 @@ OUT="$ROOT/roku/build/coastloop-roku-dev.zip"
 rm -f "$OUT"
 
 cd "$ROOT/roku"
-zip -q -r "$OUT" manifest source components \
+zip -q -r "$OUT" manifest source components images \
   -x '*.DS_Store' '__MACOSX/*'
 
 printf 'ROKU_PACKAGE=%s\n' "$OUT"
