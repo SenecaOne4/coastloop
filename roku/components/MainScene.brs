@@ -1,6 +1,6 @@
 sub init()
     m.baseUrl = "https://coastloop.site"
-    m.playerVersion = "roku-0.1.0"
+    m.playerVersion = "roku-0.1.1"
     m.tasks = []
     m.items = []
     m.index = 0

@@ -6,11 +6,18 @@ sub execute()
     req = m.top.request
 
     if req = invalid
-        m.top.response = { ok: false, action: "", error: "missing request" }
+        m.top.response = {
+            ok: false
+            action: ""
+            error: "missing request"
+        }
         return
     end if
 
+    port = CreateObject("roMessagePort")
     xfer = CreateObject("roUrlTransfer")
+
+    xfer.SetMessagePort(port)
     xfer.SetCertificatesFile("common:/certs/ca-bundle.crt")
     xfer.InitClientCertificates()
     xfer.SetUrl(req.url)
@@ -22,7 +29,49 @@ sub execute()
         body = FormatJson(req.body)
     end if
 
-    text = xfer.PostFromString(body)
+    started = xfer.AsyncPostFromString(body)
+
+    if started <> true
+        m.top.response = {
+            ok: false
+            action: req.action
+            error: "request did not start"
+        }
+        return
+    end if
+
+    event = wait(15000, port)
+
+    if event = invalid
+        xfer.AsyncCancel()
+        m.top.response = {
+            ok: false
+            action: req.action
+            error: "request timeout"
+        }
+        return
+    end if
+
+    if type(event) <> "roUrlEvent"
+        m.top.response = {
+            ok: false
+            action: req.action
+            error: "unexpected network event"
+        }
+        return
+    end if
+
+    code = event.GetResponseCode()
+    text = event.GetString()
+
+    if code < 200 or code >= 300
+        m.top.response = {
+            ok: false
+            action: req.action
+            error: "http " + code.ToStr()
+        }
+        return
+    end if
 
     if text = invalid or text = ""
         m.top.response = {
