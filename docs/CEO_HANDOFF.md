@@ -468,6 +468,23 @@ All six raster assets are built into `roku/build/coastloop-roku-dev.zip` at the 
 
 Physical visual QA remains pending installation of the current Roku development build using the operator-held Roku developer password.
 
+## 11D. Roku offline playback / recovery hardening
+
+Roku `0.1.9` removes network availability from the critical playback loop.
+
+Implemented:
+- playlist playback continues locally when a loop wraps
+- configuration refresh occurs asynchronously while media keeps playing
+- config refresh is rate-limited and never duplicated in flight
+- media failures retry locally with exponential backoff capped at 60 seconds
+- successful playback resets media retry backoff
+- stale device credentials still force a controlled re-bootstrap
+- obsolete Cloudflare D1 package scripts were removed; CoastLoop remains Supabase-only
+
+This prevents a temporary Wi-Fi/API outage from blacking out a screen merely because the playlist reached its end.
+
+Physical reboot/Wi-Fi-loss burn-in remains pending installation of the current Roku development build using the operator-held Roku developer password.
+
 ## 12. Roku launch blockers / burn-in backlog
 
 Before calling hardware production-ready:

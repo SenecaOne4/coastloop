@@ -95,6 +95,7 @@
 
         <Timer id="pollTimer" duration="5" repeat="false" />
         <Timer id="retryTimer" duration="2" repeat="false" />
+        <Timer id="mediaRetryTimer" duration="5" repeat="false" />
         <Timer id="heartbeatTimer" duration="30" repeat="true" />
         <Timer id="imageTimer" duration="15" repeat="false" />
     </children>

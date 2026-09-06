@@ -46,12 +46,15 @@ end function
 
 sub init()
     m.baseUrl = "https://coastloop.site"
-    m.playerVersion = "roku-0.1.8"
+    m.playerVersion = "roku-0.1.9"
     m.tasks = {}
     m.nextTaskId = 0
     m.retryDelay = 5
     m.proofRetryQueue = []
     m.proofRetryActive = false
+    m.configRefreshInFlight = false
+    m.configClock = invalid
+    m.mediaRetryDelay = 5
     m.items = []
     m.index = 0
     m.currentItem = invalid
@@ -64,11 +67,13 @@ sub init()
     m.poster = m.top.findNode("poster")
     m.pollTimer = m.top.findNode("pollTimer")
     m.retryTimer = m.top.findNode("retryTimer")
+    m.mediaRetryTimer = m.top.findNode("mediaRetryTimer")
     m.heartbeatTimer = m.top.findNode("heartbeatTimer")
     m.imageTimer = m.top.findNode("imageTimer")
 
     m.pollTimer.observeField("fire", "onPoll")
     m.retryTimer.observeField("fire", "onProofRetry")
+    m.mediaRetryTimer.observeField("fire", "onMediaRetry")
     m.heartbeatTimer.observeField("fire", "onHeartbeat")
     m.imageTimer.observeField("fire", "onImageFinished")
     m.video.observeField("state", "onVideoState")
@@ -121,6 +126,28 @@ sub requestConfig()
         device_id: m.deviceId
         device_key: m.deviceKey
     })
+end sub
+
+sub requestConfigRefresh()
+    if m.deviceKey = invalid or m.deviceKey = "" then return
+    if m.configRefreshInFlight = true then return
+
+    m.configRefreshInFlight = true
+    m.configClock = CreateObject("roTimespan")
+    m.configClock.Mark()
+
+    startRequest("config_refresh", "/api/player/config", {
+        device_id: m.deviceId
+        device_key: m.deviceKey
+    })
+end sub
+
+sub maybeRefreshConfig()
+    if m.configRefreshInFlight = true then return
+
+    if m.configClock = invalid or m.configClock.TotalMilliseconds() >= 60000
+        requestConfigRefresh()
+    end if
 end sub
 
 sub startRequest(action as String, path as String, body as Object)
@@ -226,7 +253,8 @@ sub onNetworkResponse(event as Object)
     if result <> invalid and result.action <> invalid then action = result.action
 
     if result = invalid or result.ok <> true
-        if action = "config" and result <> invalid and result.status_code = 401
+        if (action = "config" or action = "config_refresh") and result <> invalid and result.status_code = 401
+            m.configRefreshInFlight = false
             clearDeviceKey()
             resetRetryBackoff()
             boot()
@@ -235,6 +263,12 @@ sub onNetworkResponse(event as Object)
 
         if action = "proof"
             queueProofRetry(req)
+            return
+        end if
+
+        if action = "config_refresh"
+            m.configRefreshInFlight = false
+            m.configClock = invalid
             return
         end if
 
@@ -260,6 +294,8 @@ sub onNetworkResponse(event as Object)
         handleBoot(data)
     else if action = "config"
         handleConfig(data)
+    else if action = "config_refresh"
+        handleConfigRefresh(data)
     end if
 end sub
 
@@ -288,11 +324,15 @@ sub handleBoot(data as Object)
 end sub
 
 sub handleConfig(data as Object)
+    m.configRefreshInFlight = false
+
     if data.items <> invalid and data.items.Count() > 0
         m.items = data.items
         m.index = 0
         m.pairing.visible = false
         m.heartbeatTimer.control = "start"
+        m.configClock = CreateObject("roTimespan")
+        m.configClock.Mark()
         playCurrent()
     else
         m.pairing.visible = true
@@ -303,6 +343,18 @@ sub handleConfig(data as Object)
 
         m.status.text = "Waiting for pairing..."
         schedulePoll()
+    end if
+end sub
+
+sub handleConfigRefresh(data as Object)
+    m.configRefreshInFlight = false
+
+    if data.items <> invalid and data.items.Count() > 0
+        m.items = data.items
+        m.configClock = CreateObject("roTimespan")
+        m.configClock.Mark()
+    else
+        m.configClock = invalid
     end if
 end sub
 
@@ -384,6 +436,9 @@ sub onVideoState()
     state = m.video.state
 
     if state = "playing"
+        m.mediaRetryDelay = 5
+        m.mediaRetryTimer.control = "stop"
+
         if m.currentStarted = false
             m.currentStarted = true
             m.playClock = CreateObject("roTimespan")
@@ -418,7 +473,23 @@ sub tryFallbackOrAdvance()
         return
     end if
 
-    advance()
+    scheduleMediaRetry()
+end sub
+
+sub scheduleMediaRetry()
+    m.video.control = "stop"
+    m.poster.visible = false
+
+    m.mediaRetryTimer.control = "stop"
+    m.mediaRetryTimer.duration = m.mediaRetryDelay
+    m.mediaRetryTimer.control = "start"
+
+    m.mediaRetryDelay = m.mediaRetryDelay * 2
+    if m.mediaRetryDelay > 60 then m.mediaRetryDelay = 60
+end sub
+
+sub onMediaRetry()
+    playCurrent()
 end sub
 
 sub recordProof()
@@ -457,7 +528,8 @@ sub advance()
 
     if m.index >= m.items.Count()
         m.index = 0
-        requestConfig()
+        playCurrent()
+        maybeRefreshConfig()
     else
         playCurrent()
     end if
