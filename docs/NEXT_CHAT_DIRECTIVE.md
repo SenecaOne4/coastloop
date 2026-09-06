@@ -51,3 +51,11 @@ Immediate work queue at handoff:
 10. first CoastLoop Certified TV family decision
 
 Do not start by rebuilding the site. Continue the operating system already in place.
+
+## Auth/access update — second-user lifecycle
+- Production second non-owner lifecycle verified end-to-end with a disposable internal `viewer`.
+- Passed: admin invite creation -> signup/confirmation -> invitation claim -> viewer login -> `/api/auth/me` -> admin-route denial -> access revocation -> subsequent login denied.
+- Disposable auth user and invitation were deleted after the test; production returned to owner-only state.
+- `public.sync_coastloop_user_profile()` SECURITY DEFINER execution is now revoked from `public`, `anon`, and `authenticated`; `service_role` retains execute.
+- Migration: `0010_lock_profile_sync_trigger_function.sql`.
+- Priority 3 is complete. Next: priority 4, Host-only / Advertiser-only / both access modeling and portal enforcement.

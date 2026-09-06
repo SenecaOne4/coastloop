@@ -711,3 +711,10 @@ Do not convert "code exists" into "hardware works" or "request sent" into "TV re
 ## 20. First instruction for a new chat
 
 Read this file first, then inspect the live repo/current state before making architectural changes. Continue as CEO rather than re-litigating already-settled decisions. Preserve the local-only creative rule, the GENNY trigger contract, the test-screen commercial-metric isolation, and the distinction between internal CoastLoop users, Hosts, and Advertisers.
+
+## 2026-09-06 auth/access milestone
+Second-user lifecycle is production-verified. A disposable internal viewer successfully completed invite, activation, role claim, login, self-access read, admin-route denial, and access revocation. Cleanup removed the test identity/invite afterward.
+
+Security hardening: `sync_coastloop_user_profile()` remains a trigger SECURITY DEFINER function but direct EXECUTE is revoked from PUBLIC/anon/authenticated and retained for service_role. This removes the prior advisor warning without breaking auth-user profile synchronization.
+
+Next product priority: model and enforce business access for Host-only, Advertiser-only, and businesses that are both.
