@@ -24,7 +24,7 @@ end function
 
 sub init()
     m.baseUrl = "https://coastloop.site"
-    m.playerVersion = "roku-0.1.4"
+    m.playerVersion = "roku-0.1.5"
     m.tasks = []
     m.items = []
     m.index = 0
@@ -108,6 +108,12 @@ sub onNetworkResponse(event as Object)
     result = event.getData()
 
     if result = invalid or result.ok <> true
+        if result <> invalid and result.action = "config" and result.status_code = 401
+            clearDeviceKey()
+            boot()
+            return
+        end if
+
         m.status.text = "Connection retrying..."
         schedulePoll()
         return
@@ -121,6 +127,13 @@ sub onNetworkResponse(event as Object)
     else if action = "config"
         handleConfig(data)
     end if
+end sub
+
+sub clearDeviceKey()
+    m.deviceKey = ""
+    reg = CreateObject("roRegistrySection", "CoastLoop")
+    reg.Delete("device_key")
+    reg.Flush()
 end sub
 
 sub handleBoot(data as Object)

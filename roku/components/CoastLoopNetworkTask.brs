@@ -68,6 +68,7 @@ sub execute()
         m.top.response = {
             ok: false
             action: req.action
+            status_code: code
             error: "http " + code.ToStr()
         }
         return

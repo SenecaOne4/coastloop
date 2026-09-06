@@ -124,6 +124,26 @@
 
 <section class="card">
 <div class="row">
+  <div><h2>Pair a screen</h2><p class="muted">Enter the six-character code shown on the TV. Pairing is the only path that activates a new screen.</p></div>
+</div>
+<form id="pairScreen" style="margin-top:12px">
+<div class="row">
+  <input name="pair_code" maxlength="6" placeholder="ABC123" autocomplete="off" required style="text-transform:uppercase;max-width:130px">
+  <input name="name" placeholder="Screen name" required>
+  <select name="location_id" id="pairLocation"></select>
+  <select name="playlist_id" id="pairPlaylist"></select>
+  <label style="display:flex;align-items:center;gap:7px;white-space:nowrap">
+    <input name="is_test" type="checkbox" style="width:auto">
+    <span>Test screen</span>
+  </label>
+  <button>Pair screen</button>
+</div>
+<div id="pairMessage" class="muted" style="margin-top:8px"></div>
+</form>
+</section>
+
+<section class="card">
+<div class="row">
   <div><h2>Screens</h2><p class="muted">Live device health and actual proof-of-play totals.</p></div>
 </div>
 <div style="overflow:auto">

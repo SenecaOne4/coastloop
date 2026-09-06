@@ -122,19 +122,61 @@ async function bootPlayer(request, env) {
     });
   }
 
+  if (!screen.device_key_hash) {
+    const deviceKey = randomHex(32);
+    const code = pairCode();
+    const updated = await sb(env, `screens?id=eq.${screen.id}`, {
+      method: "PATCH",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify({
+        name: "Unpaired screen",
+        status: "unpaired",
+        paired_at: null,
+        pairing_code: code,
+        pairing_expires_at: new Date(Date.now() + 7 * 86400000).toISOString(),
+        device_key_hash: await sha256Hex(deviceKey),
+        last_seen_at: new Date().toISOString(),
+        app_version: b.app_version || screen.app_version,
+        display_width: Number.isFinite(b.width) ? b.width : screen.display_width,
+        display_height: Number.isFinite(b.height) ? b.height : screen.display_height,
+        lan_ip: String(b.lan_ip || screen.lan_ip || "").trim() || null,
+      }),
+    });
+
+    screen = updated[0] || screen;
+    return json({
+      screen_id: screen.id,
+      paired: false,
+      pair_code: screen.pairing_code,
+      name: screen.name,
+      status: screen.status,
+      device_key: deviceKey,
+    });
+  }
+
   if (!b.device_key || await sha256Hex(b.device_key) !== screen.device_key_hash)
     return json({ error: "invalid device key" }, 401);
+
+  const patch = {
+    last_seen_at: new Date().toISOString(),
+    app_version: b.app_version || screen.app_version,
+    display_width: Number.isFinite(b.width) ? b.width : screen.display_width,
+    display_height: Number.isFinite(b.height) ? b.height : screen.display_height,
+    lan_ip: String(b.lan_ip || screen.lan_ip || "").trim() || null,
+  };
+
+  if (!screen.paired_at &&
+      (!screen.pairing_code ||
+       !screen.pairing_expires_at ||
+       new Date(screen.pairing_expires_at).getTime() <= Date.now())) {
+    patch.pairing_code = pairCode();
+    patch.pairing_expires_at = new Date(Date.now() + 7 * 86400000).toISOString();
+  }
 
   const updated = await sb(env, `screens?id=eq.${screen.id}`, {
     method: "PATCH",
     headers: { Prefer: "return=representation" },
-    body: JSON.stringify({
-      last_seen_at: new Date().toISOString(),
-      app_version: b.app_version || screen.app_version,
-      display_width: Number.isFinite(b.width) ? b.width : screen.display_width,
-      display_height: Number.isFinite(b.height) ? b.height : screen.display_height,
-      lan_ip: String(b.lan_ip || screen.lan_ip || "").trim() || null,
-    }),
+    body: JSON.stringify(patch),
   });
 
   screen = updated[0] || screen;
@@ -673,24 +715,40 @@ async function setPlaylistItems(request, env, playlistId) {
   return json({ ok: true });
 }
 
-async function assignScreen(request, env, screenId) {
-  const b = await bodyJson(request);
+async function applyScreenAssignment(env, screen, b, markPaired = false) {
+  const isTest = b.is_test !== undefined ? Boolean(b.is_test) : Boolean(screen.is_test);
+  const locationId = String(b.location_id || "").trim() || null;
+
+  if (!isTest && !locationId)
+    return json({ error: "location required for commercial screen" }, 400);
+
+  if (locationId) {
+    const locations = await sb(
+      env,
+      `locations?id=eq.${encodeURIComponent(locationId)}&organization_id=eq.${ORG_ID}&select=id`
+    );
+    if (!locations?.[0]) return json({ error: "invalid location" }, 400);
+  }
 
   const screenPatch = {
     name: String(b.name || "CoastLoop Screen").trim(),
     status: "active",
-    paired_at: new Date().toISOString(),
+    location_id: locationId,
+    is_test: isTest,
   };
 
-  if (b.is_test !== undefined)
-    screenPatch.is_test = Boolean(b.is_test);
+  if (markPaired) {
+    screenPatch.paired_at = new Date().toISOString();
+    screenPatch.pairing_code = null;
+    screenPatch.pairing_expires_at = null;
+  }
 
-  await sb(env, `screens?id=eq.${screenId}`, {
+  await sb(env, `screens?id=eq.${screen.id}&organization_id=eq.${ORG_ID}`, {
     method: "PATCH",
     body: JSON.stringify(screenPatch),
   });
 
-  await sb(env, `screen_playlist_assignments?screen_id=eq.${screenId}`, {
+  await sb(env, `screen_playlist_assignments?screen_id=eq.${screen.id}`, {
     method: "DELETE",
   });
 
@@ -699,14 +757,81 @@ async function assignScreen(request, env, screenId) {
       method: "POST",
       body: JSON.stringify({
         organization_id: ORG_ID,
-        screen_id: screenId,
+        screen_id: screen.id,
         playlist_id: b.playlist_id,
         priority: 100,
       }),
     });
   }
 
-  return json({ ok: true });
+  return json({ ok: true, screen_id: screen.id });
+}
+
+async function pairScreen(request, env) {
+  const b = await bodyJson(request);
+  const code = String(b.pair_code || "").trim().toUpperCase();
+  if (!code) return json({ error: "pair code required" }, 400);
+
+  const rows = await sb(
+    env,
+    `screens?organization_id=eq.${ORG_ID}&pairing_code=eq.${encodeURIComponent(code)}&select=*`
+  );
+  const screen = rows?.[0];
+
+  if (!screen) return json({ error: "pair code not found" }, 404);
+  if (screen.paired_at) return json({ error: "screen already paired" }, 409);
+  if (!screen.pairing_expires_at ||
+      new Date(screen.pairing_expires_at).getTime() <= Date.now())
+    return json({ error: "pair code expired; restart the CoastLoop player for a new code" }, 410);
+
+  return applyScreenAssignment(env, screen, b, true);
+}
+
+async function assignScreen(request, env, screenId) {
+  const b = await bodyJson(request);
+  const rows = await sb(
+    env,
+    `screens?id=eq.${encodeURIComponent(screenId)}&organization_id=eq.${ORG_ID}&select=*`
+  );
+  const screen = rows?.[0];
+
+  if (!screen) return json({ error: "screen not found" }, 404);
+  if (!screen.paired_at)
+    return json({ error: "unpaired screen must be paired by code first" }, 409);
+
+  return applyScreenAssignment(env, screen, b, false);
+}
+
+async function resetTestScreenPairing(env, screenId) {
+  const rows = await sb(
+    env,
+    `screens?id=eq.${encodeURIComponent(screenId)}&organization_id=eq.${ORG_ID}&select=*`
+  );
+  const screen = rows?.[0];
+
+  if (!screen) return json({ error: "screen not found" }, 404);
+  if (!screen.is_test)
+    return json({ error: "pairing reset is restricted to test screens" }, 403);
+
+  await sb(env, `screen_playlist_assignments?screen_id=eq.${screen.id}`, {
+    method: "DELETE",
+  });
+
+  await sb(env, `screens?id=eq.${screen.id}&organization_id=eq.${ORG_ID}`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      name: "Unpaired screen",
+      status: "unpaired",
+      paired_at: null,
+      pairing_code: null,
+      pairing_expires_at: null,
+      device_key_hash: null,
+      location_id: null,
+      is_test: true,
+    }),
+  });
+
+  return json({ ok: true, screen_id: screen.id });
 }
 
 
@@ -1248,7 +1373,7 @@ export default {
         return portalOverview(request, env);
 
       if (url.pathname === "/api/health")
-        return json({ ok: true, service: "coastloop", version: "0.19.0" });
+        return json({ ok: true, service: "coastloop", version: "0.20.0" });
 
       if (url.pathname === "/api/player/boot" && request.method === "POST")
         return bootPlayer(request, env);
@@ -1294,6 +1419,9 @@ export default {
         if (url.pathname === "/api/admin/screens" && request.method === "GET")
           return json(await adminScreens(env));
 
+        if (url.pathname === "/api/admin/screens/pair" && request.method === "POST")
+          return pairScreen(request, env);
+
         if (url.pathname === "/api/admin/prospects" && request.method === "GET")
           return json(await adminProspects(env));
 
@@ -1335,6 +1463,10 @@ export default {
         const assign = url.pathname.match(/^\/api\/admin\/screens\/([^/]+)\/assign$/);
         if (assign && request.method === "PUT")
           return assignScreen(request, env, assign[1]);
+
+        const resetPairing = url.pathname.match(/^\/api\/admin\/screens\/([^/]+)\/reset-pairing$/);
+        if (resetPairing && request.method === "POST")
+          return resetTestScreenPairing(env, resetPairing[1]);
 
         const items = url.pathname.match(/^\/api\/admin\/playlists\/([^/]+)\/items$/);
         if (items && request.method === "PUT")

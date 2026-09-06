@@ -382,18 +382,25 @@ Important limitation:
 
 Future proper remote-control model should be a cloud command queue polled by the player (relaunch/refresh/diagnostics/etc.), rather than pretending the Cloudflare Worker can call private LAN addresses.
 
-## 11. Roku pairing work still required
+## 11. Roku pairing status
 
-Manual pairing performed during hardware validation was not acceptable as final UX.
+Launch-quality pairing-by-code is implemented in Worker/Admin as of live version `0.20.0`.
 
-Launch-quality pairing target:
+Verified live cloud flow:
 
-1. TV starts unpaired.
-2. TV shows a short pairing code.
-3. Operator enters the code in Admin/mobile.
-4. Backend resolves the screen by `pairing_code`.
-5. Operator assigns business/location/name/playlist.
-6. TV polls config and becomes paired automatically.
+1. test screen reset to zero-state
+2. player boot received a fresh six-character pairing code and device credential
+3. Admin claimed the screen by `pairing_code`
+4. backend marked it paired and cleared the pairing code
+5. player config returned `paired:true` with the CoastLoop House Loop
+
+Admin now supports location/name/playlist/test-screen assignment during pairing.
+Commercial screens require a real location. Direct Save cannot activate an unpaired screen.
+Pairing reset is restricted to TEST screens.
+
+Roku `0.1.5` adds stale-credential recovery: a config `401` clears the local registry device key and reboots through the pairing flow.
+
+Physical TCL zero-state proof is still pending because the current lab TV is running `roku-0.1.3` and the Roku developer installer password is intentionally not stored in the repository/handoff. Do not reset that TCL until `roku-0.1.5` is installed.
 
 Do not regress to manually editing the database or auto-pairing lab screens as the production workflow.
 

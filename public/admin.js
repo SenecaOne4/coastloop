@@ -48,6 +48,18 @@ function resolution(s){
   return s.display_width && s.display_height ? `${s.display_width}×${s.display_height}` : '—';
 }
 
+function allLocations(){
+  return state.businesses.flatMap(b=>(b.locations||[]).map(l=>({...l,business_name:b.name})));
+}
+
+function locationOptions(selected=''){
+  const options=allLocations().map(l=>{
+    const label=[l.business_name,l.name && l.name!==l.business_name?l.name:null,l.address_line1,l.city].filter(Boolean).join(' · ');
+    return `<option value="${l.id}" ${l.id===selected?'selected':''}>${esc(label)}</option>`;
+  }).join('');
+  return `<option value="">Unassigned${options?' / choose location':''}</option>${options}`;
+}
+
 
 let prospectMap=null;
 let prospectLayer=null;
@@ -297,6 +309,10 @@ function render(){
   $('#campaignBusiness').innerHTML = '<option value="">Choose advertiser…</option>' +
     state.businesses.map(b=>`<option value="${b.id}">${esc(b.name)}</option>`).join('');
 
+  $('#pairLocation').innerHTML = locationOptions();
+  $('#pairPlaylist').innerHTML = '<option value="">No playlist yet</option>' +
+    state.playlists.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
+
   $('#campaigns').innerHTML = state.campaigns.map(c=>{
     const b=state.businesses.find(x=>x.id===c.advertiser_business_id);
     const r=state.campaignReports.find(x=>x.campaign_id===c.id) || {};
@@ -335,7 +351,7 @@ function render(){
       </label>
     </td>
     <td>
-      <strong>${esc(s.location_name||'Unassigned')}</strong>
+      <select class="s-location">${locationOptions(s.location_id||'')}</select>
       <div class="muted">${esc(s.address||'No physical location linked')}</div>
     </td>
     <td><select class="s-playlist">${playlistOptions(s.playlist_id)}</select></td>
@@ -367,7 +383,12 @@ function render(){
            <div class="muted" style="margin-top:4px">${esc(s.lan_ip)}</div>`
         : '<span class="muted">No LAN IP</span>'}
     </td>
-    <td><button class="save-screen">Save</button></td>
+    <td>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="save-screen" ${s.paired_at?'':'disabled'}>Save</button>
+        ${s.is_test && s.paired_at ? '<button class="secondary reset-pairing" type="button">Reset pairing</button>' : ''}
+      </div>
+    </td>
   </tr>`).join('');
   $('#media').innerHTML = state.media.map(m=>`<div class="media-item"><strong>${esc(m.name)}</strong> <span class="pill">${m.media_type}</span><div class="muted">${m.duration_seconds}s · ${(m.bytes/1024/1024).toFixed(2)} MB · ${m.id}</div></div>`).join('') || '<div class="muted">No media yet.</div>';
   $('#playlists').innerHTML = state.playlists.map(p=>`<div class="playlist" data-id="${p.id}">
@@ -461,6 +482,31 @@ $('#inviteUser').onsubmit=async e=>{
 };
 $('#upload').onsubmit=async e=>{ e.preventDefault(); try { await api('/api/admin/media',{method:'POST',body:new FormData(e.target)}); e.target.reset(); await load(); } catch(err){ $('#error').textContent=err.message; } };
 $('#newPlaylist').onsubmit=async e=>{ e.preventDefault(); const name=new FormData(e.target).get('name'); try { await api('/api/admin/playlists',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name})}); e.target.reset(); await load(); } catch(err){ $('#error').textContent=err.message; } };
+
+$('#pairScreen').onsubmit=async e=>{
+  e.preventDefault();
+  const f=new FormData(e.target);
+  const message=$('#pairMessage');
+  message.textContent='Pairing…';
+  try{
+    await api('/api/admin/screens/pair',{
+      method:'POST',
+      headers:{'content-type':'application/json'},
+      body:JSON.stringify({
+        pair_code:String(f.get('pair_code')||'').trim().toUpperCase(),
+        name:String(f.get('name')||'').trim(),
+        location_id:f.get('location_id')||null,
+        playlist_id:f.get('playlist_id')||null,
+        is_test:f.get('is_test')==='on'
+      })
+    });
+    e.target.reset();
+    message.textContent='✓ Screen paired. The TV will activate automatically.';
+    await load();
+  }catch(err){
+    message.textContent=err.message;
+  }
+};
 
 
 async function relaunchRoku(ip, button){
@@ -582,10 +628,19 @@ document.addEventListener('click', async e=>{
     });
     await load();
   }
+  if(e.target.matches('.reset-pairing')){
+    const row=e.target.closest('tr');
+    if(!confirm('Reset this TEST screen to an unpaired state? The TV will receive a new pairing code on its next boot request.')) return;
+    await api(`/api/admin/screens/${row.dataset.id}/reset-pairing`,{method:'POST'});
+    await load();
+    return;
+  }
+
   if(e.target.matches('.save-screen')){
     const row=e.target.closest('tr');
     await api(`/api/admin/screens/${row.dataset.id}/assign`,{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({
         name:row.querySelector('.s-name').value,
+        location_id:row.querySelector('.s-location').value||null,
         playlist_id:row.querySelector('.s-playlist').value||null,
         is_test:row.querySelector('.s-test').checked
       })});
