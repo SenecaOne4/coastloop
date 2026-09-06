@@ -366,18 +366,97 @@ async function mediaLookup(env, mediaId) {
   return rows?.[0] || null;
 }
 
-async function serveMedia(env, mediaId) {
+async function serveMedia(request, env, mediaId) {
   const row = await mediaLookup(env, mediaId);
-  if (!row?.storage_key) return new Response("Not found", { status: 404 });
+  if (!row?.storage_key)
+    return new Response("Not found", { status: 404 });
 
-  const object = await env.MEDIA.get(row.storage_key);
-  if (!object) return new Response("Not found", { status: 404 });
+  const head = await env.MEDIA.head(row.storage_key);
+  if (!head)
+    return new Response("Not found", { status: 404 });
+
+  const size = head.size;
+  const rangeHeader = request.headers.get("range");
+
+  let start = 0;
+  let end = size - 1;
+  let status = 200;
+  let object = null;
+
+  if (rangeHeader) {
+    const match = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader.trim());
+
+    if (!match) {
+      return new Response(null, {
+        status: 416,
+        headers: {
+          "content-range": `bytes */${size}`,
+          "accept-ranges": "bytes",
+        },
+      });
+    }
+
+    if (match[1] === "") {
+      const suffix = Number(match[2]);
+      if (!Number.isFinite(suffix) || suffix <= 0)
+        return new Response(null, {
+          status: 416,
+          headers: {
+            "content-range": `bytes */${size}`,
+            "accept-ranges": "bytes",
+          },
+        });
+
+      start = Math.max(0, size - suffix);
+      end = size - 1;
+    } else {
+      start = Number(match[1]);
+      end = match[2] === "" ? size - 1 : Number(match[2]);
+    }
+
+    if (!Number.isFinite(start) ||
+        !Number.isFinite(end) ||
+        start < 0 ||
+        start >= size ||
+        end < start) {
+      return new Response(null, {
+        status: 416,
+        headers: {
+          "content-range": `bytes */${size}`,
+          "accept-ranges": "bytes",
+        },
+      });
+    }
+
+    end = Math.min(end, size - 1);
+    object = await env.MEDIA.get(row.storage_key, {
+      range: {
+        offset: start,
+        length: end - start + 1,
+      },
+    });
+    status = 206;
+  } else if (request.method !== "HEAD") {
+    object = await env.MEDIA.get(row.storage_key);
+  }
 
   const headers = new Headers();
-  object.writeHttpMetadata(headers);
-  headers.set("etag", object.httpEtag);
+  head.writeHttpMetadata(headers);
+  headers.set("etag", head.httpEtag);
   headers.set("cache-control", "public, max-age=31536000, immutable");
-  return new Response(object.body, { headers });
+  headers.set("accept-ranges", "bytes");
+
+  if (status === 206) {
+    headers.set("content-range", `bytes ${start}-${end}/${size}`);
+    headers.set("content-length", String(end - start + 1));
+  } else {
+    headers.set("content-length", String(size));
+  }
+
+  return new Response(
+    request.method === "HEAD" ? null : object?.body || null,
+    { status, headers }
+  );
 }
 
 async function adminScreens(env) {
@@ -1140,8 +1219,9 @@ export default {
       if (url.pathname === "/api/player/proof" && request.method === "POST")
         return proof(request, env);
 
-      if (url.pathname.startsWith("/media/") && request.method === "GET")
-        return serveMedia(env, url.pathname.split("/").pop());
+      if (url.pathname.startsWith("/media/") &&
+          (request.method === "GET" || request.method === "HEAD"))
+        return serveMedia(request, env, url.pathname.split("/").pop());
 
       if (url.pathname === "/api/public/lead" && request.method === "POST")
         return createPublicLead(request, env);
