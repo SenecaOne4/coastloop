@@ -718,3 +718,18 @@ Second-user lifecycle is production-verified. A disposable internal viewer succe
 Security hardening: `sync_coastloop_user_profile()` remains a trigger SECURITY DEFINER function but direct EXECUTE is revoked from PUBLIC/anon/authenticated and retained for service_role. This removes the prior advisor warning without breaking auth-user profile synchronization.
 
 Next product priority: model and enforce business access for Host-only, Advertiser-only, and businesses that are both.
+
+## 2026-09-06 business capability milestone
+Host/Advertiser account semantics are now explicit rather than inferred from activity. `businesses.is_host` and `businesses.is_advertiser` support exactly host-only, advertiser-only, and both. A database check prevents a business with neither capability.
+
+Prospect conversion carries the prospect's explicit host/advertiser interests into the business record. Campaign creation rejects host-only businesses. Portal payloads are capability-gated so advertiser-only customers do not receive hosted-screen sections and host-only customers do not receive campaign sections.
+
+Production matrix PASS:
+- host-only
+- advertiser-only
+- both
+- host-only campaign rejection
+- advertiser campaign creation
+- both campaign creation
+
+All synthetic matrix data was deleted after verification. Production Worker is 0.24.1.

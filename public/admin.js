@@ -317,6 +317,7 @@ function render(){
         <div>
           <strong>${esc(b.name)}</strong>
           <span class="pill">${esc(b.category||'business')}</span>
+          <span class="pill">${b.is_host&&b.is_advertiser?'HOST · ADVERTISER':b.is_host?'HOST':'ADVERTISER'}</span>
           <div class="muted">${esc(b.contact_name||'')}${b.phone?' · '+esc(b.phone):''}${b.email?' · '+esc(b.email):''}</div>
         </div>
         <div class="muted">${(b.locations||[]).length} location${(b.locations||[]).length===1?'':'s'}</div>
@@ -325,7 +326,7 @@ function render(){
     </div>`).join('') || '<div class="muted">No customers yet. Promote a prospect when they convert.</div>';
 
   $('#campaignBusiness').innerHTML = '<option value="">Choose advertiser…</option>' +
-    state.businesses.map(b=>`<option value="${b.id}">${esc(b.name)}</option>`).join('');
+    state.businesses.filter(b=>b.is_advertiser).map(b=>`<option value="${b.id}">${esc(b.name)}</option>`).join('');
 
   $('#pairLocation').innerHTML = locationOptions();
   $('#pairPlaylist').innerHTML = '<option value="">No playlist yet</option>' +

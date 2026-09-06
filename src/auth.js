@@ -123,7 +123,7 @@ async function accessForUser(env, user, claim = true) {
   const [internalRows, businessRows, businesses] = await Promise.all([
     rest(env, `organization_members?organization_id=eq.${ORG_ID}&user_id=eq.${user.id}&select=role`),
     rest(env, `business_members?user_id=eq.${user.id}&select=business_id,role`),
-    rest(env, `businesses?organization_id=eq.${ORG_ID}&select=id,name,category`),
+    rest(env, `businesses?organization_id=eq.${ORG_ID}&select=id,name,category,is_host,is_advertiser`),
   ]);
 
   const businessMap = new Map((businesses || []).map(x => [x.id, x]));
@@ -542,10 +542,10 @@ export async function portalOverview(request, env) {
       name: b.name,
       category: b.category,
       member_role: auth.access.businesses.find(x => x.business_id === b.id)?.role || "viewer",
-      is_host: locationData.length > 0,
-      is_advertiser: campaignData.length > 0,
-      locations: locationData,
-      campaigns: campaignData,
+      is_host: Boolean(b.is_host),
+      is_advertiser: Boolean(b.is_advertiser),
+      locations: b.is_host ? locationData : [],
+      campaigns: b.is_advertiser ? campaignData : [],
     };
   });
 

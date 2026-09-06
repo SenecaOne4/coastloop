@@ -1080,6 +1080,8 @@ async function promoteProspect(request, env, prospectId) {
   );
   const prospect = rows?.[0];
   if (!prospect) return json({ error: "prospect not found" }, 404);
+  if (!prospect.host_interest && !prospect.advertiser_interest)
+    return json({ error: "prospect must be host, advertiser, or both before promotion" }, 400);
 
   let existing = await sb(
     env,
@@ -1102,6 +1104,8 @@ async function promoteProspect(request, env, prospectId) {
         email: prospect.email,
         website: prospect.website,
         notes: prospect.notes,
+        is_host: Boolean(prospect.host_interest),
+        is_advertiser: Boolean(prospect.advertiser_interest),
       }),
     });
     business = created?.[0];
@@ -1166,7 +1170,7 @@ async function createCampaign(request, env) {
 
   const business = await sb(
     env,
-    `businesses?id=eq.${businessId}&organization_id=eq.${ORG_ID}&select=id`
+    `businesses?id=eq.${businessId}&organization_id=eq.${ORG_ID}&is_advertiser=eq.true&select=id`
   );
   if (!business?.[0])
     return json({ error: "business not found" }, 404);
@@ -1422,7 +1426,7 @@ export default {
         return portalOverview(request, env);
 
       if (url.pathname === "/api/health")
-        return json({ ok: true, service: "coastloop", version: "0.23.0" });
+        return json({ ok: true, service: "coastloop", version: "0.24.1" });
 
       if (url.pathname === "/api/player/boot" && request.method === "POST")
         return bootPlayer(request, env);

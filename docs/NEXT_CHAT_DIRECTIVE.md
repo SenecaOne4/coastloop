@@ -59,3 +59,19 @@ Do not start by rebuilding the site. Continue the operating system already in pl
 - `public.sync_coastloop_user_profile()` SECURITY DEFINER execution is now revoked from `public`, `anon`, and `authenticated`; `service_role` retains execute.
 - Migration: `0010_lock_profile_sync_trigger_function.sql`.
 - Priority 3 is complete. Next: priority 4, Host-only / Advertiser-only / both access modeling and portal enforcement.
+
+## Business capability milestone — Host / Advertiser / Both
+- Priority 4 complete.
+- Businesses now have explicit `is_host` and `is_advertiser` capabilities.
+- Database constraint requires at least one capability.
+- Prospect promotion maps `host_interest` / `advertiser_interest` directly to business capabilities.
+- Promotion is rejected if neither capability is selected.
+- Host-only businesses cannot create campaigns.
+- Advertiser-only and both-mode businesses can create campaigns.
+- Customer portal returns hosted-screen data only for host-capable businesses and campaign data only for advertiser-capable businesses.
+- Admin advertiser picker only lists advertiser-capable businesses.
+- Production E2E matrix passed: Host-only, Advertiser-only, Both, host campaign rejection, advertiser campaign creation, both campaign creation.
+- Synthetic businesses/prospects/campaigns/locations were cleaned; production business data returned to zero rows.
+- Worker production version: 0.24.1.
+- Migration: `0011_business_capabilities.sql`.
+- Next priority: return to physical Roku validation / first commercial screen baseline while auth email branding remains staged behind paid Supabase custom-domain support.
