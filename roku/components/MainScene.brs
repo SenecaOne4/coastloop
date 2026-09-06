@@ -1,6 +1,6 @@
 sub init()
     m.baseUrl = "https://coastloop.site"
-    m.playerVersion = "roku-0.1.1"
+    m.playerVersion = "roku-0.1.2"
     m.tasks = []
     m.items = []
     m.index = 0
@@ -44,6 +44,10 @@ sub boot()
         width: m.displayWidth
         height: m.displayHeight
     }
+
+    if m.deviceKey <> invalid and m.deviceKey <> ""
+        body.device_key = m.deviceKey
+    end if
 
     startRequest("boot", "/api/player/boot", body)
 end sub
