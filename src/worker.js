@@ -658,13 +658,18 @@ async function setPlaylistItems(request, env, playlistId) {
 async function assignScreen(request, env, screenId) {
   const b = await bodyJson(request);
 
+  const screenPatch = {
+    name: String(b.name || "CoastLoop Screen").trim(),
+    status: "active",
+    paired_at: new Date().toISOString(),
+  };
+
+  if (b.is_test !== undefined)
+    screenPatch.is_test = Boolean(b.is_test);
+
   await sb(env, `screens?id=eq.${screenId}`, {
     method: "PATCH",
-    body: JSON.stringify({
-      name: String(b.name || "CoastLoop Screen").trim(),
-      status: "active",
-      paired_at: new Date().toISOString(),
-    }),
+    body: JSON.stringify(screenPatch),
   });
 
   await sb(env, `screen_playlist_assignments?screen_id=eq.${screenId}`, {
@@ -1005,7 +1010,7 @@ async function adminCampaignReports(env) {
     sb(env, `businesses?organization_id=eq.${ORG_ID}&select=id,name`),
     sb(env, `playback_daily?organization_id=eq.${ORG_ID}&campaign_id=not.is.null&select=campaign_id,screen_id,media_asset_id,play_date,play_count,seconds_played,first_played_at,last_played_at&order=play_date.asc`),
     sb(env, `media_assets?organization_id=eq.${ORG_ID}&select=id,title,kind`),
-    sb(env, `screens?organization_id=eq.${ORG_ID}&select=id,name,location_id`),
+    sb(env, `screens?organization_id=eq.${ORG_ID}&select=id,name,location_id,is_test`),
     sb(env, `locations?organization_id=eq.${ORG_ID}&select=id,business_id,name,address_line1,city,state`),
     sb(env, `playlist_items?organization_id=eq.${ORG_ID}&campaign_id=not.is.null&select=campaign_id,media_asset_id`)
   ]);
@@ -1056,6 +1061,10 @@ async function adminCampaignReports(env) {
 
   for (const row of plays || []) {
     if (!row.campaign_id) continue;
+
+    // Internal/demo screens retain proof-of-play, but never count toward
+    // advertiser/customer-facing delivery metrics.
+    if (row.screen_id && screenMap.get(row.screen_id)?.is_test) continue;
 
     const g = ensureGroup(row.campaign_id);
     const count = Number(row.play_count || 0);
@@ -1181,21 +1190,31 @@ async function adminCampaignReports(env) {
 
 async function stats(env) {
   const [screens, media, plays] = await Promise.all([
-    sb(env, `screens?organization_id=eq.${ORG_ID}&select=id,last_seen_at`),
+    sb(env, `screens?organization_id=eq.${ORG_ID}&select=id,last_seen_at,is_test`),
     sb(env, `media_assets?organization_id=eq.${ORG_ID}&status=eq.ready&select=id`),
-    sb(env, `playback_daily?organization_id=eq.${ORG_ID}&select=play_count,last_played_at`),
+    sb(env, `playback_daily?organization_id=eq.${ORG_ID}&select=screen_id,play_count,last_played_at`),
   ]);
 
   const cutoff = Date.now() - 120000;
   const dayCutoff = Date.now() - 86400000;
 
+  const commercialScreens = (screens || []).filter(s => !s.is_test);
+  const commercialIds = new Set(commercialScreens.map(s => s.id));
+
   return {
-    screens: screens?.length || 0,
-    online: (screens || []).filter(s => s.last_seen_at && new Date(s.last_seen_at).getTime() > cutoff).length,
+    screens: commercialScreens.length,
+    online: commercialScreens
+      .filter(s => s.last_seen_at && new Date(s.last_seen_at).getTime() > cutoff)
+      .length,
     media: media?.length || 0,
     plays_24h: (plays || [])
-      .filter(p => p.last_played_at && new Date(p.last_played_at).getTime() > dayCutoff)
+      .filter(p =>
+        commercialIds.has(p.screen_id) &&
+        p.last_played_at &&
+        new Date(p.last_played_at).getTime() > dayCutoff
+      )
       .reduce((n, p) => n + Number(p.play_count || 0), 0),
+    test_screens: (screens || []).filter(s => s.is_test).length,
   };
 }
 
@@ -1205,7 +1224,7 @@ export default {
 
     try {
       if (url.pathname === "/api/health")
-        return json({ ok: true, service: "coastloop", version: "0.15.0" });
+        return json({ ok: true, service: "coastloop", version: "0.16.0" });
 
       if (url.pathname === "/api/player/boot" && request.method === "POST")
         return bootPlayer(request, env);

@@ -189,7 +189,16 @@ function render(){
 
   $('#screens').innerHTML = state.screens.map(s=>`<tr data-id="${s.id}">
     <td><span class="pill ${online(s.last_seen_at)?'online':'offline'}">${online(s.last_seen_at)?'ONLINE':'OFFLINE'}</span></td>
-    <td><input class="s-name" value="${esc(s.name||'')}" style="min-width:165px"></td>
+    <td>
+      <input class="s-name" value="${esc(s.name||'')}" style="min-width:165px">
+      ${s.is_test ? '<div class="muted" style="margin-top:4px">INTERNAL / TEST</div>' : ''}
+    </td>
+    <td>
+      <label style="display:flex;align-items:center;gap:7px;white-space:nowrap">
+        <input class="s-test" type="checkbox" style="width:auto" ${s.is_test?'checked':''}>
+        <span class="muted">Exclude</span>
+      </label>
+    </td>
     <td>
       <strong>${esc(s.location_name||'Unassigned')}</strong>
       <div class="muted">${esc(s.address||'No physical location linked')}</div>
@@ -276,7 +285,11 @@ document.addEventListener('click', async e=>{
   }
   if(e.target.matches('.save-screen')){
     const row=e.target.closest('tr');
-    await api(`/api/admin/screens/${row.dataset.id}/assign`,{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({name:row.querySelector('.s-name').value,playlist_id:row.querySelector('.s-playlist').value||null})});
+    await api(`/api/admin/screens/${row.dataset.id}/assign`,{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({
+        name:row.querySelector('.s-name').value,
+        playlist_id:row.querySelector('.s-playlist').value||null,
+        is_test:row.querySelector('.s-test').checked
+      })});
     await load();
   }
   if(e.target.matches('.add-media')){
