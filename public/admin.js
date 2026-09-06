@@ -226,6 +226,12 @@ function render(){
       <div class="muted">${esc(s.orientation||'')}</div>
     </td>
     <td><strong>${esc(s.pair_code||'—')}</strong></td>
+    <td>
+      ${s.lan_ip
+        ? `<button class="secondary relaunch-screen" data-ip="${esc(s.lan_ip)}">▶ Relaunch</button>
+           <div class="muted" style="margin-top:4px">${esc(s.lan_ip)}</div>`
+        : '<span class="muted">No LAN IP</span>'}
+    </td>
     <td><button class="save-screen">Save</button></td>
   </tr>`).join('');
   $('#media').innerHTML = state.media.map(m=>`<div class="media-item"><strong>${esc(m.name)}</strong> <span class="pill">${m.media_type}</span><div class="muted">${m.duration_seconds}s · ${(m.bytes/1024/1024).toFixed(2)} MB · ${m.id}</div></div>`).join('') || '<div class="muted">No media yet.</div>';
@@ -257,7 +263,59 @@ $('#saveToken').onclick=()=>{ state.token=$('#token').value.trim(); sessionStora
 $('#upload').onsubmit=async e=>{ e.preventDefault(); try { await api('/api/admin/media',{method:'POST',body:new FormData(e.target)}); e.target.reset(); await load(); } catch(err){ $('#error').textContent=err.message; } };
 $('#newPlaylist').onsubmit=async e=>{ e.preventDefault(); const name=new FormData(e.target).get('name'); try { await api('/api/admin/playlists',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name})}); e.target.reset(); await load(); } catch(err){ $('#error').textContent=err.message; } };
 
+
+async function relaunchRoku(ip, button){
+  const url=`http://${ip}:8060/launch/dev`;
+  const original=button.textContent;
+  button.disabled=true;
+  button.textContent='Launching…';
+
+  try{
+    await fetch(url,{
+      method:'POST',
+      mode:'no-cors',
+      cache:'no-store'
+    });
+    button.textContent='✓ Sent';
+    setTimeout(()=>{button.textContent=original;button.disabled=false},1400);
+    return;
+  }catch(firstError){
+    try{
+      let frame=document.querySelector('#rokuControlSink');
+      if(!frame){
+        frame=document.createElement('iframe');
+        frame.id='rokuControlSink';
+        frame.name='rokuControlSink';
+        frame.style.display='none';
+        document.body.appendChild(frame);
+      }
+
+      const form=document.createElement('form');
+      form.method='POST';
+      form.action=url;
+      form.target='rokuControlSink';
+      form.style.display='none';
+      document.body.appendChild(form);
+      form.submit();
+      setTimeout(()=>form.remove(),1000);
+
+      button.textContent='✓ Sent';
+      setTimeout(()=>{button.textContent=original;button.disabled=false},1400);
+      return;
+    }catch(secondError){
+      button.textContent='Failed';
+      button.disabled=false;
+      $('#error').textContent=`Could not reach Roku at ${ip}. Admin device must be on the same LAN.`;
+    }
+  }
+}
+
 document.addEventListener('click', async e=>{
+  if(e.target.matches('.relaunch-screen')){
+    await relaunchRoku(e.target.dataset.ip,e.target);
+    return;
+  }
+
   if(e.target.matches('.promote-prospect')){
     const row=e.target.closest('tr');
     e.target.disabled=true;

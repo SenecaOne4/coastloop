@@ -1,6 +1,30 @@
+function getLanIp() as String
+    info = CreateObject("roDeviceInfo")
+    addrs = info.GetIPAddrs()
+    fallback = ""
+
+    if addrs <> invalid
+        for each key in addrs
+            ip = addrs[key]
+
+            if ip <> invalid and ip <> "" and Left(ip, 4) <> "127."
+                if Left(ip, 8) = "192.168." or Left(ip, 3) = "10."
+                    return ip
+                end if
+
+                if fallback = ""
+                    fallback = ip
+                end if
+            end if
+        end for
+    end if
+
+    return fallback
+end function
+
 sub init()
     m.baseUrl = "https://coastloop.site"
-    m.playerVersion = "roku-0.1.3"
+    m.playerVersion = "roku-0.1.4"
     m.tasks = []
     m.items = []
     m.index = 0
@@ -27,6 +51,7 @@ sub init()
     display = info.GetDisplaySize()
     m.displayWidth = display.w
     m.displayHeight = display.h
+    m.lanIp = getLanIp()
 
     reg = CreateObject("roRegistrySection", "CoastLoop")
     m.deviceKey = reg.Read("device_key")
@@ -43,6 +68,7 @@ sub boot()
         app_version: m.playerVersion
         width: m.displayWidth
         height: m.displayHeight
+        lan_ip: m.lanIp
     }
 
     if m.deviceKey <> invalid and m.deviceKey <> ""
@@ -293,5 +319,6 @@ sub onHeartbeat()
         app_version: m.playerVersion
         width: m.displayWidth
         height: m.displayHeight
+        lan_ip: m.lanIp
     })
 end sub

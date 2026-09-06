@@ -97,6 +97,7 @@ async function bootPlayer(request, env) {
         display_width: Number.isFinite(b.width) ? b.width : null,
         display_height: Number.isFinite(b.height) ? b.height : null,
         device_id: b.device_id,
+        lan_ip: String(b.lan_ip || "").trim() || null,
       }),
     });
 
@@ -122,6 +123,7 @@ async function bootPlayer(request, env) {
       app_version: b.app_version || screen.app_version,
       display_width: Number.isFinite(b.width) ? b.width : screen.display_width,
       display_height: Number.isFinite(b.height) ? b.height : screen.display_height,
+      lan_ip: String(b.lan_ip || screen.lan_ip || "").trim() || null,
     }),
   });
 
@@ -329,7 +331,13 @@ async function heartbeat(request, env) {
 
   await sb(env, `screens?id=eq.${screen.id}`, {
     method: "PATCH",
-    body: JSON.stringify({ last_seen_at: new Date().toISOString() }),
+    body: JSON.stringify({
+      last_seen_at: new Date().toISOString(),
+      app_version: b.app_version || screen.app_version,
+      display_width: Number.isFinite(b.width) ? b.width : screen.display_width,
+      display_height: Number.isFinite(b.height) ? b.height : screen.display_height,
+      lan_ip: String(b.lan_ip || screen.lan_ip || "").trim() || null,
+    }),
   });
   return json({ ok: true });
 }
@@ -1224,7 +1232,7 @@ export default {
 
     try {
       if (url.pathname === "/api/health")
-        return json({ ok: true, service: "coastloop", version: "0.16.0" });
+        return json({ ok: true, service: "coastloop", version: "0.17.0" });
 
       if (url.pathname === "/api/player/boot" && request.method === "POST")
         return bootPlayer(request, env);
