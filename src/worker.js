@@ -106,6 +106,8 @@ async function bootPlayer(request, env) {
         app_version: b.app_version || "0.3.0",
         display_width: Number.isFinite(b.width) ? b.width : null,
         display_height: Number.isFinite(b.height) ? b.height : null,
+        video_mode: String(b.video_mode || "").trim() || null,
+        can_play_4k: b.can_play_4k === true,
         device_id: b.device_id,
         lan_ip: String(b.lan_ip || "").trim() || null,
       }),
@@ -139,6 +141,8 @@ async function bootPlayer(request, env) {
         app_version: b.app_version || screen.app_version,
         display_width: Number.isFinite(b.width) ? b.width : screen.display_width,
         display_height: Number.isFinite(b.height) ? b.height : screen.display_height,
+        video_mode: String(b.video_mode || screen.video_mode || "").trim() || null,
+        can_play_4k: typeof b.can_play_4k === "boolean" ? b.can_play_4k : Boolean(screen.can_play_4k),
         lan_ip: String(b.lan_ip || screen.lan_ip || "").trim() || null,
       }),
     });
@@ -162,6 +166,8 @@ async function bootPlayer(request, env) {
     app_version: b.app_version || screen.app_version,
     display_width: Number.isFinite(b.width) ? b.width : screen.display_width,
     display_height: Number.isFinite(b.height) ? b.height : screen.display_height,
+    video_mode: String(b.video_mode || screen.video_mode || "").trim() || null,
+    can_play_4k: typeof b.can_play_4k === "boolean" ? b.can_play_4k : Boolean(screen.can_play_4k),
     lan_ip: String(b.lan_ip || screen.lan_ip || "").trim() || null,
   };
 
@@ -243,14 +249,13 @@ async function playlistPayload(env, playlistId, now, screen = null) {
   };
 
   if (playlist.name === "CoastLoop House Loop" && screen) {
-    const w = Number(screen.display_width || 0);
-    const h = Number(screen.display_height || 0);
-    const is4k = Math.max(w, h) >= 3000 && Math.min(w, h) >= 1700;
+    const videoMode = String(screen.video_mode || "");
+    const is4k = videoMode.startsWith("2160p") && screen.can_play_4k === true;
 
     if (is4k) {
       const masters = await sb(
         env,
-        `media_assets?organization_id=eq.${ORG_ID}&title=eq.${encodeURIComponent("coastloop-house-v3-master-4k.mp4")}&status=eq.ready&select=*&limit=1`
+        `media_assets?organization_id=eq.${ORG_ID}&title=eq.${encodeURIComponent("coastloop-house-v3-delivery-4k-hevc.mp4")}&status=eq.ready&select=*&limit=1`
       );
       const master = masters?.[0];
       const base = payload.items?.[0];
@@ -268,6 +273,9 @@ async function playlistPayload(env, playlistId, now, screen = null) {
           fallback_url: base.url,
           delivery_tier: "4k",
         };
+      } else if (base) {
+        base.delivery_tier = "1080p";
+        base.delivery_note = "4k_asset_unavailable";
       }
     } else if (payload.items?.[0]) {
       payload.items[0].delivery_tier = "1080p";
@@ -388,6 +396,8 @@ async function heartbeat(request, env) {
       app_version: b.app_version || screen.app_version,
       display_width: Number.isFinite(b.width) ? b.width : screen.display_width,
       display_height: Number.isFinite(b.height) ? b.height : screen.display_height,
+      video_mode: String(b.video_mode || screen.video_mode || "").trim() || null,
+      can_play_4k: typeof b.can_play_4k === "boolean" ? b.can_play_4k : Boolean(screen.can_play_4k),
       lan_ip: String(b.lan_ip || screen.lan_ip || "").trim() || null,
     }),
   });
@@ -1373,7 +1383,7 @@ export default {
         return portalOverview(request, env);
 
       if (url.pathname === "/api/health")
-        return json({ ok: true, service: "coastloop", version: "0.20.0" });
+        return json({ ok: true, service: "coastloop", version: "0.21.0" });
 
       if (url.pathname === "/api/player/boot" && request.method === "POST")
         return bootPlayer(request, env);

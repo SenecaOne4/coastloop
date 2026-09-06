@@ -45,7 +45,10 @@ function duration(seconds){
   return `${h}h ${m}m`;
 }
 function resolution(s){
-  return s.display_width && s.display_height ? `${s.display_width}×${s.display_height}` : '—';
+  const ui=s.display_width && s.display_height ? `${s.display_width}×${s.display_height} UI` : 'UI —';
+  const video=s.video_mode ? `${s.video_mode} video` : 'video —';
+  const tier=s.can_play_4k ? '4K capable' : '1080p tier';
+  return `${video} · ${ui} · ${tier}`;
 }
 
 function allLocations(){

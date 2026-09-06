@@ -1,3 +1,25 @@
+function canPlay4K(info as Object) as Boolean
+    videoMode = info.GetVideoMode()
+    if Left(videoMode, 5) <> "2160p"
+        return false
+    end if
+
+    if info.GetModelType() = "STB"
+        hdmi = CreateObject("roHdmiStatus")
+        if hdmi = invalid or hdmi.IsHdcpActive("2.2") <> true
+            return false
+        end if
+    end if
+
+    decode4k = info.CanDecodeVideo({
+        codec: "hevc"
+        profile: "main"
+        level: "5.1"
+    })
+
+    return decode4k <> invalid and decode4k.result = true
+end function
+
 function getLanIp() as String
     info = CreateObject("roDeviceInfo")
     addrs = info.GetIPAddrs()
@@ -24,7 +46,7 @@ end function
 
 sub init()
     m.baseUrl = "https://coastloop.site"
-    m.playerVersion = "roku-0.1.5"
+    m.playerVersion = "roku-0.1.6"
     m.tasks = []
     m.items = []
     m.index = 0
@@ -51,6 +73,9 @@ sub init()
     display = info.GetDisplaySize()
     m.displayWidth = display.w
     m.displayHeight = display.h
+    m.videoMode = info.GetVideoMode()
+    m.canPlay4k = canPlay4K(info)
+
     m.lanIp = getLanIp()
 
     reg = CreateObject("roRegistrySection", "CoastLoop")
@@ -68,6 +93,8 @@ sub boot()
         app_version: m.playerVersion
         width: m.displayWidth
         height: m.displayHeight
+        video_mode: m.videoMode
+        can_play_4k: m.canPlay4k
         lan_ip: m.lanIp
     }
 
@@ -332,6 +359,8 @@ sub onHeartbeat()
         app_version: m.playerVersion
         width: m.displayWidth
         height: m.displayHeight
+        video_mode: m.videoMode
+        can_play_4k: m.canPlay4k
         lan_ip: m.lanIp
     })
 end sub

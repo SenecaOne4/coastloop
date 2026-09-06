@@ -404,6 +404,34 @@ Physical TCL zero-state proof is still pending because the current lab TV is run
 
 Do not regress to manually editing the database or auto-pairing lab screens as the production workflow.
 
+## 11A. Roku 4K delivery status
+
+Capability-aware 4K delivery is implemented as of Worker `0.21.0` / Roku `0.1.6`.
+
+The player now reports:
+- `GetVideoMode()`
+- `CanDecodeVideo()` HEVC Main capability
+- HDCP 2.2 readiness for standalone Roku/STB paths
+
+The backend no longer infers 4K capability from `GetDisplaySize()` alone.
+
+A 4K screen receives the 4K tier only when:
+- reported video mode begins with `2160p`
+- `can_play_4k` is true
+- the HEVC delivery asset exists
+
+Current 4K house delivery asset:
+- `coastloop-house-v3-delivery-4k-hevc.mp4`
+- HEVC Main
+- 3840x2160
+- 30 fps
+- yuv420p
+- approximately 5.2 Mbps observed output bitrate
+- 1080p fallback URL remains attached to the payload
+
+Live synthetic capability-path verification passed end-to-end.
+Physical TCL verification still requires installation of the current Roku development build using the operator-held Roku developer password.
+
 ## 12. Roku launch blockers / burn-in backlog
 
 Before calling hardware production-ready:
