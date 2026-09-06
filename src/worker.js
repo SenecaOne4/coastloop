@@ -422,6 +422,7 @@ async function proof(request, env) {
       p_campaign_id: b.campaign_id || null,
       p_seconds: seconds,
       p_stamp: stamp,
+      p_proof_id: String(b.proof_id || "").trim() || null,
     }),
   });
 
@@ -1383,7 +1384,7 @@ export default {
         return portalOverview(request, env);
 
       if (url.pathname === "/api/health")
-        return json({ ok: true, service: "coastloop", version: "0.21.0" });
+        return json({ ok: true, service: "coastloop", version: "0.22.0" });
 
       if (url.pathname === "/api/player/boot" && request.method === "POST")
         return bootPlayer(request, env);

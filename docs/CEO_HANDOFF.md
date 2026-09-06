@@ -432,6 +432,27 @@ Current 4K house delivery asset:
 Live synthetic capability-path verification passed end-to-end.
 Physical TCL verification still requires installation of the current Roku development build using the operator-held Roku developer password.
 
+## 11B. Roku network reliability / proof idempotency
+
+Worker `0.22.0` / Roku `0.1.7` adds the first always-on reliability hardening pass.
+
+Implemented:
+- completed SceneGraph network tasks are unobserved and removed from `m.tasks` instead of accumulating forever
+- boot/config failures use bounded exponential retry backoff, capped at 60 seconds
+- proof retries are isolated from config polling
+- failed proof submissions retry up to 3 times with bounded queue size
+- every playback proof carries a Roku-generated UUID v4
+- backend proof ingestion is idempotent by `(screen_id, proof_id)`
+- duplicate delivery returns success without double-counting playback
+
+Production verification:
+- duplicate submission of the same proof returned success twice
+- `playback_proof_receipts` contained exactly one receipt
+- `playback_daily` recorded exactly one play and 7.250 seconds
+- proof test used a TEST screen, excluded from commercial metrics
+
+Physical long-duration Roku burn-in remains pending installation of the current developer build using the operator-held Roku developer password.
+
 ## 12. Roku launch blockers / burn-in backlog
 
 Before calling hardware production-ready:

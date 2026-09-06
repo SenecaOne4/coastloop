@@ -46,8 +46,12 @@ end function
 
 sub init()
     m.baseUrl = "https://coastloop.site"
-    m.playerVersion = "roku-0.1.6"
-    m.tasks = []
+    m.playerVersion = "roku-0.1.7"
+    m.tasks = {}
+    m.nextTaskId = 0
+    m.retryDelay = 5
+    m.proofRetryQueue = []
+    m.proofRetryActive = false
     m.items = []
     m.index = 0
     m.currentItem = invalid
@@ -59,10 +63,12 @@ sub init()
     m.video = m.top.findNode("video")
     m.poster = m.top.findNode("poster")
     m.pollTimer = m.top.findNode("pollTimer")
+    m.retryTimer = m.top.findNode("retryTimer")
     m.heartbeatTimer = m.top.findNode("heartbeatTimer")
     m.imageTimer = m.top.findNode("imageTimer")
 
     m.pollTimer.observeField("fire", "onPoll")
+    m.retryTimer.observeField("fire", "onProofRetry")
     m.heartbeatTimer.observeField("fire", "onHeartbeat")
     m.imageTimer.observeField("fire", "onImageFinished")
     m.video.observeField("state", "onVideoState")
@@ -118,35 +124,136 @@ sub requestConfig()
 end sub
 
 sub startRequest(action as String, path as String, body as Object)
+    startRequestAttempt(action, path, body, 0)
+end sub
+
+sub startRequestAttempt(action as String, path as String, body as Object, retryCount as Integer)
+    m.nextTaskId = m.nextTaskId + 1
+    requestId = action + "-" + m.nextTaskId.ToStr()
+
     task = CreateObject("roSGNode", "CoastLoopNetworkTask")
     task.observeField("response", "onNetworkResponse")
 
     task.request = {
         action: action
+        path: path
         url: m.baseUrl + path
         body: body
+        retry_count: retryCount
+        request_id: requestId
     }
 
-    m.tasks.Push(task)
+    m.tasks[requestId] = task
     task.control = "RUN"
 end sub
 
+sub retireTask(task as Object)
+    if task = invalid then return
+    req = task.request
+    if req = invalid then return
+    if req.request_id = invalid or req.request_id = "" then return
+    task.unobserveField("response")
+    m.tasks.Delete(req.request_id)
+end sub
+
+sub resetRetryBackoff()
+    m.retryDelay = 5
+end sub
+
+sub scheduleRetry()
+    m.pollTimer.control = "stop"
+    m.pollTimer.duration = m.retryDelay
+    m.pollTimer.control = "start"
+
+    m.retryDelay = m.retryDelay * 2
+    if m.retryDelay > 60 then m.retryDelay = 60
+end sub
+
+sub queueProofRetry(req as Object)
+    if req = invalid then return
+
+    retryCount = 0
+    if req.retry_count <> invalid then retryCount = req.retry_count
+    if retryCount >= 3 then return
+
+    if m.proofRetryQueue.Count() >= 20
+        m.proofRetryQueue.Shift()
+    end if
+
+    m.proofRetryQueue.Push({
+        action: "proof"
+        path: req.path
+        body: req.body
+        retry_count: retryCount + 1
+    })
+
+    scheduleProofRetry()
+end sub
+
+sub scheduleProofRetry()
+    if m.proofRetryActive = true then return
+    if m.proofRetryQueue.Count() = 0 then return
+
+    item = m.proofRetryQueue[0]
+    delay = 2
+    if item.retry_count = 2 then delay = 5
+    if item.retry_count >= 3 then delay = 15
+
+    m.proofRetryActive = true
+    m.retryTimer.control = "stop"
+    m.retryTimer.duration = delay
+    m.retryTimer.control = "start"
+end sub
+
+sub onProofRetry()
+    m.proofRetryActive = false
+    if m.proofRetryQueue.Count() = 0 then return
+
+    item = m.proofRetryQueue.Shift()
+    startRequestAttempt(item.action, item.path, item.body, item.retry_count)
+end sub
+
 sub onNetworkResponse(event as Object)
+    task = event.getRoSGNode()
+    req = invalid
+    if task <> invalid then req = task.request
+
     result = event.getData()
+    retireTask(task)
+
+    action = ""
+    if req <> invalid and req.action <> invalid then action = req.action
+    if result <> invalid and result.action <> invalid then action = result.action
 
     if result = invalid or result.ok <> true
-        if result <> invalid and result.action = "config" and result.status_code = 401
+        if action = "config" and result <> invalid and result.status_code = 401
             clearDeviceKey()
+            resetRetryBackoff()
             boot()
             return
         end if
 
-        m.status.text = "Connection retrying..."
-        schedulePoll()
+        if action = "proof"
+            queueProofRetry(req)
+            return
+        end if
+
+        if action = "boot" or action = "config"
+            m.status.text = "Connection retrying..."
+            scheduleRetry()
+        end if
         return
     end if
 
-    action = result.action
+    if action = "boot" or action = "config"
+        resetRetryBackoff()
+    end if
+
+    if action = "proof"
+        scheduleProofRetry()
+        return
+    end if
+
     data = result.data
 
     if action = "boot"
@@ -200,7 +307,9 @@ sub handleConfig(data as Object)
 end sub
 
 sub schedulePoll()
+    resetRetryBackoff()
     m.pollTimer.control = "stop"
+    m.pollTimer.duration = 5
     m.pollTimer.control = "start"
 end sub
 
@@ -327,9 +436,13 @@ sub recordProof()
     campaignId = invalid
     if item.campaign_id <> invalid then campaignId = item.campaign_id
 
+    info = CreateObject("roDeviceInfo")
+    proofId = info.GetRandomUUID()
+
     startRequest("proof", "/api/player/proof", {
         device_id: m.deviceId
         device_key: m.deviceKey
+        proof_id: proofId
         media_id: item.media_id
         campaign_id: campaignId
         seconds: seconds
