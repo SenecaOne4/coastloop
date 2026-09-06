@@ -121,7 +121,7 @@ async function accessForUser(env, user, claim = true) {
   await upsertProfile(env, user);
 
   const [internalRows, businessRows, businesses] = await Promise.all([
-    rest(env, `organization_members?organization_id=eq.${ORG_ID}&user_id=eq.${user.id}&select=role`),
+    rest(env, `organization_members?organization_id=eq.${ORG_ID}&user_id=eq.${user.id}&select=role,broker_commission_percent`),
     rest(env, `business_members?user_id=eq.${user.id}&select=business_id,role`),
     rest(env, `businesses?organization_id=eq.${ORG_ID}&select=id,name,category,is_host,is_advertiser`),
   ]);
@@ -129,6 +129,7 @@ async function accessForUser(env, user, claim = true) {
   const businessMap = new Map((businesses || []).map(x => [x.id, x]));
   return {
     internal_role: internalRows?.[0]?.role || null,
+    broker_commission_percent: Number(internalRows?.[0]?.broker_commission_percent || 0),
     businesses: (businessRows || []).map(m => ({
       business_id: m.business_id,
       business_name: businessMap.get(m.business_id)?.name || "Business",
@@ -155,6 +156,12 @@ export async function requireAdminAccess(request, env) {
 
   const auth = await requireUserAccess(request, env);
   if (!auth || !["owner", "admin"].includes(auth.access.internal_role)) return null;
+  return auth;
+}
+
+export async function requireBrokerAccess(request, env) {
+  const auth = await requireUserAccess(request, env);
+  if (!auth || !["owner", "admin", "broker"].includes(auth.access.internal_role)) return null;
   return auth;
 }
 
@@ -400,14 +407,14 @@ export async function handleAuthRoute(request, env, url) {
 export async function adminUserDirectory(env) {
   const [profiles, internal, businessMembers, businesses, invites] = await Promise.all([
     rest(env, "user_profiles?select=*&order=created_at.asc"),
-    rest(env, `organization_members?organization_id=eq.${ORG_ID}&select=user_id,role,created_at`),
+    rest(env, `organization_members?organization_id=eq.${ORG_ID}&select=user_id,role,broker_commission_percent,created_at`),
     rest(env, "business_members?select=business_id,user_id,role,created_at"),
     rest(env, `businesses?organization_id=eq.${ORG_ID}&select=id,name,category`),
     rest(env, `user_invitations?organization_id=eq.${ORG_ID}&select=*&order=created_at.desc`),
   ]);
 
   const businessMap = new Map((businesses || []).map(x => [x.id, x]));
-  const internalMap = new Map((internal || []).map(x => [x.user_id, x.role]));
+  const internalMap = new Map((internal || []).map(x => [x.user_id, x]));
   const businessByUser = new Map();
   for (const m of businessMembers || []) {
     if (!businessByUser.has(m.user_id)) businessByUser.set(m.user_id, []);
@@ -425,7 +432,8 @@ export async function adminUserDirectory(env) {
       full_name: p.full_name,
       last_login_at: p.last_login_at,
       created_at: p.created_at,
-      internal_role: internalMap.get(p.user_id) || null,
+      internal_role: internalMap.get(p.user_id)?.role || null,
+      broker_commission_percent: Number(internalMap.get(p.user_id)?.broker_commission_percent || 0),
       businesses: businessByUser.get(p.user_id) || [],
     })),
     invitations: invites || [],
@@ -440,7 +448,7 @@ export async function createUserInvitation(request, env, adminAuth) {
   const businessId = b.business_id ? String(b.business_id) : null;
 
   if (!/^\S+@\S+\.\S+$/.test(email)) return json({ error: "Valid email required" }, 400);
-  const internalRoles = new Set(["owner", "admin", "sales", "creative", "viewer"]);
+  const internalRoles = new Set(["owner", "admin", "broker", "creative", "viewer"]);
   const businessRoles = new Set(["owner", "manager", "viewer"]);
   if (accountType === "internal") {
     if (!internalRoles.has(role)) return json({ error: "Invalid internal role" }, 400);
@@ -560,12 +568,12 @@ export async function portalOverview(request, env) {
 
 export async function updateUserAccess(request, env, adminAuth, userId) {
   const b = await bodyJson(request);
-  const allowedInternal = new Set(["owner","admin","sales","creative","viewer"]);
+  const allowedInternal = new Set(["owner","admin","broker","creative","viewer"]);
   const allowedBusiness = new Set(["owner","manager","viewer"]);
 
   const current = await rest(
     env,
-    `organization_members?organization_id=eq.${ORG_ID}&user_id=eq.${userId}&select=role`
+    `organization_members?organization_id=eq.${ORG_ID}&user_id=eq.${userId}&select=role,broker_commission_percent`
   );
   const currentRole = current?.[0]?.role || null;
 
@@ -585,6 +593,12 @@ export async function updateUserAccess(request, env, adminAuth, userId) {
       if (!allowedInternal.has(role))
         return json({ error: "Invalid internal role" }, 400);
 
+      const rawCommission = b.broker_commission_percent === undefined
+        ? Number(current?.[0]?.broker_commission_percent || 0)
+        : Number(b.broker_commission_percent);
+      if (!Number.isFinite(rawCommission) || rawCommission < 0 || rawCommission > 100)
+        return json({ error: "Broker commission must be between 0 and 100 percent" }, 400);
+
       await rest(env, "organization_members?on_conflict=organization_id,user_id", {
         method: "POST",
         headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
@@ -592,6 +606,7 @@ export async function updateUserAccess(request, env, adminAuth, userId) {
           organization_id: ORG_ID,
           user_id: userId,
           role,
+          broker_commission_percent: role === "broker" ? rawCommission : 0,
         }),
       });
     }

@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CoastLoop Broker Desk</title>
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<main class="shell">
+<header class="topbar">
+  <div>
+    <div class="eyebrow">COASTLOOP · BROKER DESK</div>
+    <h1>Sell screens. Sell airtime.</h1>
+    <p class="muted">Your leads, customers, campaigns, and commissions — nothing technical.</p>
+  </div>
+  <div class="row top-actions">
+    <span id="brokerWho" class="muted"></span>
+    <button id="accountButton" class="secondary">My account</button>
+    <button id="logoutButton" class="secondary">Sign out</button>
+  </div>
+</header>
+
+<div id="error" class="error"></div>
+
+<section class="card workflow-card">
+  <h2>Your sales flow</h2>
+  <div class="workflow-grid">
+    <div><strong>1 · Add lead</strong><span>Enter a business that may host a TV, buy ads, or both.</span></div>
+    <div><strong>2 · Work lead</strong><span>Track stage, score, follow-up date, and the host offer.</span></div>
+    <div><strong>3 · Promote</strong><span>When the deal is real, Promote turns the lead into a CoastLoop customer.</span></div>
+    <div><strong>4 · Sell campaign</strong><span>Advertiser campaigns automatically credit your broker account.</span></div>
+  </div>
+</section>
+
+<section class="card">
+  <h2>My money</h2>
+  <p class="muted">Booked sales snapshot. Commission is frozen on each campaign when it is created.</p>
+  <div class="money-grid">
+    <div><span>Booked ad sales</span><strong id="fRevenue">—</strong></div>
+    <div><span>My commissions</span><strong id="fCommission">—</strong></div>
+  </div>
+</section>
+
+<section class="card">
+  <div class="section-heading">
+    <div>
+      <h2>Add a lead</h2>
+      <p class="muted">Host = displays a CoastLoop TV. Advertiser = buys airtime. A business can be both.</p>
+    </div>
+  </div>
+  <form id="newProspect" class="form-grid">
+    <input name="name" placeholder="Business name" required>
+    <input name="category" placeholder="Category, e.g. restaurant">
+    <input name="contact_name" placeholder="Contact name">
+    <input name="phone" placeholder="Phone">
+    <input name="email" type="email" placeholder="Email">
+    <input name="website" placeholder="Website">
+    <input name="address_line1" placeholder="Street address">
+    <input name="city" value="North Myrtle Beach" placeholder="City">
+    <input name="state" value="SC" placeholder="State">
+    <input name="postal_code" placeholder="ZIP">
+    <label class="check-field"><input name="advertiser_interest" type="checkbox" checked> Advertiser</label>
+    <label class="check-field"><input name="host_interest" type="checkbox"> Host</label>
+    <label class="field-help">
+      <span>Host annual pay per TV</span>
+      <input name="host_annual_pay_dollars" type="number" min="0" max="599" step="1" value="0">
+      <small>$599/year is the maximum, not the default.</small>
+    </label>
+    <textarea name="notes" placeholder="Notes"></textarea>
+    <button>Add lead</button>
+  </form>
+  <div id="prospectMessage" class="muted"></div>
+</section>
+
+<section class="card">
+  <div class="row">
+    <div><h2>My pipeline</h2><p class="muted">Only leads assigned to you appear here.</p></div>
+    <div id="mProspects" class="metric">0</div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Business</th><th>Type</th><th>Stage</th><th>Score / host offer</th><th>Follow-up</th><th></th></tr></thead>
+      <tbody id="prospects"></tbody>
+    </table>
+  </div>
+</section>
+
+<section class="card">
+  <div class="row">
+    <div><h2>My customers</h2><p class="muted">Customers created from your promoted leads.</p></div>
+    <div id="mBusinesses" class="metric">0</div>
+  </div>
+  <div id="businesses" class="business-list"></div>
+</section>
+
+<section class="card">
+  <h2>Sell advertiser campaign</h2>
+  <p class="muted">Only Advertiser customers assigned to you can be selected.</p>
+  <form id="newCampaign" class="form-grid">
+    <select name="advertiser_business_id" id="campaignBusiness" required></select>
+    <input name="name" placeholder="Campaign name" required>
+    <select name="status">
+      <option value="draft">Draft</option>
+      <option value="scheduled">Scheduled</option>
+      <option value="active">Active</option>
+    </select>
+    <label class="field-help">
+      <span>Contract value</span>
+      <input name="price_dollars" type="number" min="0" step="1" placeholder="$">
+    </label>
+    <input name="starts_at" type="datetime-local">
+    <input name="ends_at" type="datetime-local">
+    <textarea name="billing_notes" placeholder="Billing / contract notes"></textarea>
+    <button>Create campaign</button>
+  </form>
+  <div id="campaignMessage" class="muted"></div>
+  <div id="campaigns" class="campaign-list"></div>
+</section>
+</main>
+
+<script type="module" src="/broker.js"></script>
+</body>
+</html>

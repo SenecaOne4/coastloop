@@ -1,6 +1,7 @@
 import {
   handleAuthRoute,
   requireAdminAccess,
+  requireBrokerAccess,
   adminUserDirectory,
   createUserInvitation,
   updateUserAccess,
@@ -18,6 +19,24 @@ const json = (data, status = 200, headers = {}) =>
 
 async function bodyJson(request) {
   try { return await request.json(); } catch { return {}; }
+}
+
+function brokerIdFromAuth(auth) {
+  return auth?.access?.internal_role === "broker" ? auth?.user?.id || null : null;
+}
+
+async function brokerTerms(env, userId) {
+  if (!userId) return null;
+  const rows = await sb(
+    env,
+    `organization_members?organization_id=eq.${ORG_ID}&user_id=eq.${encodeURIComponent(userId)}&role=eq.broker&select=user_id,broker_commission_percent`
+  );
+  return rows?.[0] || null;
+}
+
+function validMoneyCents(value, max = null) {
+  const n = Math.round(Number(value || 0));
+  return Number.isFinite(n) && n >= 0 && (max === null || n <= max) ? n : null;
 }
 
 function requireAdmin(request, env) {
@@ -769,13 +788,28 @@ async function applyScreenAssignment(env, screen, b, markPaired = false) {
   if (!isTest && !locationId)
     return json({ error: "location required for commercial screen" }, 400);
 
+  let location = null;
   if (locationId) {
     const locations = await sb(
       env,
-      `locations?id=eq.${encodeURIComponent(locationId)}&organization_id=eq.${ORG_ID}&select=id`
+      `locations?id=eq.${encodeURIComponent(locationId)}&organization_id=eq.${ORG_ID}&select=id,host_annual_pay_cents`
     );
-    if (!locations?.[0]) return json({ error: "invalid location" }, 400);
+    location = locations?.[0] || null;
+    if (!location) return json({ error: "invalid location" }, 400);
   }
+
+  const hostAnnualPayCents = b.host_annual_pay_cents === undefined
+    ? Number(location?.host_annual_pay_cents ?? screen.host_annual_pay_cents ?? 0)
+    : validMoneyCents(b.host_annual_pay_cents, 59900);
+  const hardwareCostCents = b.hardware_cost_cents === undefined
+    ? Number(screen.hardware_cost_cents || 0)
+    : validMoneyCents(b.hardware_cost_cents);
+  const setupCostCents = b.setup_cost_cents === undefined
+    ? Number(screen.setup_cost_cents || 0)
+    : validMoneyCents(b.setup_cost_cents);
+
+  if (hostAnnualPayCents === null || hardwareCostCents === null || setupCostCents === null)
+    return json({ error: "invalid screen financial values" }, 400);
 
   const screenPatch = {
     name: String(b.name || "CoastLoop Screen").trim(),
@@ -784,6 +818,9 @@ async function applyScreenAssignment(env, screen, b, markPaired = false) {
     is_test: isTest,
     deployment_class: deploymentClass,
     certification_note: certificationNote,
+    host_annual_pay_cents: hostAnnualPayCents,
+    hardware_cost_cents: hardwareCostCents,
+    setup_cost_cents: setupCostCents,
   };
 
   if (markPaired) {
@@ -955,7 +992,7 @@ async function geocodeUS(address) {
   }
 }
 
-async function createAdminProspect(request, env) {
+async function createAdminProspect(request, env, auth = null) {
   const b = await bodyJson(request);
   const name = String(b.name || "").trim().slice(0, 180);
 
@@ -984,6 +1021,15 @@ async function createAdminProspect(request, env) {
     }
   }
 
+  const hostAnnualPayCents = validMoneyCents(b.host_annual_pay_cents, 59900);
+  if (hostAnnualPayCents === null)
+    return json({ error: "host annual pay must be between $0 and $599 per TV" }, 400);
+
+  const actorBrokerId = brokerIdFromAuth(auth);
+  const requestedBrokerId = actorBrokerId || String(b.broker_user_id || "").trim() || null;
+  if (requestedBrokerId && !(await brokerTerms(env, requestedBrokerId)))
+    return json({ error: "invalid broker" }, 400);
+
   const rows = await sb(env, "prospects", {
     method: "POST",
     headers: { Prefer: "return=representation" },
@@ -992,6 +1038,8 @@ async function createAdminProspect(request, env) {
       name,
       category: String(b.category || "").trim().slice(0, 120) || null,
       stage: "new",
+      broker_user_id: requestedBrokerId,
+      host_annual_pay_cents: hostAnnualPayCents,
       host_interest: Boolean(b.host_interest),
       advertiser_interest: b.advertiser_interest !== false,
       score: b.score === undefined || b.score === "" ? null : Math.max(0, Math.min(100, Math.round(Number(b.score) || 0))),
@@ -1014,15 +1062,24 @@ async function createAdminProspect(request, env) {
   return json({ ok: true, prospect: rows?.[0] || null });
 }
 
-async function adminProspects(env) {
+async function adminProspects(env, auth = null) {
+  const brokerId = brokerIdFromAuth(auth);
+  const scope = brokerId ? `&broker_user_id=eq.${encodeURIComponent(brokerId)}` : "";
   return await sb(
     env,
-    `prospects?organization_id=eq.${ORG_ID}&select=*&order=created_at.desc`
+    `prospects?organization_id=eq.${ORG_ID}${scope}&select=*&order=created_at.desc`
   );
 }
 
-async function updateProspect(request, env, prospectId) {
+async function updateProspect(request, env, prospectId, auth = null) {
   const b = await bodyJson(request);
+  const brokerId = brokerIdFromAuth(auth);
+  const scope = brokerId ? `&broker_user_id=eq.${encodeURIComponent(brokerId)}` : "";
+  const existing = await sb(
+    env,
+    `prospects?id=eq.${encodeURIComponent(prospectId)}&organization_id=eq.${ORG_ID}${scope}&select=id`
+  );
+  if (!existing?.[0]) return json({ error: "prospect not found" }, 404);
   const patch = { updated_at: new Date().toISOString() };
 
   if (b.stage !== undefined) {
@@ -1045,6 +1102,20 @@ async function updateProspect(request, env, prospectId) {
   if (b.notes !== undefined)
     patch.notes = String(b.notes || "").slice(0, 4000) || null;
 
+  if (b.broker_user_id !== undefined && !brokerId) {
+    const nextBrokerId = String(b.broker_user_id || "").trim() || null;
+    if (nextBrokerId && !(await brokerTerms(env, nextBrokerId)))
+      return json({ error: "invalid broker" }, 400);
+    patch.broker_user_id = nextBrokerId;
+  }
+
+  if (b.host_annual_pay_cents !== undefined) {
+    const cents = validMoneyCents(b.host_annual_pay_cents, 59900);
+    if (cents === null)
+      return json({ error: "host annual pay must be between $0 and $599 per TV" }, 400);
+    patch.host_annual_pay_cents = cents;
+  }
+
   if (b.next_follow_up_at !== undefined)
     patch.next_follow_up_at = b.next_follow_up_at || null;
 
@@ -1057,10 +1128,12 @@ async function updateProspect(request, env, prospectId) {
 }
 
 
-async function adminBusinesses(env) {
+async function adminBusinesses(env, auth = null) {
+  const brokerId = brokerIdFromAuth(auth);
+  const scope = brokerId ? `&broker_user_id=eq.${encodeURIComponent(brokerId)}` : "";
   const businesses = await sb(
     env,
-    `businesses?organization_id=eq.${ORG_ID}&select=*&order=created_at.desc`
+    `businesses?organization_id=eq.${ORG_ID}${scope}&select=*&order=created_at.desc`
   );
   const locations = await sb(
     env,
@@ -1073,10 +1146,12 @@ async function adminBusinesses(env) {
   }));
 }
 
-async function promoteProspect(request, env, prospectId) {
+async function promoteProspect(request, env, prospectId, auth = null) {
+  const brokerId = brokerIdFromAuth(auth);
+  const scope = brokerId ? `&broker_user_id=eq.${encodeURIComponent(brokerId)}` : "";
   const rows = await sb(
     env,
-    `prospects?id=eq.${prospectId}&organization_id=eq.${ORG_ID}&select=*`
+    `prospects?id=eq.${prospectId}&organization_id=eq.${ORG_ID}${scope}&select=*`
   );
   const prospect = rows?.[0];
   if (!prospect) return json({ error: "prospect not found" }, 404);
@@ -1104,6 +1179,7 @@ async function promoteProspect(request, env, prospectId) {
         email: prospect.email,
         website: prospect.website,
         notes: prospect.notes,
+        broker_user_id: prospect.broker_user_id || null,
         is_host: Boolean(prospect.host_interest),
         is_advertiser: Boolean(prospect.advertiser_interest),
       }),
@@ -1136,6 +1212,7 @@ async function promoteProspect(request, env, prospectId) {
           latitude: prospect.latitude,
           longitude: prospect.longitude,
           host_status: "negotiating",
+          host_annual_pay_cents: Number(prospect.host_annual_pay_cents || 0),
         }),
       });
       location = created?.[0];
@@ -1153,14 +1230,16 @@ async function promoteProspect(request, env, prospectId) {
   return json({ ok: true, business, location });
 }
 
-async function adminCampaigns(env) {
+async function adminCampaigns(env, auth = null) {
+  const brokerId = brokerIdFromAuth(auth);
+  const scope = brokerId ? `&broker_user_id=eq.${encodeURIComponent(brokerId)}` : "";
   return await sb(
     env,
-    `campaigns?organization_id=eq.${ORG_ID}&select=*&order=created_at.desc`
+    `campaigns?organization_id=eq.${ORG_ID}${scope}&select=*&order=created_at.desc`
   );
 }
 
-async function createCampaign(request, env) {
+async function createCampaign(request, env, auth = null) {
   const b = await bodyJson(request);
   const businessId = String(b.advertiser_business_id || "").trim();
   const name = String(b.name || "").trim().slice(0, 180);
@@ -1168,9 +1247,13 @@ async function createCampaign(request, env) {
   if (!businessId || !name)
     return json({ error: "advertiser business and campaign name required" }, 400);
 
+  const actorBrokerId = brokerIdFromAuth(auth);
+  const businessScope = actorBrokerId
+    ? `&broker_user_id=eq.${encodeURIComponent(actorBrokerId)}`
+    : "";
   const business = await sb(
     env,
-    `businesses?id=eq.${businessId}&organization_id=eq.${ORG_ID}&is_advertiser=eq.true&select=id`
+    `businesses?id=eq.${businessId}&organization_id=eq.${ORG_ID}&is_advertiser=eq.true${businessScope}&select=id,broker_user_id`
   );
   if (!business?.[0])
     return json({ error: "business not found" }, 404);
@@ -1178,12 +1261,23 @@ async function createCampaign(request, env) {
   const allowed = new Set(["draft","scheduled","active","paused","completed","canceled"]);
   const status = allowed.has(b.status) ? b.status : "draft";
 
+  const requestedBrokerId = actorBrokerId
+    || String(b.broker_user_id || "").trim()
+    || business?.[0]?.broker_user_id
+    || null;
+  const terms = requestedBrokerId ? await brokerTerms(env, requestedBrokerId) : null;
+  if (requestedBrokerId && !terms)
+    return json({ error: "invalid broker" }, 400);
+  const brokerCommissionPercent = Number(terms?.broker_commission_percent || 0);
+
   const rows = await sb(env, "campaigns", {
     method: "POST",
     headers: { Prefer: "return=representation" },
     body: JSON.stringify({
       organization_id: ORG_ID,
       advertiser_business_id: businessId,
+      broker_user_id: requestedBrokerId,
+      broker_commission_percent: brokerCommissionPercent,
       name,
       status,
       starts_at: b.starts_at || null,
@@ -1384,6 +1478,48 @@ async function adminCampaignReports(env) {
   });
 }
 
+async function financeSnapshot(env, auth = null) {
+  const brokerId = brokerIdFromAuth(auth);
+  const campaignScope = brokerId ? `&broker_user_id=eq.${encodeURIComponent(brokerId)}` : "";
+  const campaigns = await sb(
+    env,
+    `campaigns?organization_id=eq.${ORG_ID}${campaignScope}&select=price_cents,broker_commission_percent,status`
+  );
+
+  const booked = (campaigns || []).filter(c =>
+    ["scheduled","active","paused","completed"].includes(c.status)
+  );
+  const bookedRevenueCents = booked.reduce((n,c)=>n+Number(c.price_cents||0),0);
+  const brokerCommissionCents = booked.reduce(
+    (n,c)=>n+Math.round(Number(c.price_cents||0)*Number(c.broker_commission_percent||0)/100),0
+  );
+
+  let hostAnnualCommitmentCents = 0;
+  let hardwareCostCents = 0;
+  let setupCostCents = 0;
+
+  if (!brokerId) {
+    const screens = await sb(
+      env,
+      `screens?organization_id=eq.${ORG_ID}&is_test=eq.false&select=host_annual_pay_cents,hardware_cost_cents,setup_cost_cents`
+    );
+    hostAnnualCommitmentCents = (screens || []).reduce((n,x)=>n+Number(x.host_annual_pay_cents||0),0);
+    hardwareCostCents = (screens || []).reduce((n,x)=>n+Number(x.hardware_cost_cents||0),0);
+    setupCostCents = (screens || []).reduce((n,x)=>n+Number(x.setup_cost_cents||0),0);
+  }
+
+  return {
+    booked_revenue_cents: bookedRevenueCents,
+    broker_commission_cents: brokerCommissionCents,
+    host_annual_commitment_cents: hostAnnualCommitmentCents,
+    hardware_cost_cents: hardwareCostCents,
+    setup_cost_cents: setupCostCents,
+    contribution_cents:
+      bookedRevenueCents - brokerCommissionCents -
+      hostAnnualCommitmentCents - hardwareCostCents - setupCostCents,
+  };
+}
+
 async function stats(env) {
   const [screens, media, plays] = await Promise.all([
     sb(env, `screens?organization_id=eq.${ORG_ID}&select=id,last_seen_at,is_test`),
@@ -1426,7 +1562,7 @@ export default {
         return portalOverview(request, env);
 
       if (url.pathname === "/api/health")
-        return json({ ok: true, service: "coastloop", version: "0.24.1" });
+        return json({ ok: true, service: "coastloop", version: "0.25.0" });
 
       if (url.pathname === "/api/player/boot" && request.method === "POST")
         return bootPlayer(request, env);
@@ -1446,6 +1582,38 @@ export default {
 
       if (url.pathname === "/api/public/lead" && request.method === "POST")
         return createPublicLead(request, env);
+
+      if (url.pathname.startsWith("/api/broker/")) {
+        const brokerAuth = await requireBrokerAccess(request, env);
+        if (!brokerAuth)
+          return json({ error: "unauthorized" }, 401);
+
+        if (url.pathname === "/api/broker/prospects" && request.method === "GET")
+          return json(await adminProspects(env, brokerAuth));
+
+        if (url.pathname === "/api/broker/prospects" && request.method === "POST")
+          return createAdminProspect(request, env, brokerAuth);
+
+        const brokerPromote = url.pathname.match(/^\/api\/broker\/prospects\/([^/]+)\/promote$/);
+        if (brokerPromote && request.method === "POST")
+          return promoteProspect(request, env, brokerPromote[1], brokerAuth);
+
+        const brokerProspect = url.pathname.match(/^\/api\/broker\/prospects\/([^/]+)$/);
+        if (brokerProspect && request.method === "PUT")
+          return updateProspect(request, env, brokerProspect[1], brokerAuth);
+
+        if (url.pathname === "/api/broker/businesses" && request.method === "GET")
+          return json(await adminBusinesses(env, brokerAuth));
+
+        if (url.pathname === "/api/broker/campaigns" && request.method === "GET")
+          return json(await adminCampaigns(env, brokerAuth));
+
+        if (url.pathname === "/api/broker/campaigns" && request.method === "POST")
+          return createCampaign(request, env, brokerAuth);
+
+        if (url.pathname === "/api/broker/finance" && request.method === "GET")
+          return json(await financeSnapshot(env, brokerAuth));
+      }
 
       if (url.pathname.startsWith("/api/admin/")) {
         const adminAuth = await requireAdminAccess(request, env);
@@ -1469,6 +1637,9 @@ export default {
         if (url.pathname === "/api/admin/stats" && request.method === "GET")
           return json(await stats(env));
 
+        if (url.pathname === "/api/admin/finance" && request.method === "GET")
+          return json(await financeSnapshot(env, adminAuth));
+
         if (url.pathname === "/api/admin/screens" && request.method === "GET")
           return json(await adminScreens(env));
 
@@ -1476,30 +1647,30 @@ export default {
           return pairScreen(request, env);
 
         if (url.pathname === "/api/admin/prospects" && request.method === "GET")
-          return json(await adminProspects(env));
+          return json(await adminProspects(env, adminAuth));
 
         if (url.pathname === "/api/admin/prospects" && request.method === "POST")
-          return createAdminProspect(request, env);
+          return createAdminProspect(request, env, adminAuth);
 
         const promote = url.pathname.match(/^\/api\/admin\/prospects\/([^/]+)\/promote$/);
         if (promote && request.method === "POST")
-          return promoteProspect(request, env, promote[1]);
+          return promoteProspect(request, env, promote[1], adminAuth);
 
         const prospect = url.pathname.match(/^\/api\/admin\/prospects\/([^/]+)$/);
         if (prospect && request.method === "PUT")
-          return updateProspect(request, env, prospect[1]);
+          return updateProspect(request, env, prospect[1], adminAuth);
 
         if (url.pathname === "/api/admin/businesses" && request.method === "GET")
-          return json(await adminBusinesses(env));
+          return json(await adminBusinesses(env, adminAuth));
 
         if (url.pathname === "/api/admin/campaigns" && request.method === "GET")
-          return json(await adminCampaigns(env));
+          return json(await adminCampaigns(env, adminAuth));
 
         if (url.pathname === "/api/admin/reports/campaigns" && request.method === "GET")
           return json(await adminCampaignReports(env));
 
         if (url.pathname === "/api/admin/campaigns" && request.method === "POST")
-          return createCampaign(request, env);
+          return createCampaign(request, env, adminAuth);
 
         if (url.pathname === "/api/admin/media" && request.method === "GET")
           return json(await adminMedia(env));

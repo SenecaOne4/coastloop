@@ -130,3 +130,48 @@ th,td { text-align:left; padding:12px 8px; border-bottom:1px solid var(--line); 
   .coastloop-lockup{gap:8px}
   .public-logo .coastloop-mark{width:33px}
 }
+
+/* CoastLoop control-plane clarity */
+*,*::before,*::after{box-sizing:border-box}
+.row{min-width:0;flex-wrap:wrap}
+.row>*{min-width:0}
+input,select{min-width:0;max-width:100%;box-sizing:border-box}
+select{height:44px}
+form .row>input,form .row>select,form .row>label{min-width:150px}
+.compact-select{margin-top:6px;min-width:150px}
+.field-help{display:flex;flex-direction:column;gap:5px}
+.field-help>span,.broker-rate>span{font-size:12px;font-weight:800;color:var(--muted)}
+.field-help>small{font-size:11px;color:var(--muted);line-height:1.35}
+.broker-rate{display:flex;flex-direction:column;gap:4px;margin-top:7px}
+.broker-rate input{max-width:130px}
+.is-hidden{display:none!important}
+.workflow-grid,.money-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.workflow-grid>div,.money-grid>div{border:1px solid var(--line);border-radius:12px;padding:14px;min-width:0}
+.workflow-grid strong,.workflow-grid span,.money-grid span,.money-grid strong{display:block}
+.workflow-grid span,.money-grid span{color:var(--muted);font-size:12px;line-height:1.4;margin-top:5px}
+.money-grid strong{font-size:24px;margin-top:6px}
+.money-grid .money-total{grid-column:span 2}
+.section-heading{justify-content:space-between}
+#screens input[type="number"]{min-width:95px;width:95px}
+#prospects .p-score{width:76px;min-width:76px}
+@media(max-width:900px){
+  .workflow-grid,.money-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .money-grid .money-total{grid-column:span 1}
+}
+@media(max-width:560px){
+  .workflow-grid,.money-grid{grid-template-columns:1fr}
+}
+.form-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.form-grid textarea{grid-column:span 2;min-height:92px;padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:#0e1013;color:var(--text);font:inherit;resize:vertical}
+.check-field{display:flex;align-items:center;gap:8px;padding:10px 0}
+.check-field input{width:auto}
+.table-wrap{overflow:auto}
+.action-stack{display:flex;gap:6px;flex-wrap:wrap}
+.micro-field{display:block;margin-top:6px}
+.micro-field span{display:block;font-size:11px;color:var(--muted);margin-bottom:3px}
+.micro-field input{min-width:100px;width:110px}
+.deal-math{margin-top:12px}
+.deal-math>div{min-width:120px}
+.top-actions{justify-content:flex-end}
+@media(max-width:900px){.form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:560px){.form-grid{grid-template-columns:1fr}.form-grid textarea{grid-column:span 1}}

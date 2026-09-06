@@ -6,6 +6,7 @@ const state = {
   screens:[], media:[], playlists:[], prospects:[], businesses:[],
   campaigns:[], campaignReports:[],
   userDirectory:{users:[],invitations:[]},
+  finance:{},
   authConfig:{}
 };
 
@@ -27,6 +28,14 @@ async function api(path, options={}) {
   return data;
 }
 function esc(v=''){ return String(v).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function money(cents){ return '$'+(Number(cents||0)/100).toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:2}); }
+function brokerUsers(){
+  return (state.userDirectory.users||[]).filter(u=>u.internal_role==='broker');
+}
+function brokerOptions(selected=''){
+  return '<option value="">No broker / house lead</option>'+
+    brokerUsers().map(u=>`<option value="${u.user_id}" ${u.user_id===selected?'selected':''}>${esc(u.full_name||u.email)}</option>`).join('');
+}
 function online(ts){ return ts && (Date.now() - new Date(ts).getTime()) < 120000; }
 
 function age(ts){
@@ -159,7 +168,7 @@ async function load(){
   try {
     const [
       stats,screens,media,playlists,prospects,businesses,
-      campaigns,campaignReports,userDirectory,authConfig
+      campaigns,campaignReports,userDirectory,finance,authConfig
     ] = await Promise.all([
       api('/api/admin/stats'),
       api('/api/admin/screens'),
@@ -170,12 +179,13 @@ async function load(){
       api('/api/admin/campaigns'),
       api('/api/admin/reports/campaigns'),
       api('/api/admin/users'),
+      api('/api/admin/finance'),
       fetch('/api/auth/config').then(r=>r.json())
     ]);
 
     Object.assign(state,{
       screens,media,playlists,prospects,businesses,
-      campaigns,campaignReports,userDirectory,authConfig
+      campaigns,campaignReports,userDirectory,finance,authConfig
     });
 
     $('#mScreens').textContent=stats.screens;
@@ -185,6 +195,12 @@ async function load(){
     $('#mProspects').textContent=prospects.length;
     $('#mBusinesses').textContent=businesses.length;
     $('#mUsers').textContent=(userDirectory.users||[]).length;
+    $('#fRevenue').textContent=money(finance.booked_revenue_cents);
+    $('#fCommission').textContent=money(finance.broker_commission_cents);
+    $('#fHost').textContent=money(finance.host_annual_commitment_cents);
+    $('#fHardware').textContent=money(finance.hardware_cost_cents);
+    $('#fSetup').textContent=money(finance.setup_cost_cents);
+    $('#fContribution').textContent=money(finance.contribution_cents);
 
     $('#adminMode').textContent=state.token?'RECOVERY KEY':'OWNER LOGIN';
     $('#ownerSetup').hidden=!(authConfig.bootstrap_required && state.token);
@@ -223,13 +239,13 @@ function stageOptions(selected='new'){
 }
 
 function internalRoleOptions(selected=''){
-  const roles=['','owner','admin','sales','creative','viewer'];
+  const roles=['','owner','admin','broker','creative','viewer'];
   return roles.map(v=>`<option value="${v}" ${v===selected?'selected':''}>${v||'No internal access'}</option>`).join('');
 }
 
 function inviteRoleOptions(type){
   return (type==='internal'
-    ? ['admin','sales','creative','viewer']
+    ? ['admin','broker','creative','viewer']
     : ['owner','manager','viewer'])
     .map(v=>`<option value="${v}">${v}</option>`).join('');
 }
@@ -266,6 +282,7 @@ function renderUsers(){
   $('#inviteBusiness').innerHTML=
     '<option value="">Choose business…</option>'+
     state.businesses.map(b=>`<option value="${b.id}">${esc(b.name)}</option>`).join('');
+  if($('#prospectBroker')) $('#prospectBroker').innerHTML=brokerOptions();
   refreshInviteControls();
 
   $('#users').innerHTML=users.map(u=>`
@@ -276,6 +293,10 @@ function renderUsers(){
       </td>
       <td>
         <select class="u-internal">${internalRoleOptions(u.internal_role||'')}</select>
+        <label class="broker-rate ${u.internal_role==='broker'?'':'is-hidden'}">
+          <span>Commission %</span>
+          <input class="u-broker-rate" type="number" min="0" max="100" step="0.25" value="${Number(u.broker_commission_percent||0)}">
+        </label>
       </td>
       <td>${businessAccessEditor(u)}</td>
       <td>${age(u.last_login_at)}</td>
@@ -306,8 +327,14 @@ function render(){
     <td><strong>${esc(p.name)}</strong><div class="muted">${esc(p.city||'')}${p.state?', '+esc(p.state):''}</div></td>
     <td><span class="pill">${prospectInterest(p)}</span></td>
     <td>${esc(p.contact_name||'')}<div class="muted">${esc(p.phone||p.email||'')}</div></td>
-    <td><select class="p-stage">${stageOptions(p.stage)}</select></td>
-    <td><input class="p-score" type="number" min="0" max="100" value="${p.score??''}" style="width:76px"></td>
+    <td>
+      <select class="p-stage">${stageOptions(p.stage)}</select>
+      <select class="p-broker compact-select">${brokerOptions(p.broker_user_id||'')}</select>
+    </td>
+    <td>
+      <input class="p-score" type="number" min="0" max="100" value="${p.score??''}">
+      ${p.host_interest?`<input class="p-host-pay" type="number" min="0" max="599" step="1" value="${Number(p.host_annual_pay_cents||0)/100}" title="Annual host pay per TV">`:''}
+    </td>
     <td><input class="p-follow" type="datetime-local" value="${p.next_follow_up_at ? new Date(p.next_follow_up_at).toISOString().slice(0,16) : ''}"></td>
     <td><div class="row"><button class="save-prospect">Save</button>${p.stage==='won'?'':`<button class="secondary promote-prospect">Promote</button>`}</div></td>
   </tr>`).join('') || '<tr><td colspan="7" class="muted">No prospects yet.</td></tr>';
@@ -397,6 +424,9 @@ function render(){
       <select class="s-deployment" style="margin-top:6px">${deploymentOptions(s.deployment_class||'unreviewed')}</select>
       <input class="s-cert-note" value="${esc(s.certification_note||'')}" placeholder="Hardware certification note" style="margin-top:6px;min-width:220px">
     </td>
+    <td><input class="s-host-pay" type="number" min="0" max="599" step="1" value="${Number(s.host_annual_pay_cents||0)/100}"></td>
+    <td><input class="s-hardware" type="number" min="0" step="1" value="${Number(s.hardware_cost_cents||0)/100}"></td>
+    <td><input class="s-setup" type="number" min="0" step="1" value="${Number(s.setup_cost_cents||0)/100}"></td>
     <td><strong>${esc(s.pair_code||'—')}</strong></td>
     <td>
       ${s.lan_ip
@@ -593,6 +623,12 @@ document.addEventListener('click', async e=>{
     return;
   }
 
+  if(e.target.matches('.u-internal')){
+    const row=e.target.closest('tr');
+    row.querySelector('.broker-rate')?.classList.toggle('is-hidden',e.target.value!=='broker');
+    return;
+  }
+
   if(e.target.matches('.u-business')){
     const row=e.target.closest('tr');
     const role=row.querySelector(`.u-business-role[data-business="${e.target.dataset.business}"]`);
@@ -612,6 +648,7 @@ document.addEventListener('click', async e=>{
       headers:{'content-type':'application/json'},
       body:JSON.stringify({
         internal_role:row.querySelector('.u-internal').value||null,
+        broker_commission_percent:Number(row.querySelector('.u-broker-rate')?.value||0),
         businesses
       })
     });
@@ -646,6 +683,8 @@ document.addEventListener('click', async e=>{
       body:JSON.stringify({
         stage:row.querySelector('.p-stage').value,
         score:row.querySelector('.p-score').value || 0,
+        broker_user_id:row.querySelector('.p-broker')?.value||null,
+        host_annual_pay_cents:Math.round(Number(row.querySelector('.p-host-pay')?.value||0)*100),
         next_follow_up_at:follow ? new Date(follow).toISOString() : null
       })
     });
@@ -667,7 +706,10 @@ document.addEventListener('click', async e=>{
         playlist_id:row.querySelector('.s-playlist').value||null,
         is_test:row.querySelector('.s-test').checked,
         deployment_class:row.querySelector('.s-deployment').value,
-        certification_note:row.querySelector('.s-cert-note').value
+        certification_note:row.querySelector('.s-cert-note').value,
+        host_annual_pay_cents:Math.round(Number(row.querySelector('.s-host-pay').value||0)*100),
+        hardware_cost_cents:Math.round(Number(row.querySelector('.s-hardware').value||0)*100),
+        setup_cost_cents:Math.round(Number(row.querySelector('.s-setup').value||0)*100)
       })});
     await load();
   }
@@ -720,6 +762,8 @@ $('#newProspect').onsubmit=async e=>{
   const body=Object.fromEntries(fd.entries());
   body.advertiser_interest=form.elements.advertiser_interest.checked;
   body.host_interest=form.elements.host_interest.checked;
+  body.host_annual_pay_cents=Math.round(Number(body.host_annual_pay_dollars||0)*100);
+  delete body.host_annual_pay_dollars;
 
   try{
     $('#prospectMessage').textContent='Saving…';

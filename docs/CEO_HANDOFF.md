@@ -732,4 +732,97 @@ Production matrix PASS:
 - advertiser campaign creation
 - both campaign creation
 
-All synthetic matrix data was deleted after verification. Production Worker is 0.24.1.
+All synthetic matrix data was deleted after verification. Production Worker is 0.25.0.
+
+
+## 2026-09-06 broker/admin simplicity and finance milestone
+
+Worker `0.25.0` is live.
+
+### Internal operating roles
+- Seneca = Owner/Admin.
+- `broker` is now the sales-operator role.
+- The former application-facing `sales` role has been removed from current role choices.
+- Brokers do not inherit Owner/Admin control-plane permissions.
+
+### Broker Desk
+Dedicated `/broker` surface:
+- own prospects
+- own promoted customers
+- own advertiser campaigns
+- own booked revenue / commission snapshot
+
+Brokers cannot access:
+- screen administration
+- pairing/reset
+- Roku/network controls
+- media
+- playlists
+- internal user/role administration
+- owner configuration
+
+API isolation is enforced server-side, not merely hidden in the browser.
+
+### Broker attribution
+Sales ownership follows the commercial relationship:
+1. broker creates prospect
+2. prospect stores `broker_user_id`
+3. promotion carries broker to business
+4. campaign carries broker automatically
+5. broker commission percentage is snapshotted onto the campaign when sold
+
+Historical campaigns therefore do not change if the broker's future commission rate changes.
+
+### Host economics
+The prior-market host compensation ceiling is modeled as:
+- maximum `$599/year per TV`
+- negotiated amount may be lower, including `$0`
+- rate is captured during prospecting
+- promotion copies it to the host location
+- deployment copies it to the actual screen
+
+Each screen additionally records:
+- hardware cost
+- setup cost
+
+### Finance snapshot
+Admin displays booked economics:
+`booked ad revenue - broker commissions - annual host-TV commitments - hardware - setup = contribution`
+
+This is intentionally labeled as a commercial snapshot, not formal accounting P&L, because booked campaign values and annual host obligations can use different time bases.
+
+### Admin UX
+Admin now explains:
+`Prospect -> Customer -> Deal -> Delivery`
+
+Definitions are visible in the interface:
+- Host = business displaying CoastLoop TV(s)
+- Advertiser = business purchasing campaigns/airtime
+- Both = same business performs both roles
+
+Form/select sizing and responsive layout were corrected.
+
+### Verification
+Production synthetic Broker E2E passed:
+- broker account/login
+- broker-only lead attribution
+- host pay rejection above `$599/year`
+- prospect promotion preserving broker and host rate
+- campaign creation preserving broker + commission snapshot
+- finance calculation
+- broker denied from admin screen API
+- Worker health `0.25.0`
+- synthetic cleanup
+
+Final production commercial data state after cleanup:
+- owner memberships: 1
+- broker memberships: 0
+- prospects: 0
+- businesses: 0
+- campaigns: 0
+
+Supabase security advisors showed no new broker/finance security warning. Existing notices remain:
+- INFO: service-only RLS tables without policies (`playback_proof_receipts`, `user_invitations`)
+- WARN: leaked-password protection disabled
+
+The next hardware milestone remains physical installation of Roku `0.1.10` on the lab TCL, followed by zero-state pairing, actual 4K capability validation, and reboot/Wi-Fi/burn-in testing.

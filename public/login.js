@@ -1,6 +1,17 @@
 import {saveSession,readSession} from '/session.js';
 const $=s=>document.querySelector(s);
-if(readSession()?.access_token) location.replace('/admin');
+function homeFor(access){
+  if(access?.internal_role==='broker') return '/broker.html';
+  if(access?.internal_role) return '/admin.html';
+  return '/portal.html';
+}
+
+if(readSession()?.access_token){
+  fetch('/api/auth/me',{headers:{authorization:`Bearer ${readSession().access_token}`}})
+    .then(r=>r.ok?r.json():null)
+    .then(d=>{ if(d?.access) location.replace(homeFor(d.access)); })
+    .catch(()=>{});
+}
 
 const config=await fetch('/api/auth/config').then(r=>r.json()).catch(()=>({}));
 if(config.bootstrap_required){
@@ -18,7 +29,7 @@ $('#login').onsubmit=async e=>{
   const d=await r.json().catch(()=>({}));
   if(!r.ok){$('#msg').textContent=d.error||'Sign in failed';return}
   saveSession(d.session);
-  location.replace(d.access?.internal_role?'/admin':'/portal');
+  location.replace(homeFor(d.access));
 };
 
 $('#owner').onsubmit=async e=>{
@@ -86,5 +97,5 @@ $('#activate').onsubmit=async e=>{
   }
 
   saveSession(d.session);
-  location.replace(d.access?.internal_role?'/admin.html':'/portal.html');
+  location.replace(homeFor(d.access));
 };

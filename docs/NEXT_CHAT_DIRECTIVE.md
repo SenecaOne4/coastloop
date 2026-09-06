@@ -58,7 +58,7 @@ Do not start by rebuilding the site. Continue the operating system already in pl
 - Disposable auth user and invitation were deleted after the test; production returned to owner-only state.
 - `public.sync_coastloop_user_profile()` SECURITY DEFINER execution is now revoked from `public`, `anon`, and `authenticated`; `service_role` retains execute.
 - Migration: `0010_lock_profile_sync_trigger_function.sql`.
-- Priority 3 is complete. Next: priority 4, Host-only / Advertiser-only / both access modeling and portal enforcement.
+- Priority 3 is complete. Priority 4 Host-only / Advertiser-only / Both access modeling and portal enforcement is also complete.
 
 ## Business capability milestone — Host / Advertiser / Both
 - Priority 4 complete.
@@ -72,6 +72,60 @@ Do not start by rebuilding the site. Continue the operating system already in pl
 - Admin advertiser picker only lists advertiser-capable businesses.
 - Production E2E matrix passed: Host-only, Advertiser-only, Both, host campaign rejection, advertiser campaign creation, both campaign creation.
 - Synthetic businesses/prospects/campaigns/locations were cleaned; production business data returned to zero rows.
-- Worker production version: 0.24.1.
+- Worker production version: 0.25.0.
 - Migration: `0011_business_capabilities.sql`.
 - Next priority: return to physical Roku validation / first commercial screen baseline while auth email branding remains staged behind paid Supabase custom-domain support.
+
+
+## Broker / admin simplicity / finance milestone — 2026-09-06
+- Shipped in Worker `0.25.0`.
+- Seneca remains Owner/Admin and retains the full control plane.
+- Added internal `broker` role; removed the old `sales` role from application role choices.
+- Brokers use `/broker` and do not receive screen, media, playlist, user-management, pairing, or network-control access.
+- Broker records are ownership-scoped:
+  - broker-created prospects are assigned to that broker
+  - promoted businesses preserve broker attribution
+  - campaigns preserve broker attribution
+  - brokers can only sell against their own advertiser businesses
+- Broker commission percentage is configured on the broker account and snapshotted onto each campaign when created.
+- Added Host annual pay per TV with a hard maximum of `$599/year`.
+  - negotiated host rate exists on the prospect before closing
+  - it carries into the host location when promoted
+  - it is copied onto each deployed screen for actual installed economics
+- Added screen hardware and setup cost fields.
+- Admin now includes a plain Money Snapshot:
+  - booked ad revenue
+  - broker commissions
+  - annual host-TV commitments
+  - hardware cost
+  - setup cost
+  - contribution = revenue - commissions - host commitments - hardware - setup
+- This is explicitly a booked-economics snapshot, not GAAP/accounting P&L.
+- Admin information architecture now explains how CoastLoop data gets there:
+  Prospect -> Customer -> Deal -> Delivery.
+- Dropdown/input sizing and responsive form behavior were corrected.
+- Added dedicated Broker Desk with only:
+  - leads
+  - customers
+  - campaigns
+  - broker commissions
+- Production E2E PASS:
+  - broker login
+  - broker lead attribution
+  - `$599` host-pay ceiling
+  - prospect -> business/location attribution
+  - campaign commission snapshot
+  - broker finance math
+  - broker denial from `/api/admin/screens`
+  - Worker `0.25.0` health
+  - synthetic cleanup
+- Production was returned to clean state after E2E:
+  - 1 organization member = Seneca owner
+  - 0 brokers
+  - 0 prospects
+  - 0 businesses
+  - 0 campaigns
+- Supabase migrations live:
+  - `broker_financial_model`
+  - `host_per_tv_rate`
+- Next physical priority remains installing the current Roku `0.1.10` package on the lab TCL using the operator-held developer password, then zero-state pairing / 4K / burn-in validation.

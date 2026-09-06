@@ -20,6 +20,32 @@
 </div></div>
 <div id="error" class="error"></div>
 <div class="grid"><div class="card"><div id="mScreens" class="metric">-</div><div class="muted">Screens</div></div><div class="card"><div id="mOnline" class="metric">-</div><div class="muted">Online</div></div><div class="card"><div id="mMedia" class="metric">-</div><div class="muted">Media</div></div><div class="card"><div id="mPlays" class="metric">-</div><div class="muted">Plays / 24h</div></div></div>
+<section class="card workflow-card">
+  <h2>How CoastLoop works</h2>
+  <p class="muted">Everything below follows this same path. You control the network; brokers only work the sales side.</p>
+  <div class="workflow-grid">
+    <div><strong>1 · Prospect</strong><span>You or a broker adds a local business lead.</span></div>
+    <div><strong>2 · Customer</strong><span>Promote it as Host, Advertiser, or Both.</span></div>
+    <div><strong>3 · Deal</strong><span>Hosts receive a TV placement offer. Advertisers buy campaign time.</span></div>
+    <div><strong>4 · Delivery</strong><span>TVs report real playback and CoastLoop shows the economics.</span></div>
+  </div>
+</section>
+<section class="card">
+  <div class="row section-heading">
+    <div>
+      <h2>Money snapshot</h2>
+      <p class="muted">Booked economics, not accounting P&amp;L. Host pay is annual per deployed TV and cannot exceed $599.</p>
+    </div>
+  </div>
+  <div class="money-grid">
+    <div><span>Booked ad revenue</span><strong id="fRevenue">—</strong></div>
+    <div><span>Broker commissions</span><strong id="fCommission">—</strong></div>
+    <div><span>Annual host TV pay</span><strong id="fHost">—</strong></div>
+    <div><span>Hardware</span><strong id="fHardware">—</strong></div>
+    <div><span>Setup</span><strong id="fSetup">—</strong></div>
+    <div class="money-total"><span>Contribution</span><strong id="fContribution">—</strong></div>
+  </div>
+</section>
 <section class="card">
 <div class="row">
   <div>
@@ -61,7 +87,7 @@
 </section>
 
 <section class="card">
-<div class="row"><div><h2>Field sales map</h2><p class="muted">Prospects, hot leads and today’s route.</p></div><button id="routeHot" class="secondary">Route hot leads</button></div>
+<div class="row"><div><h2>Sales map</h2><p class="muted">These are leads added by you, a broker, or the public website. Hot leads can be routed for field visits.</p></div><button id="routeHot" class="secondary">Route hot leads</button></div>
 <div id="prospectMap" style="height:430px;border-radius:12px;overflow:hidden;margin-top:14px"></div>
 </section>
 
@@ -88,6 +114,14 @@
 <label style="display:flex;align-items:center;gap:8px"><input name="advertiser_interest" type="checkbox" checked> Advertiser</label>
 <label style="display:flex;align-items:center;gap:8px"><input name="host_interest" type="checkbox"> Host</label>
 <input name="score" type="number" min="0" max="100" placeholder="Score 0–100">
+<select name="broker_user_id" id="prospectBroker">
+  <option value="">No broker / house lead</option>
+</select>
+<label class="field-help">
+  <span>Host annual pay per TV</span>
+  <input name="host_annual_pay_dollars" type="number" min="0" max="599" step="1" value="0" placeholder="$0–$599">
+  <small>Only used if this business will host a screen. $599/year is the ceiling, not the default.</small>
+</label>
 <button type="button" id="useLocation" class="secondary">Use my location</button>
 <button>Add prospect</button>
 </div>
@@ -97,14 +131,14 @@
 <div id="prospectMessage" class="muted"></div>
 </section>
 
-<section class="card"><div class="row"><div><h2>Sales pipeline</h2><p class="muted">New inquiries and local prospects.</p></div><div id="mProspects" class="metric">-</div></div><div style="overflow:auto"><table><thead><tr><th>Business</th><th>Interest</th><th>Contact</th><th>Stage</th><th>Score</th><th>Follow-up</th><th></th></tr></thead><tbody id="prospects"></tbody></table></div></section>
+<section class="card"><div class="row"><div><h2>Sales pipeline</h2><p class="muted">A prospect becomes a customer only when you or a broker presses Promote.</p></div><div id="mProspects" class="metric">-</div></div><div style="overflow:auto"><table><thead><tr><th>Business</th><th>Interest</th><th>Contact</th><th>Stage</th><th>Score</th><th>Follow-up</th><th></th></tr></thead><tbody id="prospects"></tbody></table></div></section>
 <section class="card">
-<div class="row"><div><h2>Customers</h2><p class="muted">Promoted advertisers and host businesses.</p></div><div id="mBusinesses" class="metric">-</div></div>
+<div class="row"><div><h2>Customers</h2><p class="muted">Customers are promoted prospects. HOST means they display a TV; ADVERTISER means they buy airtime; a business can be both.</p></div><div id="mBusinesses" class="metric">-</div></div>
 <div id="businesses" class="business-list"></div>
 </section>
 
 <section class="card">
-<div class="row"><div><h2>Campaigns</h2><p class="muted">Sales, delivery and proof of play.</p></div><button id="downloadCampaignReport" class="secondary">Export CSV</button></div>
+<div class="row"><div><h2>Campaigns</h2><p class="muted">An ad order for an Advertiser. Contract value is booked revenue; playback below is verified delivery.</p></div><button id="downloadCampaignReport" class="secondary">Export CSV</button></div>
 <form id="newCampaign">
 <div class="row">
 <select name="advertiser_business_id" id="campaignBusiness" required></select>
@@ -167,6 +201,9 @@
   <th>Last play</th>
   <th>Last seen</th>
   <th>Device</th>
+  <th>Host $ / yr</th>
+  <th>Hardware $</th>
+  <th>Setup $</th>
   <th>Pair</th>
   <th>Control</th>
   <th></th>
