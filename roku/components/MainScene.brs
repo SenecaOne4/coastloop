@@ -1,6 +1,6 @@
 sub init()
     m.baseUrl = "https://coastloop.site"
-    m.playerVersion = "roku-0.1.2"
+    m.playerVersion = "roku-0.1.3"
     m.tasks = []
     m.items = []
     m.index = 0
@@ -159,12 +159,20 @@ sub playCurrent()
     playItemUrl(m.currentItem.url)
 end sub
 
+function mediaUrl(url as String) as String
+    if Left(url, 1) = "/"
+        return m.baseUrl + url
+    end if
+    return url
+end function
+
 sub playItemUrl(url as String)
     item = m.currentItem
     if item = invalid then return
 
-    m.playClock = CreateObject("roTimespan")
-    m.playClock.Mark()
+    m.currentStarted = false
+    m.playClock = invalid
+    url = mediaUrl(url)
 
     mediaType = item.media_type
     if mediaType = invalid then mediaType = item.kind
@@ -175,6 +183,9 @@ sub playItemUrl(url as String)
 
         m.poster.uri = url
         m.poster.visible = true
+        m.currentStarted = true
+        m.playClock = CreateObject("roTimespan")
+        m.playClock.Mark()
 
         seconds = item.duration_seconds
         if seconds = invalid or seconds <= 0 then seconds = 15
@@ -197,8 +208,16 @@ end sub
 sub onVideoState()
     state = m.video.state
 
-    if state = "finished"
-        recordProof()
+    if state = "playing"
+        if m.currentStarted = false
+            m.currentStarted = true
+            m.playClock = CreateObject("roTimespan")
+            m.playClock.Mark()
+        end if
+    else if state = "finished"
+        if m.currentStarted = true
+            recordProof()
+        end if
         advance()
     else if state = "error"
         tryFallbackOrAdvance()
