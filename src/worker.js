@@ -1,3 +1,11 @@
+import {
+  handleAuthRoute,
+  requireAdminAccess,
+  adminUserDirectory,
+  createUserInvitation,
+  portalOverview
+} from "./auth.js";
+
 const ORG_ID = "28ad55e4-d32d-423b-80b5-481bd15dec9e";
 
 const json = (data, status = 200, headers = {}) =>
@@ -1231,8 +1239,14 @@ export default {
     const url = new URL(request.url);
 
     try {
+      const authRoute = await handleAuthRoute(request, env, url);
+      if (authRoute) return authRoute;
+
+      if (url.pathname === "/api/portal/overview" && request.method === "GET")
+        return portalOverview(request, env);
+
       if (url.pathname === "/api/health")
-        return json({ ok: true, service: "coastloop", version: "0.17.0" });
+        return json({ ok: true, service: "coastloop", version: "0.18.0" });
 
       if (url.pathname === "/api/player/boot" && request.method === "POST")
         return bootPlayer(request, env);
@@ -1254,8 +1268,15 @@ export default {
         return createPublicLead(request, env);
 
       if (url.pathname.startsWith("/api/admin/")) {
-        if (!requireAdmin(request, env))
+        const adminAuth = await requireAdminAccess(request, env);
+        if (!adminAuth)
           return json({ error: "unauthorized" }, 401);
+
+        if (url.pathname === "/api/admin/users" && request.method === "GET")
+          return json(await adminUserDirectory(env));
+
+        if (url.pathname === "/api/admin/users/invite" && request.method === "POST")
+          return createUserInvitation(request, env, adminAuth);
 
         if (url.pathname === "/api/admin/stats" && request.method === "GET")
           return json(await stats(env));

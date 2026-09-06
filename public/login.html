@@ -1,0 +1,40 @@
+<!doctype html>
+<html><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sign in · CoastLoop</title>
+<link rel="icon" href="/favicon.svg"><link rel="stylesheet" href="/styles.css">
+<style>
+.auth-shell{max-width:520px;margin:8vh auto}.auth-card{padding:34px}
+.auth-card form{display:grid;gap:13px}.auth-card input{width:100%}
+.auth-card button{width:100%}.auth-divider{text-align:center;margin:18px 0}
+.auth-logo{display:flex;align-items:center;gap:12px;margin-bottom:28px}
+.auth-logo img{width:38px}
+</style></head>
+<body><main class="shell auth-shell"><section class="card auth-card">
+<div class="auth-logo"><img src="/brand/coastloop-mark.svg"><div><strong>COASTLOOP</strong><div class="muted">Network access</div></div></div>
+<div id="normal">
+<h1>Sign in</h1><p class="muted">Hosts, advertisers and CoastLoop staff.</p>
+<form id="login">
+<input name="email" type="email" placeholder="Email" autocomplete="email" required>
+<input name="password" type="password" placeholder="Password" autocomplete="current-password" required>
+<button>Sign in</button>
+</form>
+<div id="googleWrap" hidden><div class="auth-divider muted">or</div><button id="google" class="secondary">Continue with Google</button></div>
+<p class="muted" style="margin-top:16px"><a href="/reset-password">Forgot password?</a></p>
+</div>
+
+<div id="bootstrap" hidden>
+<h1>Create CoastLoop owner</h1>
+<p class="muted">One-time setup. This replaces the raw admin-token workflow with your own account.</p>
+<form id="owner">
+<input name="full_name" placeholder="Name" autocomplete="name">
+<input name="email" type="email" placeholder="Owner email" autocomplete="email" required>
+<input name="password" type="password" minlength="10" placeholder="New password (10+ characters)" required>
+<input name="confirm" type="password" minlength="10" placeholder="Confirm password" required>
+<input id="setupKey" name="setup_key" type="password" placeholder="Legacy admin key (only if needed)">
+<button>Create owner account</button>
+</form>
+</div>
+<div id="msg" class="muted" style="margin-top:14px"></div>
+</section></main>
+<script type="module" src="/login.js"></script></body></html>
