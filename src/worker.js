@@ -311,7 +311,7 @@ async function playlistPayload(env, playlistId, now, screen = null) {
     ),
     sb(
       env,
-      `campaigns?organization_id=eq.${ORG_ID}&select=id,status,starts_at,ends_at`
+      `campaigns?organization_id=eq.${ORG_ID}&select=id,status,starts_at,ends_at,advertiser_business_id`
     )
   ]);
 
@@ -354,6 +354,20 @@ async function playlistPayload(env, playlistId, now, screen = null) {
     .map(i => {
       const m = mediaMap.get(i.media_asset_id);
       if (!m) return null;
+
+      if (i.campaign_id) {
+        const campaign = campaignMap.get(i.campaign_id);
+        if (!campaign || m.approval_status !== "approved")
+          return null;
+
+        if (!m.advertiser_business_id ||
+            m.advertiser_business_id !== campaign.advertiser_business_id)
+          return null;
+      } else if (m.advertiser_business_id) {
+        // Advertiser creative must always retain campaign attribution.
+        return null;
+      }
+
       return {
         item_id: i.id,
         position: i.position,
@@ -765,14 +779,25 @@ function validMediaSignature(mime, bytes) {
   return false;
 }
 
-async function uploadMedia(request, env) {
+async function uploadMedia(request, env, auth = null) {
   if (requestTooLarge(request, MEDIA_REQUEST_MAX_BYTES))
     return json({ error: "upload too large; maximum media file is 75 MB" }, 413);
 
   const form = await request.formData();
   const file = form.get("file");
+  const advertiserBusinessId =
+    String(form.get("advertiser_business_id") || "").trim() || null;
   if (!(file instanceof File))
     return json({ error: "file required" }, 400);
+
+  if (advertiserBusinessId) {
+    const businesses = await sb(
+      env,
+      `businesses?id=eq.${encodeURIComponent(advertiserBusinessId)}&organization_id=eq.${ORG_ID}&is_advertiser=eq.true&select=id`
+    );
+    if (!businesses?.[0])
+      return json({ error: "advertiser business not found" }, 400);
+  }
 
   if (!file.size)
     return json({ error: "empty media file" }, 400);
@@ -796,6 +821,9 @@ async function uploadMedia(request, env) {
   const originalName = String(file.name || `media.${spec.ext}`)
     .replace(/[\u0000-\u001f\u007f]/g, "")
     .slice(0, 240) || `media.${spec.ext}`;
+  const title =
+    String(form.get("title") || originalName).trim().slice(0, 240)
+    || originalName;
 
   const rawDuration = Number(
     form.get("duration_seconds") || (spec.kind === "image" ? 15 : 30)
@@ -817,7 +845,8 @@ async function uploadMedia(request, env) {
       headers: { Prefer: "return=representation" },
       body: JSON.stringify({
         organization_id: ORG_ID,
-        title: originalName,
+        advertiser_business_id: advertiserBusinessId,
+        title,
         kind: spec.kind,
         storage_key: key,
         original_filename: originalName,
@@ -825,6 +854,8 @@ async function uploadMedia(request, env) {
         byte_size: file.size,
         duration_seconds: duration,
         status: "ready",
+        approval_status: "pending",
+        created_by: auth?.user?.id || null,
       }),
     });
 
@@ -837,6 +868,67 @@ async function uploadMedia(request, env) {
     throw error;
   }
 }
+
+async function updateMediaApproval(request, env, auth, mediaId) {
+  const rows = await sb(
+    env,
+    `media_assets?id=eq.${encodeURIComponent(mediaId)}&organization_id=eq.${ORG_ID}&select=*`
+  );
+  const media = rows?.[0];
+  if (!media) return json({ error: "media not found" }, 404);
+
+  const b = await bodyJson(request);
+  const next = String(b.approval_status || "").trim().toLowerCase();
+  if (!new Set(["pending", "approved", "rejected"]).has(next))
+    return json({ error: "invalid approval status" }, 400);
+
+  if (next === "approved" && media.status !== "ready")
+    return json({ error: "only ready media can be approved" }, 409);
+
+  const actorId = auth?.user?.id || null;
+  const stamp = new Date().toISOString();
+  const patch = {
+    approval_status: next,
+    updated_at: stamp,
+  };
+
+  if (next === "approved") {
+    patch.approved_at = stamp;
+    patch.approved_by = actorId;
+    patch.rejected_at = null;
+    patch.rejected_by = null;
+    patch.rejection_reason = null;
+  } else if (next === "rejected") {
+    const reason = String(b.rejection_reason || "").trim().slice(0, 1000);
+    if (!reason)
+      return json({ error: "rejection reason required" }, 400);
+
+    patch.approved_at = null;
+    patch.approved_by = null;
+    patch.rejected_at = stamp;
+    patch.rejected_by = actorId;
+    patch.rejection_reason = reason;
+  } else {
+    patch.approved_at = null;
+    patch.approved_by = null;
+    patch.rejected_at = null;
+    patch.rejected_by = null;
+    patch.rejection_reason = null;
+  }
+
+  const changed = await sb(
+    env,
+    `media_assets?id=eq.${encodeURIComponent(mediaId)}&organization_id=eq.${ORG_ID}`,
+    {
+      method: "PATCH",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify(patch),
+    }
+  );
+
+  return json({ ok: true, media: changed?.[0] || null });
+}
+
 
 async function listPlaylists(env) {
   const playlists = await sb(
@@ -890,9 +982,71 @@ async function setPlaylistItems(request, env, playlistId) {
   const b = await bodyJson(request);
   const items = Array.isArray(b.items) ? b.items : [];
 
-  await sb(env, `playlist_items?playlist_id=eq.${playlistId}`, {
-    method: "DELETE",
-  });
+  if (items.length > 200)
+    return json({ error: "playlist cannot exceed 200 items" }, 400);
+
+  const [playlistRows, mediaRows, campaignRows] = await Promise.all([
+    sb(
+      env,
+      `playlists?id=eq.${encodeURIComponent(playlistId)}&organization_id=eq.${ORG_ID}&select=id,version`
+    ),
+    sb(
+      env,
+      `media_assets?organization_id=eq.${ORG_ID}&select=id,status,approval_status,advertiser_business_id`
+    ),
+    sb(
+      env,
+      `campaigns?organization_id=eq.${ORG_ID}&select=id,status,advertiser_business_id`
+    ),
+  ]);
+
+  const playlist = playlistRows?.[0];
+  if (!playlist)
+    return json({ error: "playlist not found" }, 404);
+
+  const mediaMap = new Map((mediaRows || []).map(x => [x.id, x]));
+  const campaignMap = new Map((campaignRows || []).map(x => [x.id, x]));
+
+  for (const item of items) {
+    const mediaId = String(item?.media_id || "").trim();
+    const campaignId = String(item?.campaign_id || "").trim() || null;
+    const media = mediaMap.get(mediaId);
+
+    if (!media || media.status !== "ready")
+      return json({ error: "playlist media must exist and be ready" }, 400);
+
+    if (campaignId) {
+      const campaign = campaignMap.get(campaignId);
+      if (!campaign)
+        return json({ error: "campaign not found for playlist item" }, 400);
+
+      if (["completed", "canceled"].includes(campaign.status))
+        return json({ error: "terminal campaign cannot receive playlist media" }, 409);
+
+      if (media.approval_status !== "approved")
+        return json({ error: "campaign creative must be approved" }, 409);
+
+      if (!media.advertiser_business_id)
+        return json({
+          error: "campaign creative must be assigned to its advertiser"
+        }, 409);
+
+      if (media.advertiser_business_id !== campaign.advertiser_business_id)
+        return json({
+          error: "creative advertiser does not match campaign advertiser"
+        }, 409);
+    } else if (media.advertiser_business_id) {
+      return json({
+        error: "advertiser creative requires campaign attribution"
+      }, 409);
+    }
+  }
+
+  await sb(
+    env,
+    `playlist_items?playlist_id=eq.${encodeURIComponent(playlistId)}&organization_id=eq.${ORG_ID}`,
+    { method: "DELETE" }
+  );
 
   if (items.length) {
     await sb(env, "playlist_items", {
@@ -909,14 +1063,17 @@ async function setPlaylistItems(request, env, playlistId) {
     });
   }
 
-  const p = await sb(env, `playlists?id=eq.${playlistId}&select=version`);
-  await sb(env, `playlists?id=eq.${playlistId}`, {
-    method: "PATCH",
-    body: JSON.stringify({
-      version: Number(p?.[0]?.version || 1) + 1,
-      updated_at: new Date().toISOString(),
-    }),
-  });
+  await sb(
+    env,
+    `playlists?id=eq.${encodeURIComponent(playlistId)}&organization_id=eq.${ORG_ID}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({
+        version: Number(playlist.version || 1) + 1,
+        updated_at: new Date().toISOString(),
+      }),
+    }
+  );
 
   return json({ ok: true });
 }
@@ -2077,7 +2234,7 @@ export default {
         return portalOverview(request, env);
 
       if (url.pathname === "/api/health")
-        return json({ ok: true, service: "coastloop", version: "0.26.5" });
+        return json({ ok: true, service: "coastloop", version: "0.26.6" });
 
       if (url.pathname === "/api/player/boot" && request.method === "POST")
         return bootPlayer(request, env);
@@ -2297,7 +2454,21 @@ export default {
         if (url.pathname === "/api/admin/media" && request.method === "POST")
           return auditMutation(request, env, adminAuth,
             { action: "media.upload", entity_type: "media" },
-            () => uploadMedia(request, env));
+            () => uploadMedia(request, env, adminAuth));
+
+        const mediaApproval = url.pathname.match(
+          /^\/api\/admin\/media\/([^/]+)\/approval$/
+        );
+        if (mediaApproval && request.method === "PUT")
+          return auditMutation(request, env, adminAuth,
+            {
+              action: "media.approval.update",
+              entity_type: "media",
+              entity_id: mediaApproval[1],
+            },
+            () => updateMediaApproval(
+              request, env, adminAuth, mediaApproval[1]
+            ));
 
         if (url.pathname === "/api/admin/playlists" && request.method === "GET")
           return json(await listPlaylists(env));

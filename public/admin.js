@@ -427,6 +427,9 @@ function render(){
   $('#campaignBusiness').innerHTML = '<option value="">Choose advertiser…</option>' +
     state.businesses.filter(b=>b.is_advertiser).map(b=>`<option value="${b.id}">${esc(b.name)}</option>`).join('');
 
+  $('#mediaBusiness').innerHTML = '<option value="">House / internal</option>' +
+    state.businesses.filter(b=>b.is_advertiser).map(b=>`<option value="${b.id}">${esc(b.name)}</option>`).join('');
+
   $('#pairLocation').innerHTML = locationOptions();
   $('#pairPlaylist').innerHTML = '<option value="">No playlist yet</option>' +
     state.playlists.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
@@ -615,14 +618,39 @@ function render(){
       </div>
     </td>
   </tr>`).join('');
-  $('#media').innerHTML = state.media.map(m=>`<div class="media-item"><strong>${esc(m.name)}</strong> <span class="pill">${m.media_type}</span><div class="muted">${m.duration_seconds}s · ${(m.bytes/1024/1024).toFixed(2)} MB · ${m.id}</div></div>`).join('') || '<div class="muted">No media yet.</div>';
+  $('#media').innerHTML = state.media.map(m=>{
+    const advertiser=state.businesses.find(b=>b.id===m.advertiser_business_id);
+    const approval=m.approval_status||'pending';
+    const reason=m.rejection_reason ? `<div class="error" style="margin-top:6px">${esc(m.rejection_reason)}</div>` : '';
+    return `<div class="media-item" data-media="${m.id}">
+      <div class="row">
+        <div>
+          <strong>${esc(m.name)}</strong>
+          <span class="pill">${esc(m.media_type)}</span>
+          <span class="pill">${esc(approval)}</span>
+          <div class="muted">${advertiser ? 'Advertiser: '+esc(advertiser.name) : 'House / internal'} · ${m.duration_seconds}s · ${(Number(m.bytes||0)/1024/1024).toFixed(2)} MB</div>
+          ${reason}
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+          ${approval!=='approved' ? `<button class="secondary approve-media" data-media="${m.id}" type="button">Approve</button>` : ''}
+          ${approval!=='rejected' ? `<button class="secondary reject-media" data-media="${m.id}" type="button">Reject</button>` : ''}
+          ${approval!=='pending' ? `<button class="secondary reset-media-review" data-media="${m.id}" type="button">Re-review</button>` : ''}
+        </div>
+      </div>
+      <div class="muted" style="margin-top:6px">${m.id}</div>
+    </div>`;
+  }).join('') || '<div class="muted">No media yet.</div>';
   $('#playlists').innerHTML = state.playlists.map(p=>`<div class="playlist" data-id="${p.id}">
     <div class="row">
       <div><strong>${esc(p.name)}</strong><div class="muted">Revision ${p.revision}</div></div>
       <button class="secondary add-media">Add selected media</button>
     </div>
     <div class="row" style="margin-top:10px">
-      <select class="media-picker">${state.media.map(m=>`<option value="${m.id}">${esc(m.name)}</option>`).join('')}</select>
+      <select class="media-picker">${state.media.filter(m=>m.status==='ready').map(m=>{
+        const advertiser=state.businesses.find(b=>b.id===m.advertiser_business_id);
+        const review=m.approval_status||'pending';
+        return `<option value="${m.id}">${esc(m.name)} · ${esc(review)}${advertiser?' · '+esc(advertiser.name):' · house'}</option>`;
+      }).join('')}</select>
       <select class="campaign-picker">
         <option value="">House / no campaign</option>
         ${state.campaigns.filter(c=>!['completed','canceled'].includes(c.status)).map(c=>{
@@ -986,9 +1014,72 @@ document.addEventListener('click', async e=>{
       })});
     await load();
   }
+  if(e.target.matches('.approve-media')){
+    const id=e.target.dataset.media;
+    await api(`/api/admin/media/${encodeURIComponent(id)}/approval`,{
+      method:'PUT',
+      headers:{'content-type':'application/json'},
+      body:JSON.stringify({approval_status:'approved'})
+    });
+    await load();
+    return;
+  }
+
+  if(e.target.matches('.reject-media')){
+    const id=e.target.dataset.media;
+    const reason=window.prompt('Why is this creative rejected?');
+    if(reason===null) return;
+    if(!reason.trim()){
+      $('#error').textContent='Rejection reason is required.';
+      return;
+    }
+    await api(`/api/admin/media/${encodeURIComponent(id)}/approval`,{
+      method:'PUT',
+      headers:{'content-type':'application/json'},
+      body:JSON.stringify({
+        approval_status:'rejected',
+        rejection_reason:reason.trim()
+      })
+    });
+    await load();
+    return;
+  }
+
+  if(e.target.matches('.reset-media-review')){
+    const id=e.target.dataset.media;
+    await api(`/api/admin/media/${encodeURIComponent(id)}/approval`,{
+      method:'PUT',
+      headers:{'content-type':'application/json'},
+      body:JSON.stringify({approval_status:'pending'})
+    });
+    await load();
+    return;
+  }
+
   if(e.target.matches('.add-media')){
     const box=e.target.closest('.playlist'), p=state.playlists.find(x=>x.id===box.dataset.id), mediaId=box.querySelector('.media-picker').value, campaignId=box.querySelector('.campaign-picker').value;
     if(!mediaId) return;
+
+    const media=state.media.find(x=>x.id===mediaId);
+    const campaign=campaignId ? state.campaigns.find(x=>x.id===campaignId) : null;
+
+    if(campaignId){
+      if(media?.approval_status!=='approved'){
+        $('#error').textContent='Approve this creative before assigning it to a campaign.';
+        return;
+      }
+      if(!media?.advertiser_business_id){
+        $('#error').textContent='Campaign creative must be assigned to an advertiser.';
+        return;
+      }
+      if(media.advertiser_business_id!==campaign?.advertiser_business_id){
+        $('#error').textContent='Creative advertiser does not match campaign advertiser.';
+        return;
+      }
+    }else if(media?.advertiser_business_id){
+      $('#error').textContent='Advertiser creative must be attached to a campaign.';
+      return;
+    }
     const items=[
       ...(p.items||[]).map(i=>({media_id:i.media_id,duration_seconds:i.duration_seconds,campaign_id:i.campaign_id||null})),
       {media_id:mediaId,campaign_id:campaignId||null}
