@@ -563,6 +563,17 @@ export async function portalOverview(request, env) {
         .sort()
         .pop() || null;
 
+      const dailyPlays = [];
+      for (let offset = 6; offset >= 0; offset--) {
+        const d = new Date(now - offset * 86400000).toISOString().slice(0, 10);
+        dailyPlays.push({
+          date: d,
+          plays: rows
+            .filter(p => p.play_date === d)
+            .reduce((n,p) => n + Number(p.play_count || 0), 0),
+        });
+      }
+
       return {
         ...c,
         plays: verifiedPlays,
@@ -592,6 +603,7 @@ export async function portalOverview(request, env) {
         })(),
         first_played_at: firstPlayedAt,
         last_played_at: lastPlayedAt,
+        daily_plays: dailyPlays,
       };
     });
 
@@ -611,6 +623,17 @@ export async function portalOverview(request, env) {
     const hostRows = (plays || []).filter(p =>
       bizScreens.some(s => s.id === p.screen_id)
     );
+
+    const advertiserDailyPlays = [];
+    for (let offset = 6; offset >= 0; offset--) {
+      const d = new Date(now - offset * 86400000).toISOString().slice(0, 10);
+      advertiserDailyPlays.push({
+        date: d,
+        plays: advertiserRows
+          .filter(p => p.play_date === d)
+          .reduce((n,p) => n + Number(p.play_count || 0), 0),
+      });
+    }
 
     return {
       id: b.id,
@@ -649,6 +672,7 @@ export async function portalOverview(request, env) {
           .filter(Boolean)
           .sort()
           .pop() || null,
+        daily_plays: advertiserDailyPlays,
       } : null,
       locations: b.is_host ? locationData : [],
       campaigns: b.is_advertiser ? campaignData : [],

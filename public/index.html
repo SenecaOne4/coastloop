@@ -54,6 +54,14 @@
     <div class="network-metric"><strong id="netCampaigns">—</strong><span>active campaigns</span></div>
   </div>
 
+  <div class="network-delivery">
+    <div class="network-delivery-head">
+      <span>VERIFIED DELIVERY · LAST 7 DAYS</span>
+      <strong id="network7d">—</strong>
+    </div>
+    <div class="network-chart" id="networkChart"></div>
+  </div>
+
   <div class="network-signal">
     <span id="networkActivity">Waiting for network telemetry…</span>
     <div class="network-signal-line"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
@@ -140,6 +148,26 @@ async function loadNetworkPulse(){
     if(Number(n.online) > 0) state.textContent = 'NETWORK ONLINE';
     else if(Number(n.screens) > 0) state.textContent = 'NETWORK CHECKING IN';
     else state.textContent = 'NETWORK COMMISSIONING';
+
+    const series = Array.isArray(n.daily_plays) ? n.daily_plays : [];
+    const max = Math.max(1, ...series.map(x => Number(x.plays || 0)));
+    const total7d = series.reduce((sum,x) => sum + Number(x.plays || 0), 0);
+
+    document.querySelector('#network7d').textContent =
+      `${networkNumber(total7d)} PLAYS`;
+
+    document.querySelector('#networkChart').innerHTML = series.map(x => {
+      const value = Number(x.plays || 0);
+      const height = Math.max(value ? 8 : 2, Math.round((value / max) * 100));
+      const day = new Date(`${x.date}T12:00:00`).toLocaleDateString(
+        'en-US', {weekday:'short'}
+      );
+      return `<div class="network-chart-day">
+        <div class="network-chart-value">${networkNumber(value)}</div>
+        <div class="network-chart-track"><i style="height:${height}%"></i></div>
+        <small>${day}</small>
+      </div>`;
+    }).join('');
 
     const age = networkAge(n.last_verified_at);
     document.querySelector('#networkActivity').textContent = age

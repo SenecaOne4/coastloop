@@ -23,6 +23,50 @@ const dur=x=>{
   return x>=3600?`${(x/3600).toFixed(1)} hr`:`${Math.round(x/60)} min`;
 };
 
+function deliveryChart(series,label='7-day verified delivery'){
+  const rows=Array.isArray(series)?series:[];
+  if(!rows.length)return'';
+  const max=Math.max(1,...rows.map(x=>Number(x.plays||0)));
+  const total=rows.reduce((n,x)=>n+Number(x.plays||0),0);
+
+  return `<div class="portal-delivery-chart">
+    <div class="portal-chart-head">
+      <span>${esc(label)}</span>
+      <strong>${num(total)} plays</strong>
+    </div>
+    <div class="portal-chart-bars">
+      ${rows.map(x=>{
+        const value=Number(x.plays||0);
+        const height=Math.max(value?8:2,Math.round((value/max)*100));
+        const day=new Date(`${x.date}T12:00:00`).toLocaleDateString(
+          'en-US',{weekday:'short'}
+        );
+        return `<div class="portal-chart-day">
+          <span>${num(value)}</span>
+          <div><i style="height:${height}%"></i></div>
+          <small>${day}</small>
+        </div>`;
+      }).join('')}
+    </div>
+  </div>`;
+}
+
+function deliveryHealth(c){
+  if(c.delivery_percent==null)return{
+    label:'OPEN DELIVERY',
+    className:'neutral'
+  };
+
+  const delivered=Number(c.delivery_percent||0);
+  const pace=c.pace_percent==null?null:Number(c.pace_percent);
+
+  if(delivered>=100)return{label:'DELIVERED',className:'good'};
+  if(pace!=null && pace>=95)return{label:'ON PACE',className:'good'};
+  if(pace!=null && pace>=80)return{label:'WATCH',className:'watch'};
+  if(pace!=null)return{label:'NEEDS PACE',className:'risk'};
+  return{label:'ACTIVE',className:'neutral'};
+}
+
 function metric(value,label,sub=''){
   return `<div class="portal-metric">
     <strong>${value}</strong>
@@ -106,17 +150,24 @@ function advertiserDashboard(b){
       ${metric(num(a.locations),'locations reached')}
       ${metric(num(a.active_campaigns),'active campaigns')}
     </div>
+    ${deliveryChart(a.daily_plays,'Network delivery for your advertising')}
     <div class="portal-campaign-grid">
-      ${(b.campaigns||[]).map(c=>`
+      ${(b.campaigns||[]).map(c=>{
+        const health=deliveryHealth(c);
+        return `
         <article class="portal-campaign">
           <div class="portal-card-head">
             <div>
               <div class="portal-eyebrow">${esc(c.status||'campaign')}</div>
               <h3>${esc(c.name)}</h3>
             </div>
-            <span class="pill">${esc(String(c.status||'').toUpperCase())}</span>
+            <div class="portal-campaign-badges">
+              <span class="portal-health ${health.className}">${health.label}</span>
+              <span class="pill">${esc(String(c.status||'').toUpperCase())}</span>
+            </div>
           </div>
           ${progress(c)}
+          ${deliveryChart(c.daily_plays)}
           <div class="portal-campaign-stats">
             ${metric(num(c.plays_today),'today')}
             ${metric(num(c.screen_count),'screens')}
@@ -127,8 +178,8 @@ function advertiserDashboard(b){
             <span class="network-live-dot"></span>
             Last verified ${age(c.last_played_at)}
           </div>
-        </article>
-      `).join('')||'<div class="portal-empty">No advertising campaigns yet.</div>'}
+        </article>`;
+      }).join('')||'<div class="portal-empty">No advertising campaigns yet.</div>'}
     </div>
   </section>`;
 }

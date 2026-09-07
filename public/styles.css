@@ -249,3 +249,62 @@ form .row>input,form .row>select,form .row>label{min-width:150px}
   .portal-invoice{grid-template-columns:1fr 1fr}
   .portal-invoice-actions{grid-column:1/-1}
 }
+
+
+/* CoastLoop metric depth 0.27.0 */
+.network-delivery{
+  margin-top:26px;padding-top:24px;
+  border-top:1px solid rgba(244,239,231,.1)
+}
+.network-delivery-head,.portal-chart-head{
+  display:flex;justify-content:space-between;align-items:center;gap:16px
+}
+.network-delivery-head span,.portal-chart-head span{
+  color:#aaa39c;font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase
+}
+.network-delivery-head strong,.portal-chart-head strong{
+  font-size:12px;letter-spacing:.04em
+}
+.network-chart,.portal-chart-bars{
+  height:150px;display:grid;grid-template-columns:repeat(7,1fr);gap:9px;
+  align-items:end;margin-top:17px
+}
+.network-chart-day,.portal-chart-day{
+  min-width:0;height:100%;display:grid;grid-template-rows:18px 1fr 18px;gap:6px
+}
+.network-chart-value,.portal-chart-day>span{
+  font-size:9px;color:#aaa39c;text-align:center;white-space:nowrap
+}
+.network-chart-track,.portal-chart-day>div{
+  position:relative;height:100%;overflow:hidden;border-radius:7px;
+  background:rgba(244,239,231,.055)
+}
+.network-chart-track i,.portal-chart-day>div i{
+  position:absolute;left:0;right:0;bottom:0;border-radius:7px 7px 3px 3px;
+  background:linear-gradient(to top,#7b243c,#b8924a);
+  min-height:2px;transition:height .55s cubic-bezier(.2,.7,.2,1)
+}
+.network-chart-day small,.portal-chart-day small{
+  color:#77716c;text-align:center;font-size:9px;text-transform:uppercase;
+  letter-spacing:.07em
+}
+.portal-delivery-chart{
+  padding:18px 20px 15px;border:1px solid rgba(255,255,255,.09);
+  border-radius:16px;background:rgba(255,255,255,.018);margin:14px 0 18px
+}
+.portal-chart-bars{height:115px}
+.portal-chart-day>div{background:rgba(255,255,255,.045)}
+.portal-chart-day>div i{background:linear-gradient(to top,#7b243c,#b8924a)}
+.portal-campaign-badges{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.portal-health{
+  display:inline-flex;align-items:center;border-radius:999px;padding:5px 8px;
+  font-size:9px;letter-spacing:.1em;font-weight:900;border:1px solid rgba(255,255,255,.1)
+}
+.portal-health.good{color:#70d9a0;background:rgba(85,201,139,.08);border-color:rgba(85,201,139,.22)}
+.portal-health.watch{color:#e2bc68;background:rgba(184,146,74,.09);border-color:rgba(184,146,74,.24)}
+.portal-health.risk{color:#e18585;background:rgba(180,70,70,.09);border-color:rgba(180,70,70,.24)}
+.portal-health.neutral{color:#aaa39c}
+@media(max-width:760px){
+  .network-chart,.portal-chart-bars{gap:4px;height:115px}
+  .network-chart-value,.portal-chart-day>span{font-size:8px}
+}

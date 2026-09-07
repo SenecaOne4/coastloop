@@ -2741,7 +2741,7 @@ async function publicNetworkStats(env) {
     sb(env, `screens?organization_id=eq.${ORG_ID}&select=id,location_id,last_seen_at,is_test,status,deployment_class`),
     sb(env, `locations?organization_id=eq.${ORG_ID}&select=id,host_status`),
     sb(env, `campaigns?organization_id=eq.${ORG_ID}&select=id,status,starts_at,ends_at`),
-    sb(env, `playback_daily?organization_id=eq.${ORG_ID}&select=screen_id,play_count,last_played_at`),
+    sb(env, `playback_daily?organization_id=eq.${ORG_ID}&select=screen_id,play_date,play_count,last_played_at`),
   ]);
 
   const now = Date.now();
@@ -2780,6 +2780,17 @@ async function publicNetworkStats(env) {
     .sort()
     .pop() || null;
 
+  const dailyPlays = [];
+  for (let offset = 6; offset >= 0; offset--) {
+    const d = new Date(now - offset * 86400000).toISOString().slice(0, 10);
+    dailyPlays.push({
+      date: d,
+      plays: (plays || [])
+        .filter(p => commercialIds.has(p.screen_id) && p.play_date === d)
+        .reduce((n, p) => n + Number(p.play_count || 0), 0),
+    });
+  }
+
   return {
     screens: commercialScreens.length,
     online: commercialScreens.filter(s =>
@@ -2792,6 +2803,7 @@ async function publicNetworkStats(env) {
       (n, p) => n + Number(p.play_count || 0), 0
     ),
     last_verified_at: lastVerifiedAt,
+    daily_plays: dailyPlays,
   };
 }
 
@@ -2843,7 +2855,7 @@ export default {
         return portalOverview(request, env);
 
       if (url.pathname === "/api/health")
-        return json({ ok: true, service: "coastloop", version: "0.26.9" });
+        return json({ ok: true, service: "coastloop", version: "0.27.0" });
 
       if (url.pathname === "/api/player/boot" && request.method === "POST")
         return bootPlayer(request, env);
