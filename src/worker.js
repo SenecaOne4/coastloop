@@ -292,6 +292,303 @@ async function bootPlayer(request, env) {
   });
 }
 
+
+function pacingHash(input) {
+  let h = 2166136261;
+  const text = String(input || "");
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0) / 4294967296;
+}
+
+async function applyInventoryPacing(
+  env,
+  playlist,
+  items,
+  campaignMap,
+  now,
+  screen
+) {
+  const sourceItems = Array.isArray(items) ? items : [];
+
+  if (!screen || screen.is_test) {
+    return {
+      items: sourceItems,
+      meta: {
+        mode: screen?.is_test ? "test_bypass" : "inventory_unavailable",
+        eligible_screens: null,
+        base_loop_seconds: null,
+        campaigns: [],
+      },
+    };
+  }
+
+  const targetedIds = [...new Set(
+    sourceItems
+      .map(item => item.campaign_id)
+      .filter(id => {
+        if (!id) return false;
+        const campaign = campaignMap.get(id);
+        return campaign?.delivery_target_plays != null;
+      })
+  )];
+
+  if (!targetedIds.length) {
+    return {
+      items: sourceItems,
+      meta: {
+        mode: "inventory_v1",
+        eligible_screens: null,
+        base_loop_seconds: sourceItems.reduce(
+          (n, item) => n + Number(item.duration_seconds || 15), 0
+        ),
+        campaigns: [],
+      },
+    };
+  }
+
+  const campaignFilter = targetedIds
+    .map(id => encodeURIComponent(id))
+    .join(",");
+
+  const [plays, screens, assignments] = await Promise.all([
+    sb(
+      env,
+      `playback_daily?organization_id=eq.${ORG_ID}&campaign_id=in.(${campaignFilter})&select=campaign_id,screen_id,play_count`
+    ),
+    sb(
+      env,
+      `screens?organization_id=eq.${ORG_ID}&select=id,is_test,status,last_seen_at,deployment_class`
+    ),
+    sb(
+      env,
+      `screen_playlist_assignments?organization_id=eq.${ORG_ID}&playlist_id=eq.${encodeURIComponent(playlist.id)}&select=screen_id,starts_at,ends_at`
+    ),
+  ]);
+
+  const screenMap = new Map((screens || []).map(row => [row.id, row]));
+  const delivered = new Map(targetedIds.map(id => [id, 0]));
+
+  for (const row of plays || []) {
+    const proofScreen = screenMap.get(row.screen_id);
+    if (proofScreen?.is_test) continue;
+    delivered.set(
+      row.campaign_id,
+      Number(delivered.get(row.campaign_id) || 0) +
+        Number(row.play_count || 0)
+    );
+  }
+
+  const assignedIds = new Set(
+    (assignments || [])
+      .filter(a =>
+        (!a.starts_at || new Date(a.starts_at).getTime() <= now) &&
+        (!a.ends_at || new Date(a.ends_at).getTime() > now)
+      )
+      .map(a => a.screen_id)
+  );
+
+  const onlineCutoff = now - 120000;
+  const eligibleIds = new Set(
+    (screens || [])
+      .filter(row =>
+        assignedIds.has(row.id) &&
+        !row.is_test &&
+        row.status === "active" &&
+        ["pilot", "production"].includes(row.deployment_class) &&
+        row.last_seen_at &&
+        new Date(row.last_seen_at).getTime() > onlineCutoff
+      )
+      .map(row => row.id)
+  );
+
+  const requesterEligible = eligibleIds.has(screen.id);
+  const eligibleScreens = eligibleIds.size;
+
+  const baseLoopSeconds = Math.max(
+    1,
+    sourceItems.reduce(
+      (n, item) => n + Number(item.duration_seconds || 15),
+      0
+    )
+  );
+
+  // Assigned commercial playlists receive one house item in playerConfig.
+  // Include that time in the capacity model before the item is injected.
+  const effectiveLoopSeconds =
+    baseLoopSeconds + (playlist.name === "CoastLoop House Loop" ? 0 : 15);
+
+  const groups = new Map();
+  for (const item of sourceItems) {
+    if (!item.campaign_id || !targetedIds.includes(item.campaign_id))
+      continue;
+    if (!groups.has(item.campaign_id))
+      groups.set(item.campaign_id, []);
+    groups.get(item.campaign_id).push(item);
+  }
+
+  const plans = new Map();
+  const metadata = [];
+
+  for (const campaignId of targetedIds) {
+    const campaign = campaignMap.get(campaignId);
+    const creatives = groups.get(campaignId) || [];
+    if (!campaign || !creatives.length) continue;
+
+    const target = Number(campaign.delivery_target_plays || 0);
+    const makegood = Number(campaign.makegood_plays || 0);
+    const goal = target + makegood;
+    const deliveredPlays = Number(delivered.get(campaignId) || 0);
+    const remaining = Math.max(goal - deliveredPlays, 0);
+    const endMs = campaign.ends_at
+      ? new Date(campaign.ends_at).getTime()
+      : null;
+
+    let desiredPerLoop = 1;
+    let copies = 1;
+    let requiredPerHour = null;
+    let capacityPerHour = null;
+    let capacityRatio = null;
+    let state = "tracking";
+
+    if (remaining <= 0) {
+      desiredPerLoop = 0;
+      copies = 0;
+      state = "fulfilled";
+    } else if (!requesterEligible || eligibleScreens < 1) {
+      desiredPerLoop = 0;
+      copies = 0;
+      state = "no_eligible_inventory";
+    } else if (endMs !== null && Number.isFinite(endMs) && endMs > now) {
+      const secondsLeft = Math.max(1, (endMs - now) / 1000);
+      requiredPerHour = remaining / (secondsLeft / 3600);
+
+      capacityPerHour =
+        eligibleScreens * (3600 / effectiveLoopSeconds);
+
+      capacityRatio = requiredPerHour > 0
+        ? capacityPerHour / requiredPerHour
+        : null;
+
+      desiredPerLoop =
+        (remaining * effectiveLoopSeconds) /
+        (secondsLeft * eligibleScreens);
+
+      // Small delivery reserve absorbs config jitter and brief screen dropouts.
+      desiredPerLoop *= 1.05;
+
+      const whole = Math.floor(desiredPerLoop);
+      const fraction = desiredPerLoop - whole;
+      const bucketMs = Math.max(
+        5000,
+        Math.min(120000, Math.round(effectiveLoopSeconds * 1000))
+      );
+      const bucket = Math.floor(now / bucketMs);
+      const roll = pacingHash(
+        `${screen.id}|${campaignId}|${bucket}`
+      );
+
+      copies = whole + (roll < fraction ? 1 : 0);
+      copies = Math.max(0, Math.min(12, copies));
+
+      if (desiredPerLoop > 12)
+        state = "capacity_shortfall";
+      else if (desiredPerLoop > 1.1)
+        state = "accelerated";
+      else if (desiredPerLoop < 0.9)
+        state = "throttled";
+      else
+        state = "on_rate";
+    } else {
+      // A target without a finite end date cannot be rate-paced.
+      copies = 1;
+      desiredPerLoop = 1;
+      state = "unbounded_schedule";
+    }
+
+    const bucketKey = Math.floor(
+      now / Math.max(
+        5000,
+        Math.min(120000, Math.round(effectiveLoopSeconds * 1000))
+      )
+    );
+
+    const startOffset = creatives.length
+      ? Math.floor(
+          pacingHash(`${campaignId}|${screen.id}|${bucketKey}|creative`) *
+          creatives.length
+        )
+      : 0;
+
+    const selected = [];
+    for (let n = 0; n < copies; n++) {
+      const creative = creatives[(startOffset + n) % creatives.length];
+      selected.push({
+        ...creative,
+        pacing_sequence: n + 1,
+        pacing_copies: copies,
+        pacing_state: state,
+      });
+    }
+
+    plans.set(campaignId, selected);
+    metadata.push({
+      campaign_id: campaignId,
+      goal_plays: goal,
+      delivered_plays: deliveredPlays,
+      remaining_plays: remaining,
+      desired_plays_per_loop:
+        Math.round(desiredPerLoop * 1000) / 1000,
+      copies_this_loop: copies,
+      required_plays_per_hour:
+        requiredPerHour == null
+          ? null
+          : Math.round(requiredPerHour * 10) / 10,
+      available_plays_per_hour:
+        capacityPerHour == null
+          ? null
+          : Math.round(capacityPerHour * 10) / 10,
+      capacity_ratio:
+        capacityRatio == null
+          ? null
+          : Math.round(capacityRatio * 100) / 100,
+      pacing_state: state,
+    });
+  }
+
+  const output = [];
+  const emitted = new Set();
+
+  for (const item of sourceItems) {
+    const campaignId = item.campaign_id;
+
+    if (!campaignId || !plans.has(campaignId)) {
+      output.push(item);
+      continue;
+    }
+
+    if (emitted.has(campaignId))
+      continue;
+
+    emitted.add(campaignId);
+    output.push(...(plans.get(campaignId) || []));
+  }
+
+  return {
+    items: output,
+    meta: {
+      mode: "inventory_v1",
+      eligible_screens: eligibleScreens,
+      requester_eligible: requesterEligible,
+      base_loop_seconds: baseLoopSeconds,
+      effective_loop_seconds: effectiveLoopSeconds,
+      campaigns: metadata,
+    },
+  };
+}
+
 async function playlistPayload(env, playlistId, now, screen = null) {
   const playlists = await sb(
     env,
@@ -311,7 +608,7 @@ async function playlistPayload(env, playlistId, now, screen = null) {
     ),
     sb(
       env,
-      `campaigns?organization_id=eq.${ORG_ID}&select=id,status,starts_at,ends_at,advertiser_business_id`
+      `campaigns?organization_id=eq.${ORG_ID}&select=id,status,starts_at,ends_at,advertiser_business_id,delivery_target_plays,makegood_plays`
     )
   ]);
 
@@ -382,13 +679,23 @@ async function playlistPayload(env, playlistId, now, screen = null) {
     })
     .filter(Boolean);
 
+  const paced = await applyInventoryPacing(
+    env,
+    playlist,
+    activeItems,
+    campaignMap,
+    now,
+    screen
+  );
+
   const payload = {
     playlist: {
       id: playlist.id,
       name: playlist.name,
       revision: playlist.version,
     },
-    items: activeItems,
+    items: paced.items,
+    pacing: paced.meta,
   };
 
   if (playlist.name === "CoastLoop House Loop" && screen) {
@@ -2234,7 +2541,7 @@ export default {
         return portalOverview(request, env);
 
       if (url.pathname === "/api/health")
-        return json({ ok: true, service: "coastloop", version: "0.26.6" });
+        return json({ ok: true, service: "coastloop", version: "0.26.7" });
 
       if (url.pathname === "/api/player/boot" && request.method === "POST")
         return bootPlayer(request, env);
