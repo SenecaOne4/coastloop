@@ -8,6 +8,22 @@ import {
   revokeUserInvitation,
   portalOverview
 } from "./auth.js";
+import {
+  billingConfig,
+  adminBillingInvoices,
+  adminBillingTransactions,
+  adminBillingPayouts,
+  createBillingInvoice,
+  sendBillingInvoice,
+  recordBillingPayment,
+  recordBillingRefund,
+  createBrokerPayout,
+  createHostPayout,
+  updateBrokerPayout,
+  updateHostPayout,
+  stripeWebhook,
+  billingFinanceSnapshot
+} from "./billing.js";
 
 const ORG_ID = "28ad55e4-d32d-423b-80b5-481bd15dec9e";
 
@@ -67,6 +83,38 @@ async function sb(env, path, options = {}) {
   return data;
 }
 
+function requestTooLarge(request, maxBytes) {
+  const raw = request.headers.get("content-length");
+  if (!raw) return false;
+  const size = Number(raw);
+  return Number.isFinite(size) && size > maxBytes;
+}
+
+function requestIp(request) {
+  return String(
+    request.headers.get("cf-connecting-ip") ||
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    "unknown"
+  );
+}
+
+async function enforceRateLimit(request, limiter, actorKeys = []) {
+  if (!limiter || typeof limiter.limit !== "function") return null;
+
+  const keys = [...actorKeys, `ip:${requestIp(request)}`];
+  for (const key of keys) {
+    const { success } = await limiter.limit({ key: String(key).slice(0, 200) });
+    if (!success) {
+      return json(
+        { error: "too many requests" },
+        429,
+        { "retry-after": "60", "cache-control": "no-store" }
+      );
+    }
+  }
+  return null;
+}
+
 async function sha256Hex(value) {
   const bytes = new TextEncoder().encode(value);
   const digest = await crypto.subtle.digest("SHA-256", bytes);
@@ -103,8 +151,19 @@ async function validateDevice(env, deviceId, deviceKey) {
 }
 
 async function bootPlayer(request, env) {
+  if (requestTooLarge(request, 16384))
+    return json({ error: "request too large" }, 413);
+
   const b = await bodyJson(request);
   if (!b.device_id) return json({ error: "device_id required" }, 400);
+
+  const deviceKey = await sha256Hex(String(b.device_id));
+  const limited = await enforceRateLimit(
+    request,
+    env.PLAYER_BOOT_RATE_LIMITER,
+    [`device:${deviceKey}`]
+  );
+  if (limited) return limited;
 
   let screen = await getScreen(env, b.device_id);
 
@@ -922,6 +981,9 @@ async function resetTestScreenPairing(env, screenId) {
 
 
 async function createPublicLead(request, env) {
+  if (requestTooLarge(request, 32768))
+    return json({ error: "request too large" }, 413);
+
   const b = await bodyJson(request);
 
   // Honeypot: bots can fill this; humans never see it.
@@ -937,6 +999,28 @@ async function createPublicLead(request, env) {
 
   if (!name || (!phone && !email))
     return json({ error: "business name and phone or email required" }, 400);
+
+  const contactIdentity = email
+    ? `email:${email.toLowerCase()}`
+    : `phone:${phone.replace(/\\D/g, "")}`;
+  const contactKey = await sha256Hex(contactIdentity);
+  const limited = await enforceRateLimit(
+    request,
+    env.PUBLIC_LEAD_RATE_LIMITER,
+    [`contact:${contactKey}`]
+  );
+  if (limited) return limited;
+
+  const cutoff = new Date(Date.now() - 86400000).toISOString();
+  const duplicateFilter = email
+    ? `email=eq.${encodeURIComponent(email)}`
+    : `phone=eq.${encodeURIComponent(phone)}`;
+  const duplicates = await sb(
+    env,
+    `prospects?organization_id=eq.${ORG_ID}&source=eq.${encodeURIComponent("coastloop.site")}&${duplicateFilter}&created_at=gte.${encodeURIComponent(cutoff)}&select=id&limit=1`
+  );
+  if (duplicates?.[0])
+    return json({ ok: true, id: duplicates[0].id, duplicate: true });
 
   const hostInterest = interest === "host" || interest === "both";
   const advertiserInterest = interest === "advertiser" || interest === "both";
@@ -1508,15 +1592,19 @@ async function financeSnapshot(env, auth = null) {
     setupCostCents = (screens || []).reduce((n,x)=>n+Number(x.setup_cost_cents||0),0);
   }
 
+  const cash = await billingFinanceSnapshot(env, brokerId);
+
   return {
     booked_revenue_cents: bookedRevenueCents,
     broker_commission_cents: brokerCommissionCents,
+    broker_commission_booked_cents: brokerCommissionCents,
     host_annual_commitment_cents: hostAnnualCommitmentCents,
     hardware_cost_cents: hardwareCostCents,
     setup_cost_cents: setupCostCents,
     contribution_cents:
       bookedRevenueCents - brokerCommissionCents -
       hostAnnualCommitmentCents - hardwareCostCents - setupCostCents,
+    ...cash,
   };
 }
 
@@ -1555,6 +1643,9 @@ export default {
     const url = new URL(request.url);
 
     try {
+      if (url.pathname === "/api/billing/webhook/stripe" && request.method === "POST")
+        return stripeWebhook(request, env);
+
       const authRoute = await handleAuthRoute(request, env, url);
       if (authRoute) return authRoute;
 
@@ -1562,7 +1653,7 @@ export default {
         return portalOverview(request, env);
 
       if (url.pathname === "/api/health")
-        return json({ ok: true, service: "coastloop", version: "0.25.0" });
+        return json({ ok: true, service: "coastloop", version: "0.26.0" });
 
       if (url.pathname === "/api/player/boot" && request.method === "POST")
         return bootPlayer(request, env);
@@ -1639,6 +1730,47 @@ export default {
 
         if (url.pathname === "/api/admin/finance" && request.method === "GET")
           return json(await financeSnapshot(env, adminAuth));
+
+        if (url.pathname === "/api/admin/billing/config" && request.method === "GET")
+          return json(await billingConfig(env));
+
+        if (url.pathname === "/api/admin/billing/invoices" && request.method === "GET")
+          return json(await adminBillingInvoices(env));
+
+        if (url.pathname === "/api/admin/billing/invoices" && request.method === "POST")
+          return createBillingInvoice(request, env, adminAuth?.user?.id || null);
+
+        const sendInvoice = url.pathname.match(/^\/api\/admin\/billing\/invoices\/([^/]+)\/send$/);
+        if (sendInvoice && request.method === "POST")
+          return sendBillingInvoice(request, env, sendInvoice[1]);
+
+        const recordPayment = url.pathname.match(/^\/api\/admin\/billing\/invoices\/([^/]+)\/payments$/);
+        if (recordPayment && request.method === "POST")
+          return recordBillingPayment(request, env, recordPayment[1], adminAuth?.user?.id || null);
+
+        const recordRefund = url.pathname.match(/^\/api\/admin\/billing\/invoices\/([^/]+)\/refunds$/);
+        if (recordRefund && request.method === "POST")
+          return recordBillingRefund(request, env, recordRefund[1], adminAuth?.user?.id || null);
+
+        if (url.pathname === "/api/admin/billing/transactions" && request.method === "GET")
+          return json(await adminBillingTransactions(env));
+
+        if (url.pathname === "/api/admin/billing/payouts" && request.method === "GET")
+          return json(await adminBillingPayouts(env));
+
+        if (url.pathname === "/api/admin/billing/broker-payouts" && request.method === "POST")
+          return createBrokerPayout(request, env, adminAuth?.user?.id || null);
+
+        const brokerPayout = url.pathname.match(/^\/api\/admin\/billing\/broker-payouts\/([^/]+)$/);
+        if (brokerPayout && request.method === "PUT")
+          return updateBrokerPayout(request, env, brokerPayout[1]);
+
+        if (url.pathname === "/api/admin/billing/host-payouts" && request.method === "POST")
+          return createHostPayout(request, env, adminAuth?.user?.id || null);
+
+        const hostPayout = url.pathname.match(/^\/api\/admin\/billing\/host-payouts\/([^/]+)$/);
+        if (hostPayout && request.method === "PUT")
+          return updateHostPayout(request, env, hostPayout[1]);
 
         if (url.pathname === "/api/admin/screens" && request.method === "GET")
           return json(await adminScreens(env));

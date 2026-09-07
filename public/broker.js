@@ -21,6 +21,8 @@ function render(){
   $('#mBusinesses').textContent=state.businesses.length;
   $('#fRevenue').textContent=money(state.finance.booked_revenue_cents);
   $('#fCommission').textContent=money(state.finance.broker_commission_cents);
+  $('#fEarned').textContent=money(state.finance.broker_commission_earned_cents);
+  $('#fDue').textContent=money(state.finance.broker_payout_due_cents);
 
   $('#prospects').innerHTML=state.prospects.map(p=>`<tr data-id="${p.id}">
     <td><strong>${esc(p.name)}</strong><div class="muted">${esc(p.city||'')}${p.state?', '+esc(p.state):''}</div></td>

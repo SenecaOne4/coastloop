@@ -7,6 +7,10 @@ const state = {
   campaigns:[], campaignReports:[],
   userDirectory:{users:[],invitations:[]},
   finance:{},
+  billingConfig:{},
+  billingInvoices:[],
+  billingTransactions:[],
+  billingPayouts:{broker:[],host:[]},
   authConfig:{}
 };
 
@@ -168,7 +172,8 @@ async function load(){
   try {
     const [
       stats,screens,media,playlists,prospects,businesses,
-      campaigns,campaignReports,userDirectory,finance,authConfig
+      campaigns,campaignReports,userDirectory,finance,
+      billingConfig,billingInvoices,billingTransactions,billingPayouts,authConfig
     ] = await Promise.all([
       api('/api/admin/stats'),
       api('/api/admin/screens'),
@@ -180,12 +185,17 @@ async function load(){
       api('/api/admin/reports/campaigns'),
       api('/api/admin/users'),
       api('/api/admin/finance'),
+      api('/api/admin/billing/config'),
+      api('/api/admin/billing/invoices'),
+      api('/api/admin/billing/transactions'),
+      api('/api/admin/billing/payouts'),
       fetch('/api/auth/config').then(r=>r.json())
     ]);
 
     Object.assign(state,{
       screens,media,playlists,prospects,businesses,
-      campaigns,campaignReports,userDirectory,finance,authConfig
+      campaigns,campaignReports,userDirectory,finance,
+      billingConfig,billingInvoices,billingTransactions,billingPayouts,authConfig
     });
 
     $('#mScreens').textContent=stats.screens;
@@ -201,6 +211,13 @@ async function load(){
     $('#fHardware').textContent=money(finance.hardware_cost_cents);
     $('#fSetup').textContent=money(finance.setup_cost_cents);
     $('#fContribution').textContent=money(finance.contribution_cents);
+    $('#fInvoiced').textContent=money(finance.invoiced_cents);
+    $('#fCollected').textContent=money(finance.net_collected_cents);
+    $('#fReceivable').textContent=money(finance.receivable_cents);
+    $('#fRefunded').textContent=money(finance.refunded_cents);
+    $('#fCommissionEarned').textContent=money(finance.broker_commission_earned_cents);
+    $('#fBrokerDue').textContent=money(finance.broker_payout_due_cents);
+    $('#fHostDue').textContent=money(finance.host_payout_due_cents);
 
     $('#adminMode').textContent=state.token?'RECOVERY KEY':'OWNER LOGIN';
     $('#ownerSetup').hidden=!(authConfig.bootstrap_required && state.token);
@@ -384,6 +401,74 @@ function render(){
     </div>`;
   }).join('') || '<div class="muted">No campaigns yet.</div>';
 
+
+  if($('#billingStatus')){
+    const stripe=state.billingConfig.stripe_configured;
+    const hook=state.billingConfig.stripe_webhook_configured;
+    $('#billingStatus').textContent = stripe
+      ? `STRIPE ${hook?'READY':'KEY SET · WEBHOOK NEEDED'}`
+      : 'MANUAL LEDGER · STRIPE NOT CONNECTED';
+    $('#billingStatus').className='pill';
+  }
+
+  if($('#billingCampaign')){
+    $('#billingCampaign').innerHTML='<option value="">Choose campaign…</option>'+
+      state.campaigns
+        .filter(c=>!['canceled'].includes(c.status))
+        .map(c=>{
+          const b=state.businesses.find(x=>x.id===c.advertiser_business_id);
+          return `<option value="${c.id}">${esc(b?.name||'Advertiser')} — ${esc(c.name)} · ${money(c.price_cents)}</option>`;
+        }).join('');
+  }
+
+  if($('#billingProvider')){
+    const stripeOption=$('#billingProvider').querySelector('option[value="stripe"]');
+    if(stripeOption){
+      stripeOption.disabled=!state.billingConfig.stripe_configured;
+      stripeOption.textContent=state.billingConfig.stripe_configured
+        ? 'Stripe hosted invoice · Stripe-enabled methods'
+        : 'Stripe hosted invoice · connect Stripe first';
+    }
+  }
+
+  if($('#billingInvoices')){
+    $('#billingInvoices').innerHTML=state.billingInvoices.map(inv=>{
+      const c=state.campaigns.find(x=>x.id===inv.campaign_id);
+      const b=state.businesses.find(x=>x.id===inv.advertiser_business_id);
+      const due=inv.due_at ? new Date(inv.due_at).toLocaleDateString() : '—';
+      const provider=String(inv.provider||'manual').toUpperCase();
+      const actions=[];
+      if(inv.status==='draft')
+        actions.push(`<button class="secondary billing-send" data-id="${inv.id}">Send / open</button>`);
+      if(inv.provider==='manual' && inv.status==='open' && Number(inv.amount_due_cents||0)>0)
+        actions.push(`<button class="secondary billing-pay" data-id="${inv.id}" data-amount="${Number(inv.amount_due_cents||0)}">Record ${money(inv.amount_due_cents)} paid</button>`);
+      if(inv.provider==='manual' && inv.status==='paid' &&
+         Number(inv.amount_paid_cents||0)>Number(inv.amount_refunded_cents||0))
+        actions.push(`<button class="secondary billing-refund" data-id="${inv.id}" data-amount="${Number(inv.amount_paid_cents||0)-Number(inv.amount_refunded_cents||0)}">Record refund</button>`);
+      if(inv.hosted_invoice_url)
+        actions.push(`<a class="button-link" href="${esc(inv.hosted_invoice_url)}" target="_blank" rel="noopener">Open hosted invoice</a>`);
+
+      return `<div class="media-item" data-invoice="${inv.id}">
+        <div class="row">
+          <div>
+            <strong>${esc(b?.name||'Advertiser')} · ${esc(c?.name||'Campaign')}</strong>
+            <div class="muted">${provider} · ${esc(inv.invoice_number||inv.id.slice(0,8))} · due ${esc(due)}</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
+            <span class="pill">${esc(inv.status)}</span>
+            <strong>${money(inv.total_cents)}</strong>
+          </div>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <div><strong>${money(inv.amount_paid_cents)}</strong><div class="muted">paid</div></div>
+          <div><strong>${money(inv.amount_due_cents)}</strong><div class="muted">due</div></div>
+          <div><strong>${money(inv.amount_refunded_cents)}</strong><div class="muted">refunded</div></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">${actions.join('')}</div>
+        </div>
+      </div>`;
+    }).join('') || '<div class="muted">No invoices yet. Create one from a campaign.</div>';
+  }
+
   $('#screens').innerHTML = state.screens.map(s=>`<tr data-id="${s.id}">
     <td><span class="pill ${online(s.last_seen_at)?'online':'offline'}">${online(s.last_seen_at)?'ONLINE':'OFFLINE'}</span></td>
     <td>
@@ -474,6 +559,84 @@ $('#saveToken').onclick=()=>{
 
 $('#ownerSetup').onclick=()=>{
   location.href='/login.html';
+};
+
+
+const billingForm=$('#newBillingInvoice');
+if(billingForm) billingForm.onsubmit=async e=>{
+  e.preventDefault();
+  const f=e.target, fd=new FormData(f), body=Object.fromEntries(fd.entries());
+  if(!body.campaign_id) return;
+  body.days_until_due=Math.max(1,Math.min(365,Math.round(Number(body.days_until_due||15))));
+  if(body.total_dollars!=='')
+    body.total_cents=Math.round(Number(body.total_dollars||0)*100);
+  delete body.total_dollars;
+  body.request_key=`ui-invoice:${body.campaign_id}:${crypto.randomUUID()}`;
+  const button=f.querySelector('button[type="submit"],button:not([type])');
+  if(button) button.disabled=true;
+  try{
+    $('#billingMessage').textContent='Creating invoice…';
+    await api('/api/admin/billing/invoices',{
+      method:'POST',
+      headers:{'content-type':'application/json'},
+      body:JSON.stringify(body)
+    });
+    f.reset();
+    f.elements.days_until_due.value='15';
+    $('#billingMessage').textContent='Invoice created.';
+    await load();
+  }catch(err){
+    $('#billingMessage').textContent=err.message;
+  }finally{
+    if(button) button.disabled=false;
+  }
+};
+
+const billingInvoices=$('#billingInvoices');
+if(billingInvoices) billingInvoices.onclick=async e=>{
+  const id=e.target.dataset.id;
+  if(!id) return;
+
+  try{
+    e.target.disabled=true;
+
+    if(e.target.matches('.billing-send')){
+      if(!confirm('Open/send this invoice now?')) return;
+      await api(`/api/admin/billing/invoices/${id}/send`,{method:'POST'});
+    }
+
+    if(e.target.matches('.billing-pay')){
+      const amount=Number(e.target.dataset.amount||0);
+      if(!confirm(`Record ${money(amount)} as received?`)) return;
+      await api(`/api/admin/billing/invoices/${id}/payments`,{
+        method:'POST',
+        headers:{'content-type':'application/json'},
+        body:JSON.stringify({
+          amount_cents:amount,
+          payment_method:'manual',
+          request_key:`ui-payment:${id}:${crypto.randomUUID()}`
+        })
+      });
+    }
+
+    if(e.target.matches('.billing-refund')){
+      const amount=Number(e.target.dataset.amount||0);
+      if(!confirm(`Record a ${money(amount)} refund?`)) return;
+      await api(`/api/admin/billing/invoices/${id}/refunds`,{
+        method:'POST',
+        headers:{'content-type':'application/json'},
+        body:JSON.stringify({
+          amount_cents:amount,
+          request_key:`ui-refund:${id}:${crypto.randomUUID()}`
+        })
+      });
+    }
+
+    await load();
+  }catch(err){
+    $('#billingMessage').textContent=err.message;
+    e.target.disabled=false;
+  }
 };
 
 $('#accountButton').onclick=()=>{

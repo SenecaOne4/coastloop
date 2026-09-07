@@ -47,6 +47,23 @@
   </div>
 </section>
 <section class="card">
+  <div class="row section-heading">
+    <div>
+      <h2>Cash & receivables</h2>
+      <p class="muted">Actual money state. Booked sales stay separate from invoices and collected cash.</p>
+    </div>
+  </div>
+  <div class="money-grid">
+    <div><span>Invoiced</span><strong id="fInvoiced">—</strong></div>
+    <div><span>Net collected</span><strong id="fCollected">—</strong></div>
+    <div><span>Accounts receivable</span><strong id="fReceivable">—</strong></div>
+    <div><span>Refunded</span><strong id="fRefunded">—</strong></div>
+    <div><span>Broker commission earned</span><strong id="fCommissionEarned">—</strong></div>
+    <div><span>Broker payout due</span><strong id="fBrokerDue">—</strong></div>
+    <div><span>Host payouts due</span><strong id="fHostDue">—</strong></div>
+  </div>
+</section>
+<section class="card">
 <div class="row">
   <div>
     <h2>Users & access</h2>
@@ -154,6 +171,34 @@
 </div>
 </form>
 <div id="campaigns" class="campaign-list"></div>
+</section>
+
+<section class="card">
+  <div class="row section-heading">
+    <div>
+      <h2>Billing center</h2>
+      <p class="muted">Create receivables from campaigns. Manual invoices work now; Stripe adds a hosted payment page using the payment methods enabled in Stripe.</p>
+    </div>
+    <span id="billingStatus" class="pill">BILLING</span>
+  </div>
+
+  <form id="newBillingInvoice" style="margin-top:14px">
+    <div class="row">
+      <select name="campaign_id" id="billingCampaign" required></select>
+      <select name="provider" id="billingProvider">
+        <option value="manual">Manual invoice / external payment</option>
+        <option value="stripe">Stripe hosted invoice · Stripe-enabled methods</option>
+      </select>
+      <input name="total_dollars" type="number" min="0.01" step="0.01" placeholder="Amount $ · blank = campaign price">
+      <label class="field-help">
+        <span>Days until due</span>
+        <input name="days_until_due" type="number" min="1" max="365" value="15">
+      </label>
+      <button>Create invoice</button>
+    </div>
+  </form>
+  <div id="billingMessage" class="muted" style="margin-top:8px"></div>
+  <div id="billingInvoices" style="margin-top:16px"></div>
 </section>
 
 <section class="card">
