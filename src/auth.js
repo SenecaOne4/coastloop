@@ -445,12 +445,15 @@ export async function createUserInvitation(request, env, adminAuth) {
   const accountType = String(b.account_type || "business");
   const role = String(b.role || "viewer");
   const businessId = b.business_id ? String(b.business_id) : null;
+  const actorRole = adminAuth?.access?.internal_role || adminAuth?.role || null;
 
   if (!/^\S+@\S+\.\S+$/.test(email)) return json({ error: "Valid email required" }, 400);
   const internalRoles = new Set(["owner", "admin", "broker", "creative", "viewer"]);
   const businessRoles = new Set(["owner", "manager", "viewer"]);
   if (accountType === "internal") {
     if (!internalRoles.has(role)) return json({ error: "Invalid internal role" }, 400);
+    if (role === "owner" && actorRole !== "owner")
+      return json({ error: "Only an owner can grant owner access" }, 403);
   } else if (accountType === "business") {
     if (!businessId || !businessRoles.has(role)) return json({ error: "Business and valid role required" }, 400);
     const business = await rest(env, `businesses?id=eq.${businessId}&organization_id=eq.${ORG_ID}&select=id`);
@@ -572,6 +575,7 @@ export async function updateUserAccess(request, env, adminAuth, userId) {
   const b = await bodyJson(request);
   const allowedInternal = new Set(["owner","admin","broker","creative","viewer"]);
   const allowedBusiness = new Set(["owner","manager","viewer"]);
+  const actorRole = adminAuth?.access?.internal_role || adminAuth?.role || null;
 
   const current = await rest(
     env,
@@ -579,9 +583,35 @@ export async function updateUserAccess(request, env, adminAuth, userId) {
   );
   const currentRole = current?.[0]?.role || null;
 
-  // Never let the signed-in owner accidentally remove their own ownership.
-  if (adminAuth?.user?.id === userId && currentRole === "owner" && b.internal_role !== "owner")
+  const requestedRole = b.internal_role === undefined
+    ? undefined
+    : (b.internal_role === null || b.internal_role === ""
+        ? null
+        : String(b.internal_role));
+
+  // Admins may operate the control plane, but ownership itself is owner-only.
+  if (actorRole !== "owner" &&
+      (currentRole === "owner" || requestedRole === "owner"))
+    return json({ error: "Only an owner can manage owner access" }, 403);
+
+  // Never let a signed-in owner remove their own ownership.
+  if (adminAuth?.user?.id === userId &&
+      currentRole === "owner" &&
+      requestedRole !== undefined &&
+      requestedRole !== "owner")
     return json({ error: "You cannot remove your own owner access." }, 400);
+
+  // Even a different owner cannot remove the organization's final owner.
+  if (currentRole === "owner" &&
+      requestedRole !== undefined &&
+      requestedRole !== "owner") {
+    const owners = await rest(
+      env,
+      `organization_members?organization_id=eq.${ORG_ID}&role=eq.owner&select=user_id`
+    );
+    if ((owners || []).length <= 1)
+      return json({ error: "CoastLoop must always have at least one owner" }, 409);
+  }
 
   if (b.internal_role !== undefined) {
     if (b.internal_role === null || b.internal_role === "") {
@@ -650,7 +680,19 @@ export async function updateUserAccess(request, env, adminAuth, userId) {
   return json({ ok: true });
 }
 
-export async function revokeUserInvitation(request, env, invitationId) {
+export async function revokeUserInvitation(request, env, adminAuth, invitationId) {
+  const actorRole = adminAuth?.access?.internal_role || adminAuth?.role || null;
+  const rows = await rest(
+    env,
+    `user_invitations?id=eq.${invitationId}&organization_id=eq.${ORG_ID}&status=eq.pending&select=id,account_type,role`
+  );
+  const invitation = rows?.[0] || null;
+
+  if (invitation?.account_type === "internal" &&
+      invitation?.role === "owner" &&
+      actorRole !== "owner")
+    return json({ error: "Only an owner can revoke an owner invitation" }, 403);
+
   await rest(
     env,
     `user_invitations?id=eq.${invitationId}&organization_id=eq.${ORG_ID}&status=eq.pending`,

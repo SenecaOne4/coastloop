@@ -1844,7 +1844,7 @@ export default {
         return portalOverview(request, env);
 
       if (url.pathname === "/api/health")
-        return json({ ok: true, service: "coastloop", version: "0.26.2" });
+        return json({ ok: true, service: "coastloop", version: "0.26.3" });
 
       if (url.pathname === "/api/player/boot" && request.method === "POST")
         return bootPlayer(request, env);
@@ -1914,7 +1914,7 @@ export default {
 
         const invitation = url.pathname.match(/^\/api\/admin\/invitations\/([^/]+)$/);
         if (invitation && request.method === "DELETE")
-          return revokeUserInvitation(request, env, invitation[1]);
+          return revokeUserInvitation(request, env, adminAuth, invitation[1]);
 
         if (url.pathname === "/api/admin/stats" && request.method === "GET")
           return json(await stats(env));

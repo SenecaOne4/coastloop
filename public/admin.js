@@ -11,7 +11,8 @@ const state = {
   billingInvoices:[],
   billingTransactions:[],
   billingPayouts:{broker:[],host:[]},
-  authConfig:{}
+  authConfig:{},
+  currentInternalRole:null
 };
 
 if($('#token')) $('#token').value = state.token;
@@ -238,9 +239,11 @@ async function load(){
     if(!state.token && readSession()?.access_token){
       try{
         const me=await sessionApi('/api/auth/me');
+        state.currentInternalRole=me.access?.internal_role||null;
         $('#adminWho').textContent=me.user?.full_name||me.user?.email||'';
       }catch{}
     }else{
+      state.currentInternalRole='owner';
       $('#adminWho').textContent='Bootstrap / recovery access';
     }
 
@@ -268,9 +271,12 @@ function stageOptions(selected='new'){
     .map(v=>`<option value="${v}" ${v===selected?'selected':''}>${v.replaceAll('_',' ')}</option>`).join('');
 }
 
+function ownerControlsAllowed(){
+  return Boolean(state.token || state.currentInternalRole==='owner');
+}
 function internalRoleOptions(selected=''){
-  const roles=['','owner','admin','broker','creative','viewer'];
-  return roles.map(v=>`<option value="${v}" ${v===selected?'selected':''}>${v||'No internal access'}</option>`).join('');
+  const roles=['',...((ownerControlsAllowed()||selected==='owner')?['owner']:[]),'admin','broker','creative','viewer'];
+  return roles.map(v=>`<option value="${v}" ${v===selected?'selected':''} ${v==='owner'&&!ownerControlsAllowed()?'disabled':''}>${v||'No internal access'}</option>`).join('');
 }
 
 function inviteRoleOptions(type){
@@ -315,14 +321,16 @@ function renderUsers(){
   if($('#prospectBroker')) $('#prospectBroker').innerHTML=brokerOptions();
   refreshInviteControls();
 
-  $('#users').innerHTML=users.map(u=>`
+  $('#users').innerHTML=users.map(u=>{
+    const protectedOwner=u.internal_role==='owner'&&!ownerControlsAllowed();
+    return `
     <tr data-user="${u.user_id}">
       <td>
         <strong>${esc(u.full_name||u.email)}</strong>
         <div class="muted">${esc(u.email)}</div>
       </td>
       <td>
-        <select class="u-internal">${internalRoleOptions(u.internal_role||'')}</select>
+        <select class="u-internal" ${protectedOwner?'disabled':''}>${internalRoleOptions(u.internal_role||'')}</select>
         <label class="broker-rate ${u.internal_role==='broker'?'':'is-hidden'}">
           <span>Commission %</span>
           <input class="u-broker-rate" type="number" min="0" max="100" step="0.25" value="${Number(u.broker_commission_percent||0)}">
@@ -330,9 +338,9 @@ function renderUsers(){
       </td>
       <td>${businessAccessEditor(u)}</td>
       <td>${age(u.last_login_at)}</td>
-      <td><button class="save-user-access">Save access</button></td>
+      <td><button class="save-user-access" ${protectedOwner?'disabled':''}>${protectedOwner?'Owner protected':'Save access'}</button></td>
     </tr>
-  `).join('')||'<tr><td colspan="5" class="muted">No activated users yet.</td></tr>';
+  `}).join('')||'<tr><td colspan="5" class="muted">No activated users yet.</td></tr>';
 
   $('#invitations').innerHTML=invitations.map(i=>{
     const b=state.businesses.find(x=>x.id===i.business_id);
