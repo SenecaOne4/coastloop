@@ -1,3 +1,4 @@
+import { jsonBody, validateJsonMutation } from "./request.js";
 import {
   handleAuthRoute,
   requireAdminAccess,
@@ -33,9 +34,7 @@ const json = (data, status = 200, headers = {}) =>
     headers: { "content-type": "application/json; charset=utf-8", ...headers },
   });
 
-async function bodyJson(request) {
-  try { return await request.json(); } catch { return {}; }
-}
+const bodyJson = jsonBody;
 
 function brokerIdFromAuth(auth) {
   return auth?.access?.internal_role === "broker" ? auth?.user?.id || null : null;
@@ -300,7 +299,7 @@ async function playlistPayload(env, playlistId, now, screen = null) {
   const playlist = playlists?.[0];
   if (!playlist) return null;
 
-  const [items, media] = await Promise.all([
+  const [items, media, campaigns] = await Promise.all([
     sb(
       env,
       `playlist_items?playlist_id=eq.${playlist.id}&active=eq.true&select=*&order=position.asc`
@@ -308,15 +307,48 @@ async function playlistPayload(env, playlistId, now, screen = null) {
     sb(
       env,
       `media_assets?organization_id=eq.${ORG_ID}&status=eq.ready&select=*`
+    ),
+    sb(
+      env,
+      `campaigns?organization_id=eq.${ORG_ID}&select=id,status,starts_at,ends_at`
     )
   ]);
 
   const mediaMap = new Map((media || []).map(m => [m.id, m]));
+  const campaignMap = new Map((campaigns || []).map(c => [c.id, c]));
+
+  const campaignDeliverable = campaignId => {
+    if (!campaignId) return true;
+
+    const campaign = campaignMap.get(campaignId);
+    if (!campaign) return false;
+
+    const starts = campaign.starts_at
+      ? new Date(campaign.starts_at).getTime()
+      : null;
+    const ends = campaign.ends_at
+      ? new Date(campaign.ends_at).getTime()
+      : null;
+
+    if (starts !== null && (!Number.isFinite(starts) || starts > now))
+      return false;
+    if (ends !== null && (!Number.isFinite(ends) || ends <= now))
+      return false;
+
+    if (campaign.status === "active")
+      return true;
+
+    if (campaign.status === "scheduled")
+      return starts !== null && starts <= now;
+
+    return false;
+  };
 
   const activeItems = (items || [])
     .filter(i =>
       (!i.starts_at || new Date(i.starts_at).getTime() <= now) &&
-      (!i.ends_at || new Date(i.ends_at).getTime() > now)
+      (!i.ends_at || new Date(i.ends_at).getTime() > now) &&
+      campaignDeliverable(i.campaign_id)
     )
     .map(i => {
       const m = mediaMap.get(i.media_asset_id);
@@ -1402,8 +1434,49 @@ async function createCampaign(request, env, auth = null) {
   if (!business?.[0])
     return json({ error: "business not found" }, 404);
 
-  const allowed = new Set(["draft","scheduled","active","paused","completed","canceled"]);
-  const status = allowed.has(b.status) ? b.status : "draft";
+  const requestedStatus = String(b.status || "draft").trim().toLowerCase();
+  const allowedCreate = actorBrokerId
+    ? new Set(["draft", "scheduled"])
+    : new Set(["draft", "scheduled", "active"]);
+
+  if (!allowedCreate.has(requestedStatus)) {
+    return json({
+      error: actorBrokerId
+        ? "brokers may create draft or scheduled campaigns"
+        : "campaign must start as draft, scheduled, or active"
+    }, actorBrokerId ? 403 : 400);
+  }
+
+  const parseCampaignDate = (value, label) => {
+    if (value === undefined || value === null || value === "")
+      return { value: null };
+
+    const time = new Date(value).getTime();
+    if (!Number.isFinite(time))
+      return { error: `${label} must be a valid date` };
+
+    return { value: new Date(time).toISOString() };
+  };
+
+  const parsedStart = parseCampaignDate(b.starts_at, "starts_at");
+  if (parsedStart.error) return json({ error: parsedStart.error }, 400);
+
+  const parsedEnd = parseCampaignDate(b.ends_at, "ends_at");
+  if (parsedEnd.error) return json({ error: parsedEnd.error }, 400);
+
+  if (parsedStart.value && parsedEnd.value &&
+      new Date(parsedEnd.value).getTime() <= new Date(parsedStart.value).getTime())
+    return json({ error: "ends_at must be after starts_at" }, 400);
+
+  if (requestedStatus === "scheduled" && !parsedStart.value)
+    return json({ error: "scheduled campaign requires starts_at" }, 400);
+
+  let priceCents = null;
+  if (b.price_cents !== undefined && b.price_cents !== "" && b.price_cents !== null) {
+    priceCents = validMoneyCents(b.price_cents);
+    if (priceCents === null)
+      return json({ error: "price_cents must be a non-negative integer" }, 400);
+  }
 
   const requestedBrokerId = actorBrokerId
     || String(b.broker_user_id || "").trim()
@@ -1423,11 +1496,10 @@ async function createCampaign(request, env, auth = null) {
       broker_user_id: requestedBrokerId,
       broker_commission_percent: brokerCommissionPercent,
       name,
-      status,
-      starts_at: b.starts_at || null,
-      ends_at: b.ends_at || null,
-      price_cents: b.price_cents === undefined || b.price_cents === ""
-        ? null : Math.max(0, Math.round(Number(b.price_cents) || 0)),
+      status: requestedStatus,
+      starts_at: parsedStart.value,
+      ends_at: parsedEnd.value,
+      price_cents: priceCents,
       billing_notes: String(b.billing_notes || "").slice(0, 2000) || null,
       notes: String(b.notes || "").slice(0, 4000) || null,
       updated_at: new Date().toISOString(),
@@ -1435,6 +1507,62 @@ async function createCampaign(request, env, auth = null) {
   });
 
   return json({ ok: true, campaign: rows?.[0] || null });
+}
+
+
+async function updateCampaignStatus(request, env, campaignId) {
+  const b = await bodyJson(request);
+  const nextStatus = String(b.status || "").trim().toLowerCase();
+  const statuses = new Set([
+    "draft", "scheduled", "active", "paused", "completed", "canceled"
+  ]);
+
+  if (!statuses.has(nextStatus))
+    return json({ error: "invalid campaign status" }, 400);
+
+  const rows = await sb(
+    env,
+    `campaigns?id=eq.${encodeURIComponent(campaignId)}&organization_id=eq.${ORG_ID}&select=*`
+  );
+  const campaign = rows?.[0];
+
+  if (!campaign)
+    return json({ error: "campaign not found" }, 404);
+
+  if (campaign.status === nextStatus)
+    return json({ ok: true, campaign });
+
+  const transitions = {
+    draft: new Set(["scheduled", "active", "canceled"]),
+    scheduled: new Set(["draft", "active", "canceled"]),
+    active: new Set(["paused", "completed", "canceled"]),
+    paused: new Set(["active", "completed", "canceled"]),
+    completed: new Set(),
+    canceled: new Set(),
+  };
+
+  if (!transitions[campaign.status]?.has(nextStatus))
+    return json({
+      error: `campaign cannot move from ${campaign.status} to ${nextStatus}`
+    }, 409);
+
+  if (nextStatus === "scheduled" && !campaign.starts_at)
+    return json({ error: "scheduled campaign requires a start date" }, 409);
+
+  const changed = await sb(
+    env,
+    `campaigns?id=eq.${encodeURIComponent(campaignId)}&organization_id=eq.${ORG_ID}`,
+    {
+      method: "PATCH",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify({
+        status: nextStatus,
+        updated_at: new Date().toISOString(),
+      }),
+    }
+  );
+
+  return json({ ok: true, campaign: changed?.[0] || null });
 }
 
 
@@ -1706,6 +1834,9 @@ export default {
       if (url.pathname === "/api/billing/webhook/stripe" && request.method === "POST")
         return stripeWebhook(request, env);
 
+      const jsonGuard = await validateJsonMutation(request, url);
+      if (jsonGuard) return jsonGuard;
+
       const authRoute = await handleAuthRoute(request, env, url);
       if (authRoute) return authRoute;
 
@@ -1713,7 +1844,7 @@ export default {
         return portalOverview(request, env);
 
       if (url.pathname === "/api/health")
-        return json({ ok: true, service: "coastloop", version: "0.26.1" });
+        return json({ ok: true, service: "coastloop", version: "0.26.2" });
 
       if (url.pathname === "/api/player/boot" && request.method === "POST")
         return bootPlayer(request, env);
@@ -1863,6 +1994,10 @@ export default {
 
         if (url.pathname === "/api/admin/campaigns" && request.method === "POST")
           return createCampaign(request, env, adminAuth);
+
+        const campaignStatus = url.pathname.match(/^\/api\/admin\/campaigns\/([^/]+)\/status$/);
+        if (campaignStatus && request.method === "PUT")
+          return updateCampaignStatus(request, env, campaignStatus[1]);
 
         if (url.pathname === "/api/admin/media" && request.method === "GET")
           return json(await adminMedia(env));

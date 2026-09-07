@@ -1,3 +1,4 @@
+import { jsonBody } from "./request.js";
 const ORG_ID = "28ad55e4-d32d-423b-80b5-481bd15dec9e";
 
 const json = (data, status = 200, headers = {}) =>
@@ -6,9 +7,7 @@ const json = (data, status = 200, headers = {}) =>
     headers: { "content-type": "application/json; charset=utf-8", ...headers },
   });
 
-async function bodyJson(request) {
-  try { return await request.json(); } catch { return {}; }
-}
+const bodyJson = jsonBody;
 
 async function sb(env, path, options = {}) {
   const headers = {

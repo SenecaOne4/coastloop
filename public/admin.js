@@ -33,6 +33,19 @@ async function api(path, options={}) {
 }
 function esc(v=''){ return String(v).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function money(cents){ return '$'+(Number(cents||0)/100).toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:2}); }
+function campaignActions(c){
+  const actions={
+    draft:[["scheduled","Schedule"],["active","Activate"],["canceled","Cancel"]],
+    scheduled:[["draft","Back to draft"],["active","Activate"],["canceled","Cancel"]],
+    active:[["paused","Pause"],["completed","Complete"],["canceled","Cancel"]],
+    paused:[["active","Resume"],["completed","Complete"],["canceled","Cancel"]],
+    completed:[],
+    canceled:[]
+  };
+  return (actions[c.status]||[])
+    .map(([status,label])=>`<button class="secondary campaign-state" data-campaign="${c.id}" data-status="${status}" type="button">${label}</button>`)
+    .join('');
+}
 function brokerUsers(){
   return (state.userDirectory.users||[]).filter(u=>u.internal_role==='broker');
 }
@@ -390,6 +403,7 @@ function render(){
           <span class="pill">${esc(c.status)}</span>
           <strong>${price}</strong>
           <button class="secondary view-report" data-campaign="${c.id}" type="button">View report</button>
+          ${campaignActions(c)}
         </div>
       </div>
       <div class="row" style="margin-top:12px">
@@ -779,6 +793,27 @@ document.addEventListener('click', async e=>{
     return;
   }
 
+  if(e.target.matches('.campaign-state')){
+    const id=e.target.dataset.campaign;
+    const status=e.target.dataset.status;
+    if(!id||!status)return;
+    if((status==='completed'||status==='canceled') &&
+       !confirm(`Mark this campaign ${status}? Delivery will stop.`)) return;
+    e.target.disabled=true;
+    try{
+      await api(`/api/admin/campaigns/${id}/status`,{
+        method:'PUT',
+        headers:{'content-type':'application/json'},
+        body:JSON.stringify({status})
+      });
+      await load();
+    }catch(err){
+      $('#error').textContent=err.message;
+      e.target.disabled=false;
+    }
+    return;
+  }
+
   if(e.target.matches('.revoke-invite')){
     const box=e.target.closest('[data-invite]');
     await api(`/api/admin/invitations/${box.dataset.invite}`,{method:'DELETE'});
@@ -956,7 +991,9 @@ $('#newCampaign').onsubmit=async e=>{
     advertiser_business_id:fd.get('advertiser_business_id'),
     name:fd.get('name'),
     status:fd.get('status'),
-    price_cents:dollars===''?null:Math.round(Number(dollars)*100)
+    price_cents:dollars===''?null:Math.round(Number(dollars)*100),
+    starts_at:fd.get('starts_at')?new Date(fd.get('starts_at')).toISOString():null,
+    ends_at:fd.get('ends_at')?new Date(fd.get('ends_at')).toISOString():null
   };
   try{
     await api('/api/admin/campaigns',{
