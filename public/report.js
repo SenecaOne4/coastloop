@@ -45,6 +45,36 @@ async function load(){
   const r = reports.find(x => x.campaign_id === campaignId);
   if (!r) throw new Error('Campaign report not found.');
 
+  const deliveryGoal=Number(r.delivery_goal_plays||0);
+  const deliveryPct=r.delivery_percent==null ? null : Number(r.delivery_percent);
+  const pacePct=r.pace_percent==null ? null : Number(r.pace_percent);
+  const remaining=r.remaining_plays==null ? null : Number(r.remaining_plays);
+  const health=String(r.delivery_health||'not_targeted').replaceAll('_',' ');
+  const deliveryHost=$('#reportError')?.parentElement || document.body;
+
+  if(!document.querySelector('#deliveryContract')){
+    deliveryHost.insertAdjacentHTML('afterbegin',`
+      <section id="deliveryContract" class="card" style="margin-bottom:18px">
+        <div class="row">
+          <div>
+            <div class="muted">Verified delivery contract</div>
+            <h2 style="margin:4px 0">${deliveryGoal ? deliveryGoal.toLocaleString()+' plays' : 'No guaranteed play target'}</h2>
+          </div>
+          <div><strong>${esc(health)}</strong><div class="muted">delivery health</div></div>
+        </div>
+        <div class="row" style="margin-top:12px">
+          <div><strong>${Number(r.plays||0).toLocaleString()}</strong><div class="muted">verified plays</div></div>
+          <div><strong>${remaining==null ? '—' : remaining.toLocaleString()}</strong><div class="muted">remaining</div></div>
+          <div><strong>${deliveryPct==null ? '—' : deliveryPct.toFixed(1)+'%'}</strong><div class="muted">goal delivered</div></div>
+          <div><strong>${pacePct==null ? '—' : pacePct.toFixed(1)+'%'}</strong><div class="muted">pace vs schedule</div></div>
+        </div>
+        ${Number(r.makegood_plays||0)>0
+          ? `<div class="muted" style="margin-top:10px">${Number(r.makegood_plays).toLocaleString()} makegood plays are included in the delivery goal.</div>`
+          : ''}
+      </section>
+    `);
+  }
+
   document.title = `${r.advertiser_name || 'Advertiser'} — ${r.campaign_name} | CoastLoop`;
   $('#campaignName').textContent = r.campaign_name || 'Campaign';
   $('#advertiserName').textContent = r.advertiser_name || 'CoastLoop advertiser';

@@ -438,6 +438,18 @@ function render(){
     const seconds=Number(r.seconds_played||0);
     const delivered=seconds>=3600 ? `${(seconds/3600).toFixed(1)} hr` : `${Math.round(seconds/60)} min`;
     const last=r.last_played_at ? new Date(r.last_played_at).toLocaleString() : 'Not yet';
+    const goal=Number(r.delivery_goal_plays||0);
+    const remaining=r.remaining_plays==null ? null : Number(r.remaining_plays);
+    const deliveryPct=r.delivery_percent==null ? null : Number(r.delivery_percent);
+    const pacePct=r.pace_percent==null ? null : Number(r.pace_percent);
+    const health=String(r.delivery_health||'not_targeted').replaceAll('_',' ');
+    const dateValue=v=>{
+      if(!v) return '';
+      const d=new Date(v);
+      if(Number.isNaN(d.getTime())) return '';
+      const shifted=new Date(d.getTime()-d.getTimezoneOffset()*60000);
+      return shifted.toISOString().slice(0,16);
+    };
     return `<div class="media-item">
       <div class="row">
         <div><strong>${esc(c.name)}</strong><div class="muted">${esc(b?.name||'Unknown advertiser')}</div></div>
@@ -453,6 +465,27 @@ function render(){
         <div><strong>${Number(r.screen_count||0)}</strong><div class="muted">screens</div></div>
         <div><strong>${delivered}</strong><div class="muted">delivered</div></div>
         <div><strong>${esc(last)}</strong><div class="muted">last play</div></div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <div><strong>${goal ? goal.toLocaleString() : '—'}</strong><div class="muted">delivery goal</div></div>
+        <div><strong>${remaining==null ? '—' : remaining.toLocaleString()}</strong><div class="muted">remaining</div></div>
+        <div><strong>${deliveryPct==null ? '—' : deliveryPct.toFixed(1)+'%'}</strong><div class="muted">goal delivered</div></div>
+        <div><strong>${pacePct==null ? esc(health) : pacePct.toFixed(1)+'%'}</strong><div class="muted">${pacePct==null ? 'delivery health' : esc(health)+' pace'}</div></div>
+      </div>
+      <div class="row" style="margin-top:10px;align-items:end">
+        <label class="muted">Start
+          <input class="campaign-delivery-start" data-campaign="${c.id}" type="datetime-local" value="${esc(dateValue(c.starts_at))}">
+        </label>
+        <label class="muted">End
+          <input class="campaign-delivery-end" data-campaign="${c.id}" type="datetime-local" value="${esc(dateValue(c.ends_at))}">
+        </label>
+        <label class="muted">Target plays
+          <input class="campaign-delivery-target" data-campaign="${c.id}" type="number" min="1" step="1" value="${c.delivery_target_plays==null?'':Number(c.delivery_target_plays)}" placeholder="No guarantee">
+        </label>
+        <label class="muted">Makegood
+          <input class="campaign-delivery-makegood" data-campaign="${c.id}" type="number" min="0" step="1" value="${Number(c.makegood_plays||0)}">
+        </label>
+        <button class="secondary save-campaign-delivery" data-campaign="${c.id}" type="button">Save delivery</button>
       </div>
     </div>`;
   }).join('') || '<div class="muted">No campaigns yet.</div>';
@@ -1052,6 +1085,35 @@ $('#newCampaign').onsubmit=async e=>{
 
 
 
+document.addEventListener('click', async e=>{
+  const btn=e.target.closest('.save-campaign-delivery');
+  if(!btn) return;
+
+  const id=btn.dataset.campaign;
+  const start=document.querySelector(`.campaign-delivery-start[data-campaign="${id}"]`)?.value||'';
+  const end=document.querySelector(`.campaign-delivery-end[data-campaign="${id}"]`)?.value||'';
+  const target=document.querySelector(`.campaign-delivery-target[data-campaign="${id}"]`)?.value||'';
+  const makegood=document.querySelector(`.campaign-delivery-makegood[data-campaign="${id}"]`)?.value||'0';
+
+  btn.disabled=true;
+  try{
+    await api(`/api/admin/campaigns/${encodeURIComponent(id)}/delivery`,{
+      method:'PATCH',
+      headers:{'content-type':'application/json'},
+      body:JSON.stringify({
+        starts_at:start ? new Date(start).toISOString() : null,
+        ends_at:end ? new Date(end).toISOString() : null,
+        delivery_target_plays:target==='' ? null : Number(target),
+        makegood_plays:Number(makegood||0)
+      })
+    });
+    await load();
+  }catch(err){
+    $('#error').textContent=err.message;
+    btn.disabled=false;
+  }
+});
+
 document.addEventListener('click', e=>{
   const btn=e.target.closest('.view-report');
   if(!btn) return;
@@ -1062,6 +1124,8 @@ document.addEventListener('click', e=>{
 $('#downloadCampaignReport').onclick=()=>{
   const rows=[[
     'Advertiser','Campaign','Status','Price','Plays','Screens',
+    'Target Plays','Makegood Plays','Delivery Goal','Remaining Plays',
+    'Delivery Percent','Pace Percent','Delivery Health',
     'Seconds Delivered','First Play','Last Play'
   ]];
 
@@ -1073,6 +1137,13 @@ $('#downloadCampaignReport').onclick=()=>{
       r.price_cents==null ? '' : (Number(r.price_cents)/100).toFixed(2),
       r.plays||0,
       r.screen_count||0,
+      r.delivery_target_plays==null ? '' : r.delivery_target_plays,
+      r.makegood_plays||0,
+      r.delivery_goal_plays==null ? '' : r.delivery_goal_plays,
+      r.remaining_plays==null ? '' : r.remaining_plays,
+      r.delivery_percent==null ? '' : r.delivery_percent,
+      r.pace_percent==null ? '' : r.pace_percent,
+      r.delivery_health||'',
       Number(r.seconds_played||0).toFixed(1),
       r.first_played_at||'',
       r.last_played_at||''

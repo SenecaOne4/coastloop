@@ -1479,6 +1479,29 @@ async function createCampaign(request, env, auth = null) {
       return json({ error: "price_cents must be a non-negative integer" }, 400);
   }
 
+  let deliveryTargetPlays = null;
+  if (b.delivery_target_plays !== undefined &&
+      b.delivery_target_plays !== null &&
+      b.delivery_target_plays !== "") {
+    const value = Number(b.delivery_target_plays);
+    if (!Number.isSafeInteger(value) || value <= 0)
+      return json({ error: "delivery_target_plays must be a positive integer" }, 400);
+    deliveryTargetPlays = value;
+  }
+
+  let makegoodPlays = 0;
+  if (b.makegood_plays !== undefined &&
+      b.makegood_plays !== null &&
+      b.makegood_plays !== "") {
+    const value = Number(b.makegood_plays);
+    if (!Number.isSafeInteger(value) || value < 0)
+      return json({ error: "makegood_plays must be a non-negative integer" }, 400);
+    makegoodPlays = value;
+  }
+
+  if (makegoodPlays > 0 && deliveryTargetPlays === null)
+    return json({ error: "makegood plays require a delivery target" }, 400);
+
   const requestedBrokerId = actorBrokerId
     || String(b.broker_user_id || "").trim()
     || business?.[0]?.broker_user_id
@@ -1501,6 +1524,8 @@ async function createCampaign(request, env, auth = null) {
       starts_at: parsedStart.value,
       ends_at: parsedEnd.value,
       price_cents: priceCents,
+      delivery_target_plays: deliveryTargetPlays,
+      makegood_plays: makegoodPlays,
       billing_notes: String(b.billing_notes || "").slice(0, 2000) || null,
       notes: String(b.notes || "").slice(0, 4000) || null,
       updated_at: new Date().toISOString(),
@@ -1550,6 +1575,20 @@ async function updateCampaignStatus(request, env, campaignId) {
   if (nextStatus === "scheduled" && !campaign.starts_at)
     return json({ error: "scheduled campaign requires a start date" }, 409);
 
+  if (nextStatus === "completed" && campaign.delivery_target_plays != null) {
+    const required = Number(campaign.delivery_target_plays || 0)
+      + Number(campaign.makegood_plays || 0);
+    const delivered = await verifiedCampaignPlayCount(env, campaignId);
+
+    if (delivered < required)
+      return json({
+        error: "campaign still owes verified delivery",
+        delivered_plays: delivered,
+        required_plays: required,
+        remaining_plays: required - delivered,
+      }, 409);
+  }
+
   const changed = await sb(
     env,
     `campaigns?id=eq.${encodeURIComponent(campaignId)}&organization_id=eq.${ORG_ID}`,
@@ -1564,6 +1603,197 @@ async function updateCampaignStatus(request, env, campaignId) {
   );
 
   return json({ ok: true, campaign: changed?.[0] || null });
+}
+
+
+async function verifiedCampaignPlayCount(env, campaignId) {
+  const [plays, screens] = await Promise.all([
+    sb(
+      env,
+      `playback_daily?organization_id=eq.${ORG_ID}&campaign_id=eq.${encodeURIComponent(campaignId)}&select=screen_id,play_count`
+    ),
+    sb(
+      env,
+      `screens?organization_id=eq.${ORG_ID}&select=id,is_test`
+    )
+  ]);
+
+  const screenMap = new Map((screens || []).map(x => [x.id, x]));
+  return (plays || []).reduce((total, row) => {
+    if (row.screen_id && screenMap.get(row.screen_id)?.is_test) return total;
+    return total + Number(row.play_count || 0);
+  }, 0);
+}
+
+
+async function updateCampaignDelivery(request, env, campaignId) {
+  const rows = await sb(
+    env,
+    `campaigns?id=eq.${encodeURIComponent(campaignId)}&organization_id=eq.${ORG_ID}&select=*`
+  );
+  const campaign = rows?.[0];
+  if (!campaign) return json({ error: "campaign not found" }, 404);
+
+  if (campaign.status === "completed" || campaign.status === "canceled")
+    return json({ error: "terminal campaigns cannot change delivery terms" }, 409);
+
+  const b = await bodyJson(request);
+  const patch = { updated_at: new Date().toISOString() };
+
+  let target = campaign.delivery_target_plays == null
+    ? null
+    : Number(campaign.delivery_target_plays);
+  let makegood = Number(campaign.makegood_plays || 0);
+
+  if (Object.prototype.hasOwnProperty.call(b, "delivery_target_plays")) {
+    if (b.delivery_target_plays === null || b.delivery_target_plays === "") {
+      target = null;
+      patch.delivery_target_plays = null;
+    } else {
+      const value = Number(b.delivery_target_plays);
+      if (!Number.isSafeInteger(value) || value <= 0)
+        return json({ error: "delivery_target_plays must be a positive integer" }, 400);
+      target = value;
+      patch.delivery_target_plays = value;
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(b, "makegood_plays")) {
+    const value = Number(b.makegood_plays);
+    if (!Number.isSafeInteger(value) || value < 0)
+      return json({ error: "makegood_plays must be a non-negative integer" }, 400);
+    makegood = value;
+    patch.makegood_plays = value;
+  }
+
+  if (makegood > 0 && target === null)
+    return json({ error: "makegood plays require a delivery target" }, 400);
+
+  const parseDate = (value, label) => {
+    if (value === null || value === "") return { value: null };
+    const time = new Date(value).getTime();
+    if (!Number.isFinite(time))
+      return { error: `${label} must be a valid date` };
+    return { value: new Date(time).toISOString() };
+  };
+
+  let startsAt = campaign.starts_at;
+  let endsAt = campaign.ends_at;
+
+  if (Object.prototype.hasOwnProperty.call(b, "starts_at")) {
+    const parsed = parseDate(b.starts_at, "starts_at");
+    if (parsed.error) return json({ error: parsed.error }, 400);
+    startsAt = parsed.value;
+    patch.starts_at = parsed.value;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(b, "ends_at")) {
+    const parsed = parseDate(b.ends_at, "ends_at");
+    if (parsed.error) return json({ error: parsed.error }, 400);
+    endsAt = parsed.value;
+    patch.ends_at = parsed.value;
+  }
+
+  if (startsAt && endsAt &&
+      new Date(endsAt).getTime() <= new Date(startsAt).getTime())
+    return json({ error: "ends_at must be after starts_at" }, 400);
+
+  if (campaign.status === "scheduled" && !startsAt)
+    return json({ error: "scheduled campaign requires a start date" }, 409);
+
+  if (campaign.status === "active" && endsAt &&
+      new Date(endsAt).getTime() <= Date.now())
+    return json({ error: "active campaign end must be in the future" }, 409);
+
+  const changed = await sb(
+    env,
+    `campaigns?id=eq.${encodeURIComponent(campaignId)}&organization_id=eq.${ORG_ID}`,
+    {
+      method: "PATCH",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify(patch),
+    }
+  );
+
+  return json({ ok: true, campaign: changed?.[0] || null });
+}
+
+
+function campaignDeliverySnapshot(campaign, deliveredPlays, nowMs = Date.now()) {
+  const baseTarget = campaign.delivery_target_plays == null
+    ? null
+    : Number(campaign.delivery_target_plays);
+  const makegood = Number(campaign.makegood_plays || 0);
+  const goal = baseTarget == null ? null : baseTarget + makegood;
+  const delivered = Number(deliveredPlays || 0);
+
+  if (!goal) {
+    return {
+      delivery_target_plays: baseTarget,
+      makegood_plays: makegood,
+      delivery_goal_plays: null,
+      remaining_plays: null,
+      delivery_percent: null,
+      expected_plays_by_now: null,
+      pace_percent: null,
+      projected_total_plays: null,
+      projected_shortfall: null,
+      delivery_health: "not_targeted",
+    };
+  }
+
+  const remaining = Math.max(goal - delivered, 0);
+  const deliveryPercent = Math.round((delivered / goal) * 1000) / 10;
+  const start = campaign.starts_at ? new Date(campaign.starts_at).getTime() : null;
+  const end = campaign.ends_at ? new Date(campaign.ends_at).getTime() : null;
+
+  let expected = null;
+  let pace = null;
+  let projected = null;
+  let shortfall = null;
+  let health = "tracking";
+
+  if (delivered >= goal) {
+    health = "delivered";
+  } else if (start !== null && Number.isFinite(start) && nowMs < start) {
+    health = "scheduled";
+    expected = 0;
+  } else if (end !== null && Number.isFinite(end) && nowMs >= end) {
+    expected = goal;
+    pace = Math.round((delivered / goal) * 1000) / 10;
+    projected = delivered;
+    shortfall = remaining;
+    health = "under_delivered";
+  } else if (start !== null && end !== null &&
+             Number.isFinite(start) && Number.isFinite(end) && end > start) {
+    const elapsed = Math.max(0, Math.min(1, (nowMs - start) / (end - start)));
+    expected = Math.floor(goal * elapsed);
+
+    if (elapsed > 0) {
+      projected = Math.max(delivered, Math.round(delivered / elapsed));
+      shortfall = Math.max(goal - projected, 0);
+    }
+
+    if (expected > 0) {
+      pace = Math.round((delivered / expected) * 1000) / 10;
+      health = pace < 90 ? "behind" : pace > 110 ? "ahead" : "on_pace";
+    } else {
+      health = "on_pace";
+    }
+  }
+
+  return {
+    delivery_target_plays: baseTarget,
+    makegood_plays: makegood,
+    delivery_goal_plays: goal,
+    remaining_plays: remaining,
+    delivery_percent: deliveryPercent,
+    expected_plays_by_now: expected,
+    pace_percent: pace,
+    projected_total_plays: projected,
+    projected_shortfall: shortfall,
+    delivery_health: health,
+  };
 }
 
 
@@ -1706,6 +1936,7 @@ async function adminCampaignReports(env) {
   return (campaigns || []).map(c => {
     const g = grouped.get(c.id);
     const advertiser = businessMap.get(c.advertiser_business_id);
+    const delivery = campaignDeliverySnapshot(c, g?.plays || 0);
 
     return {
       campaign_id: c.id,
@@ -1721,6 +1952,7 @@ async function adminCampaignReports(env) {
       screen_count: g?.screens?.size || 0,
       first_played_at: g?.first_played_at || null,
       last_played_at: g?.last_played_at || null,
+      ...delivery,
       daily: g ? Array.from(g.daily.values()).sort((a,b) => String(a.date).localeCompare(String(b.date))) : [],
       creatives: g ? Array.from(g.creatives.values())
         .map(x => ({
@@ -1845,7 +2077,7 @@ export default {
         return portalOverview(request, env);
 
       if (url.pathname === "/api/health")
-        return json({ ok: true, service: "coastloop", version: "0.26.4" });
+        return json({ ok: true, service: "coastloop", version: "0.26.5" });
 
       if (url.pathname === "/api/player/boot" && request.method === "POST")
         return bootPlayer(request, env);
@@ -2038,6 +2270,20 @@ export default {
           return auditMutation(request, env, adminAuth,
             { action: "campaign.create", entity_type: "campaign" },
             () => createCampaign(request, env, adminAuth));
+
+        const campaignDeliveryMatch = url.pathname.match(
+          /^\/api\/admin\/campaigns\/([^/]+)\/delivery$/
+        );
+        if (campaignDeliveryMatch && request.method === "PATCH")
+          return auditMutation(request, env, adminAuth,
+            {
+              action: "campaign.delivery.update",
+              entity_type: "campaign",
+              entity_id: campaignDeliveryMatch[1],
+            },
+            () => updateCampaignDelivery(
+              request, env, campaignDeliveryMatch[1]
+            ));
 
         const campaignStatus = url.pathname.match(/^\/api\/admin\/campaigns\/([^/]+)\/status$/);
         if (campaignStatus && request.method === "PUT")
