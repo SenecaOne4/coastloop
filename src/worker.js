@@ -1744,12 +1744,37 @@ async function createPublicLead(request, env) {
   if (String(b.company_fax || "").trim())
     return json({ ok: true });
 
-  const name = String(b.business_name || b.name || "").trim().slice(0, 180);
+  let name = String(b.business_name || b.name || "").trim().slice(0, 180);
   const contactName = String(b.contact_name || "").trim().slice(0, 180);
   const phone = String(b.phone || "").trim().slice(0, 80);
   const email = String(b.email || "").trim().slice(0, 180);
-  const notes = String(b.notes || "").trim().slice(0, 2000);
+  let notes = String(b.notes || "").trim().slice(0, 2000);
   const interest = String(b.interest || "advertiser").toLowerCase();
+  const packageId = String(b.package_id || "").trim().slice(0, 80);
+
+  if (packageId) {
+    if (!email)
+      return json({ error: "email required to reserve a package" }, 400);
+
+    const packages = await sb(
+      env,
+      `advertising_packages?id=eq.${encodeURIComponent(packageId)}&organization_id=eq.${ORG_ID}&status=eq.active&availability_status=in.(available,limited)&select=id,name,package_key,version,price_cents,currency,term_days&limit=1`
+    );
+    const pkg = packages?.[0];
+    if (!pkg)
+      return json({ error: "package is not available" }, 404);
+
+    name = `Founding reservation — ${pkg.name}`;
+    notes = [
+      "Founding package reservation.",
+      `Package: ${pkg.name}`,
+      `Package key/version: ${pkg.package_key} v${pkg.version}`,
+      `Price: ${(Number(pkg.price_cents) / 100).toFixed(2)} ${String(pkg.currency || "usd").toUpperCase()}`,
+      `Term: ${pkg.term_days || "not specified"} days`,
+      "Customer selected this package on coastloop.site.",
+      "Payment/signature intentionally deferred until approved advertising terms are locked."
+    ].join("\n").slice(0, 2000);
+  }
 
   if (!name || (!phone && !email))
     return json({ error: "business name and phone or email required" }, 400);
@@ -2873,7 +2898,7 @@ export default {
         return portalOverview(request, env);
 
       if (url.pathname === "/api/health")
-        return json({ ok: true, service: "coastloop", version: "0.27.7" });
+        return json({ ok: true, service: "coastloop", version: "0.27.8" });
 
       if (url.pathname === "/api/player/boot" && request.method === "POST")
         return bootPlayer(request, env);

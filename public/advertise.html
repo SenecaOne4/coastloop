@@ -1,3 +1,66 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#f7f3ec"><title>Advertise with CoastLoop</title><link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/styles.css"><style>
-body{background:#f7f3ec;color:#171412}.sell{width:min(1040px,calc(100% - 28px));margin:auto;padding:28px 0 72px}.top{display:flex;justify-content:space-between;margin-bottom:55px}.top a{color:inherit;text-decoration:none}h1{font-size:clamp(44px,8vw,82px);line-height:.92;letter-spacing:-.065em;max-width:850px;margin:12px 0 20px}.lede{font-size:19px;color:#655e58;max-width:650px;line-height:1.5}.packs{display:grid;grid-template-columns:repeat(3,1fr);gap:15px;margin-top:36px}.card{background:#fffdf9;border:1px solid #ded7cc;border-radius:22px;padding:22px}.pack{display:flex;flex-direction:column;gap:12px}.price{font-size:34px;font-weight:850;letter-spacing:-.05em}.muted,.note{color:#655e58}.spec{font-size:14px;line-height:1.5}.btn{border:0;background:#171412;color:white;border-radius:13px;padding:14px;font:inherit;font-weight:800;cursor:pointer;margin-top:auto;width:100%}.form{display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-top:16px}.form input{padding:13px;border:1px solid #d7d0c5;border-radius:11px;font:inherit}.full{grid-column:1/-1}.note{font-size:12px;margin-top:12px}@media(max-width:760px){.packs,.form{grid-template-columns:1fr}.full{grid-column:auto}.top{margin-bottom:36px}}
-</style></head><body><main class="sell"><div class="top"><a href="/"><strong>CoastLoop</strong></a><a href="/">Back home</a></div><div>LOCAL ADVERTISING · VERIFIED DELIVERY</div><h1>Get in the Loop, today.</h1><p class="lede">Choose a real CoastLoop placement. See the price, scope and projected verified delivery before you commit.</p><div id="packs" class="packs"></div><section id="zero" class="card" hidden><h2>Placements are being prepared.</h2><p class="muted">We won't invent pricing or delivery numbers. Tell us you're interested and we'll contact you when inventory is ready.</p><a href="/#contact">Tell us you're interested</a></section><section id="checkout" class="card" hidden><h2 id="chosen">Start campaign</h2><div class="form"><input id="legal" class="full" placeholder="Advertiser legal name"><input id="display" class="full" placeholder="Brand / display name"><input id="contact" placeholder="Contact name"><input id="mobile" placeholder="Mobile"><input id="email" type="email" placeholder="Email"><input id="website" placeholder="Website / social (optional)"><input id="start" class="full" placeholder="Preferred start timing (optional)"><button id="go" class="btn full">Review order & terms</button></div><div id="err" class="note"></div></section><p class="note">Projected plays describe expected screen delivery, not human views or impressions.</p></main><script src="/advertise.js" defer></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Advertise with CoastLoop</title>
+<meta name="description" content="Choose a CoastLoop local TV advertising plan and reserve your founding placement.">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/styles.css">
+<style>
+body{margin:0;background:#f4efe7;color:#171412}.sell{width:min(1120px,calc(100% - 28px));margin:auto;padding:22px 0 80px}
+.top{display:flex;justify-content:space-between;align-items:center}.top a{color:inherit;text-decoration:none}
+.hero{padding:65px 0 35px}.hero h1{font-size:clamp(52px,8vw,92px);line-height:.88;letter-spacing:-.07em;margin:12px 0 18px}
+.lede{font-size:20px;line-height:1.5;color:#655e58;max-width:740px}.eyebrow{font-size:11px;font-weight:900;letter-spacing:.14em;color:#7b243c}
+.packs{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:24px 0 50px}
+.pack{background:#faf7f1;border:1px solid rgba(23,20,18,.13);border-radius:22px;padding:22px;display:flex;flex-direction:column;min-height:390px}
+.pack.selected{outline:3px solid #b8924a}.pack h2{font-size:28px;letter-spacing:-.045em;margin:6px 0}.price{font-size:46px;font-weight:900;letter-spacing:-.055em;margin:8px 0}
+.price small{font-size:13px;letter-spacing:0}.spec{color:#655e58;line-height:1.65;font-size:14px;margin:13px 0 24px}
+.btn{margin-top:auto;border:0;background:#171412;color:#fff;padding:14px 16px;border-radius:12px;font-weight:850;cursor:pointer;text-decoration:none;text-align:center}
+.claim{background:#171412;color:#fff;border-radius:28px;padding:clamp(24px,5vw,50px);display:grid;grid-template-columns:1fr .8fr;gap:32px;align-items:center}
+.claim h2{font-size:clamp(38px,5vw,62px);letter-spacing:-.055em;line-height:.95;margin:8px 0 12px}
+.claim p{color:#c9c0b9;line-height:1.5}.claim-box{background:#fff;color:#171412;border-radius:18px;padding:20px}
+.claim-box label{display:block;font-size:12px;font-weight:800;margin-bottom:7px}
+.claim-box input{width:100%;box-sizing:border-box;border:1px solid #d8d0c6;border-radius:11px;padding:14px;font:inherit}
+.claim-box button{width:100%;border:0;background:#171412;color:#fff;padding:14px;border-radius:11px;font-weight:850;margin-top:10px;cursor:pointer}
+.google{width:100%;display:none;align-items:center;justify-content:center;background:#fff!important;color:#171412!important;border:1px solid #d8d0c6!important}
+.google.on{display:flex}.or{display:none;text-align:center;color:#877f78;font-size:11px;margin:10px 0}.or.on{display:block}
+.note{font-size:12px;color:#877f78;line-height:1.45;margin-top:10px}.status{min-height:20px;font-size:13px;margin-top:10px}
+.measure{margin-top:28px;color:#655e58;font-size:12px}
+@media(max-width:800px){.packs{grid-template-columns:1fr}.claim{grid-template-columns:1fr}.pack{min-height:auto}}
+</style>
+</head>
+<body>
+<main class="sell">
+  <nav class="top"><a href="/"><strong>COASTLOOP</strong></a><a href="/">Home</a></nav>
+
+  <section class="hero">
+    <div class="eyebrow">LOCAL TV ADVERTISING · FOUNDING OFFERS</div>
+    <h1>Choose your<br>local ad run.</h1>
+    <p class="lede">The product comes first. Pick the amount of local presence you want, then claim it with one email. No “tell us about your business” questionnaire.</p>
+  </section>
+
+  <section id="packs" class="packs"></section>
+
+  <section id="claim" class="claim">
+    <div>
+      <div class="eyebrow" style="color:#d8c39a">CLAIM YOUR OFFER</div>
+      <h2 id="chosen">Pick a plan above.</h2>
+      <p id="claimCopy">Once you choose a founding offer, we’ll hold that product selection and move you into secure checkout when activation opens.</p>
+    </div>
+    <div class="claim-box">
+      <button id="google" class="google">G&nbsp;&nbsp;Continue with Google</button>
+      <div id="or" class="or">OR RESERVE WITH EMAIL</div>
+      <label for="email">Email</label>
+      <input id="email" type="email" autocomplete="email" placeholder="you@yourbusiness.com">
+      <button id="reserve">Reserve selected offer</button>
+      <div id="status" class="status"></div>
+      <div class="note">No charge is taken at reservation. Your selected founding price and package are recorded with the reservation.</div>
+    </div>
+  </section>
+
+  <p class="measure">Verified plays are confirmed screen-delivery events, not human views or impressions. CoastLoop does not invent audience counts.</p>
+</main>
+<script type="module" src="/advertise.js"></script>
+</body>
+</html>

@@ -309,6 +309,20 @@ async function authRefresh(request, env) {
   });
 }
 
+async function authIdentity(request, env) {
+  const token = bearer(request);
+  const user = await authUserFromToken(env, token);
+  if (!user) return json({ error: "unauthorized" }, 401);
+  return json({
+    ok: true,
+    user: {
+      id: user.id,
+      email: user.email,
+      full_name: user.user_metadata?.full_name || user.user_metadata?.name || null,
+    },
+  });
+}
+
 async function authMe(request, env) {
   const auth = await requireUserAccess(request, env);
   if (!auth) return json({ error: "unauthorized" }, 401);
@@ -383,6 +397,8 @@ export async function handleAuthRoute(request, env, url) {
     return authSignup(request, env);
   if (url.pathname === "/api/auth/refresh" && request.method === "POST")
     return authRefresh(request, env);
+  if (url.pathname === "/api/auth/identity" && request.method === "GET")
+    return authIdentity(request, env);
   if (url.pathname === "/api/auth/me" && request.method === "GET")
     return authMe(request, env);
   if (url.pathname === "/api/auth/password" && request.method === "PUT")
@@ -395,8 +411,15 @@ export async function handleAuthRoute(request, env, url) {
     if (String(env.GOOGLE_AUTH_ENABLED || "").toLowerCase() !== "true")
       return json({ error: "Google sign-in is not enabled yet" }, 503);
     const target = new URL(`${authBase(env)}/auth/v1/authorize`);
+    const requestedNext = String(url.searchParams.get("next") || "/advertise");
+    const safeNext = requestedNext.startsWith("/") && !requestedNext.startsWith("//")
+      ? requestedNext
+      : "/advertise";
     target.searchParams.set("provider", "google");
-    target.searchParams.set("redirect_to", "https://coastloop.site/auth-callback");
+    target.searchParams.set(
+      "redirect_to",
+      `https://coastloop.site/auth-callback?next=${encodeURIComponent(safeNext)}`
+    );
     return Response.redirect(target.toString(), 302);
   }
 

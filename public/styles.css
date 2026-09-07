@@ -771,3 +771,40 @@ form .row>input,form .row>select,form .row>label{min-width:150px}
   .media-preview-dialog{width:96vw}
   .media-preview-shell{padding:12px}
 }
+
+/* CoastLoop product-first storefront 0.27.8 */
+.home-auth-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:18px}
+.home-auth-row span{font-size:12px;color:#655e58}
+.home-google{display:inline-flex;align-items:center;justify-content:center;background:#fff;color:#171412;border:1px solid rgba(23,20,18,.14);padding:11px 15px;border-radius:11px;text-decoration:none;font-weight:800}
+.shop-heading{display:grid;grid-template-columns:minmax(0,1fr) minmax(250px,.42fr);gap:32px;align-items:end}
+.shop-measurement{border-left:2px solid #b8924a;padding:3px 0 3px 17px;color:#655e58;font-size:13px;line-height:1.55}
+.home-package-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-top:30px}
+.home-package{background:#faf7f1;border:1px solid rgba(23,20,18,.13);border-radius:22px;padding:24px;display:flex;flex-direction:column;min-height:410px}
+.home-package.featured{background:#171412;color:#fff;transform:translateY(-7px)}
+.home-package-badge{font-size:10px;letter-spacing:.14em;font-weight:900;color:#7b243c;margin-bottom:22px}
+.home-package.featured .home-package-badge{color:#d8c39a}
+.home-package h3{font-size:29px;letter-spacing:-.045em;margin:0 0 7px}
+.home-package-price{font-size:46px;font-weight:900;letter-spacing:-.055em;margin:4px 0 12px}
+.home-package-price small{font-size:13px;letter-spacing:0;font-weight:650}
+.home-package p{color:#655e58;line-height:1.5}
+.home-package.featured p{color:#c9c0b9}
+.home-package ul{padding:0;margin:18px 0 28px;list-style:none;display:grid;gap:9px;font-size:14px}
+.home-package li:before{content:"✓";color:#b8924a;font-weight:900;margin-right:8px}
+.home-package .public-button{margin-top:auto;text-align:center}
+.shop-flow{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:36px}
+.shop-flow div{border-top:2px solid #171412;padding-top:14px;display:grid;gap:5px}
+.shop-flow b{font-size:11px;letter-spacing:.12em;color:#7b243c}
+.shop-flow strong{font-size:18px}
+.shop-flow span{font-size:13px;color:#655e58;line-height:1.45}
+.host-fine{max-width:660px;margin-top:18px;color:#c9c0b9;font-size:12px}
+.public-buy-close{text-align:center}
+.public-buy-close .public-lede{margin-left:auto;margin-right:auto;max-width:720px}
+@media(max-width:850px){
+  .shop-heading{grid-template-columns:1fr}
+  .home-package-grid{grid-template-columns:1fr}
+  .home-package.featured{transform:none}
+  .shop-flow{grid-template-columns:1fr 1fr}
+}
+@media(max-width:520px){
+  .shop-flow{grid-template-columns:1fr}
+}

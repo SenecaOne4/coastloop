@@ -15,9 +15,10 @@
     <span>COASTLOOP</span>
   </a>
   <nav>
-    <a href="/advertise.html">Advertise</a>
+    <a href="#advertise">Pricing</a>
     <a href="#host">Host a screen</a>
-    <a class="public-nav-cta" href="#contact">Get started</a>
+    <a href="/login">Sign in</a>
+    <a class="public-nav-cta" href="#advertise">Choose a plan</a>
   </nav>
 </header>
 
@@ -115,49 +116,69 @@
   </div>
 </section>
 
-<section class="public-section" id="advertise">
-  <div class="public-eyebrow">FOR ADVERTISERS</div>
-  <h2>Be where your customers already are.</h2>
-  <p class="public-lede">CoastLoop puts your message on curated screens inside nearby businesses — without turning the room into a wall of ugly digital business cards.</p>
-  <div class="public-cards">
-    <article><b>01</b><h3>We build the creative</h3><p>High-impact static and motion ads designed for a glance across the room.</p></article>
-    <article><b>02</b><h3>You choose the market</h3><p>Target the local places and zones that make sense for your business.</p></article>
-    <article><b>03</b><h3>You see the plays</h3><p>Know when your creative ran instead of guessing whether anyone delivered it.</p></article>
+<section class="public-section public-shop" id="advertise">
+  <div class="public-eyebrow">FOUNDING OFFERS</div>
+  <div class="shop-heading">
+    <div>
+      <h2>Pick your local presence.</h2>
+      <p class="public-lede">See the price before we ask who you are. Creative is included. Delivery reporting is included. We only sell commissioned CoastLoop inventory.</p>
+    </div>
+    <div class="shop-measurement">Verified plays are delivery events — not invented human views or impressions.</div>
+  </div>
+
+  <div id="homePackages" class="home-package-grid">
+    <article class="home-package">
+      <div class="home-package-badge">START HERE</div>
+      <h3>Founding Single</h3>
+      <div class="home-package-price">$149 <small>/ 30 days</small></div>
+      <p>One commissioned CoastLoop screen.</p>
+      <ul><li>15-second creative</li><li>Creative production included</li><li>Verified-delivery reporting</li></ul>
+      <a class="public-button" href="/advertise?plan=founding-single">Choose Single</a>
+    </article>
+
+    <article class="home-package featured">
+      <div class="home-package-badge">MOST POPULAR</div>
+      <h3>Local Three</h3>
+      <div class="home-package-price">$299 <small>/ 30 days</small></div>
+      <p>Up to three commissioned CoastLoop screens.</p>
+      <ul><li>15-second creative</li><li>Creative production included</li><li>Verified-delivery reporting</li></ul>
+      <a class="public-button light" href="/advertise?plan=local-three">Choose Local Three</a>
+    </article>
+
+    <article class="home-package">
+      <div class="home-package-badge">OWN THE LOOP</div>
+      <h3>Founding Network</h3>
+      <div class="home-package-price">$499 <small>/ 30 days</small></div>
+      <p>Rotation across eligible commissioned CoastLoop screens in the market.</p>
+      <ul><li>15-second creative</li><li>Creative production included</li><li>Verified-delivery reporting</li></ul>
+      <a class="public-button" href="/advertise?plan=founding-network">Choose Network</a>
+    </article>
+  </div>
+
+  <div class="shop-flow">
+    <div><b>01</b><strong>Choose</strong><span>Pick a real plan and price.</span></div>
+    <div><b>02</b><strong>Claim</strong><span>Google when connected, or continue directly.</span></div>
+    <div><b>03</b><strong>Create</strong><span>Website, assets, finished ad, or we make it.</span></div>
+    <div><b>04</b><strong>Verify</strong><span>See confirmed delivery after launch.</span></div>
   </div>
 </section>
 
 <section class="public-section public-dark" id="host">
   <div class="public-eyebrow">FOR HOST LOCATIONS</div>
-  <h2>A screen that adds something to the room.</h2>
-  <p class="public-lede">We provide and manage the display. Your guests get useful local content and polished creative. Your business becomes part of the local network.</p>
-  <a class="public-button light" href="#contact" data-interest="host">Ask about hosting</a>
+  <h2>Your TV can do more.</h2>
+  <p class="public-lede">Approve the exact screen, operating mode and commercial terms from your phone. CoastLoop handles the local ad layer and keeps room for your own house content.</p>
+  <div class="public-actions">
+    <a class="public-button light" href="/host">See the host program</a>
+    <a class="public-button secondary" href="/login">Host sign in</a>
+  </div>
+  <p class="host-fine">Any cash compensation is deal-specific and shown in your placement agreement before you sign.</p>
 </section>
 
-<section class="public-section" id="contact">
-  <div class="public-eyebrow">JOIN THE LOOP</div>
-  <h2>Tell us about your business.</h2>
-  <p class="public-lede">Advertising, hosting, or both. We’ll take it from here.</p>
-
-  <form id="leadForm" class="public-form">
-    <input name="company_fax" tabindex="-1" autocomplete="off" class="public-hp">
-    <div class="public-form-grid">
-      <label>Business name<input name="business_name" required></label>
-      <label>Your name<input name="contact_name"></label>
-      <label>Phone<input name="phone" type="tel"></label>
-      <label>Email<input name="email" type="email"></label>
-      <label>City<input name="city" placeholder="North Myrtle Beach"></label>
-      <label>I’m interested in
-        <select name="interest">
-          <option value="advertiser">Advertising</option>
-          <option value="host">Hosting a screen</option>
-          <option value="both">Both</option>
-        </select>
-      </label>
-    </div>
-    <label>Anything we should know?<textarea name="notes" rows="4"></textarea></label>
-    <button class="public-button" type="submit">Send inquiry</button>
-    <div id="leadMessage" class="public-form-message"></div>
-  </form>
+<section class="public-section public-buy-close">
+  <div class="public-eyebrow">READY WHEN YOU ARE</div>
+  <h2>Don’t fill out a lead form.<br>Pick something.</h2>
+  <p class="public-lede">Start with one screen. Expand when you see the delivery. CoastLoop will collect the business details only when they are actually needed to fulfill the order.</p>
+  <a class="public-button" href="#advertise">Choose a CoastLoop plan</a>
 </section>
 </main>
 
@@ -272,39 +293,17 @@ async function loadNetworkPulse(){
 loadNetworkPulse();
 setInterval(loadNetworkPulse, 15000);
 
-const form = document.querySelector('#leadForm');
-const msg = document.querySelector('#leadMessage');
-
-document.querySelectorAll('[data-interest]').forEach(a => {
-  a.addEventListener('click', () => {
-    form.elements.interest.value = a.dataset.interest;
-  });
-});
-
-form.addEventListener('submit', async e => {
-  e.preventDefault();
-  msg.textContent = 'Sending…';
-  const data = Object.fromEntries(new FormData(form).entries());
-
-  if (!data.phone && !data.email) {
-    msg.textContent = 'Add a phone number or email so we can reach you.';
-    return;
-  }
-
-  try {
-    const res = await fetch('/api/public/lead', {
-      method:'POST',
-      headers:{'content-type':'application/json'},
-      body:JSON.stringify(data)
-    });
-    const out = await res.json().catch(()=>({}));
-    if (!res.ok) throw new Error(out.error || 'Could not send inquiry');
-    form.reset();
-    msg.textContent = 'You’re in the loop. We’ll be in touch.';
-  } catch (err) {
-    msg.textContent = err.message;
-  }
-});
+fetch('/api/auth/config')
+  .then(r => r.ok ? r.json() : null)
+  .then(c => {
+    if (c?.google_enabled) {
+      const g = document.querySelector('#homeGoogle');
+      if (g) g.hidden = false;
+      const n = document.querySelector('#homeAuthNote');
+      if (n) n.textContent = 'Use Google to move faster, or choose a plan without an account.';
+    }
+  })
+  .catch(() => {});
 </script>
 </body>
 </html>
