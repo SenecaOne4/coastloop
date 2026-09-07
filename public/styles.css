@@ -672,3 +672,102 @@ form .row>input,form .row>select,form .row>label{min-width:150px}
   .ops-alert-row{grid-template-columns:1fr 1fr}
   .ops-alert-row>div:first-child{grid-column:1/-1}
 }
+
+
+/* CoastLoop creative review preview 0.27.6 */
+.creative-review-item{padding:14px}
+.creative-review-grid{
+  display:grid;
+  grid-template-columns:minmax(280px,420px) minmax(0,1fr);
+  gap:18px;
+  align-items:start
+}
+.creative-preview-frame{
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:14px;
+  overflow:hidden;
+  background:#090a0c;
+  position:relative
+}
+.creative-preview-media{
+  display:block;
+  width:100%;
+  aspect-ratio:16/9;
+  object-fit:contain;
+  background:#050607
+}
+.creative-preview-open{
+  display:block;
+  width:100%;
+  border:0;
+  border-radius:0;
+  padding:0;
+  background:#050607;
+  cursor:zoom-in
+}
+.creative-preview-frame>.secondary{
+  width:100%;
+  border-radius:0;
+  border-left:0;
+  border-right:0;
+  border-bottom:0
+}
+.creative-review-copy{padding:4px 2px}
+.creative-review-title{
+  display:flex;
+  gap:7px;
+  flex-wrap:wrap;
+  align-items:center;
+  margin-bottom:8px
+}
+.creative-review-title strong{font-size:17px}
+.creative-review-actions{
+  display:flex;
+  gap:7px;
+  flex-wrap:wrap;
+  margin-top:18px
+}
+.creative-id{margin-top:16px;font-size:9px;word-break:break-all}
+.media-preview-dialog{
+  width:min(94vw,1280px);
+  max-width:1280px;
+  padding:0;
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:18px;
+  background:#101216;
+  color:#f4efe7;
+  box-shadow:0 30px 100px rgba(0,0,0,.65)
+}
+.media-preview-dialog::backdrop{background:rgba(0,0,0,.82)}
+.media-preview-shell{padding:18px}
+.media-preview-head{
+  display:flex;
+  justify-content:space-between;
+  gap:20px;
+  align-items:flex-start;
+  margin-bottom:14px
+}
+.media-preview-head h2{margin:4px 0 3px}
+.media-preview-stage{
+  display:grid;
+  place-items:center;
+  min-height:240px;
+  max-height:78vh;
+  overflow:auto;
+  border-radius:14px;
+  background:#050607
+}
+.media-preview-stage img,
+.media-preview-stage video{
+  display:block;
+  max-width:100%;
+  max-height:76vh;
+  width:auto;
+  height:auto;
+  object-fit:contain
+}
+@media(max-width:760px){
+  .creative-review-grid{grid-template-columns:1fr}
+  .media-preview-dialog{width:96vw}
+  .media-preview-shell{padding:12px}
+}

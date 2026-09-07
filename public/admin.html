@@ -301,6 +301,20 @@
   <div id="media" class="media-list"></div>
 </section>
 <section class="card"><h2>Playlists</h2><form id="newPlaylist" class="row"><input name="name" placeholder="South Strand Demo" required><button>Create playlist</button></form><div id="playlists" class="playlist-list"></div></section>
-</main><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script type="module" src="/admin.js"></script></body></html>
+</main>
+
+<dialog id="mediaPreviewDialog" class="media-preview-dialog">
+  <div class="media-preview-shell">
+    <div class="media-preview-head">
+      <div>
+        <div class="ops-kicker">CREATIVE REVIEW</div>
+        <h2 id="mediaPreviewTitle">Media preview</h2>
+        <div id="mediaPreviewMeta" class="muted"></div>
+      </div>
+      <button id="mediaPreviewClose" class="secondary" type="button">Close</button>
+    </div>
+    <div id="mediaPreviewStage" class="media-preview-stage"></div>
+  </div>
+</dialog><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script type="module" src="/admin.js"></script></body></html>
 
 <!-- asset-refresh-20260906T182552Z -->

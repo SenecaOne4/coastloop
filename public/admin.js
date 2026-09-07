@@ -819,22 +819,34 @@ function render(){
     const advertiser=state.businesses.find(b=>b.id===m.advertiser_business_id);
     const approval=m.approval_status||'pending';
     const reason=m.rejection_reason ? `<div class="error" style="margin-top:6px">${esc(m.rejection_reason)}</div>` : '';
-    return `<div class="media-item" data-media="${m.id}">
-      <div class="row">
-        <div>
-          <strong>${esc(m.name)}</strong>
-          <span class="pill">${esc(m.media_type)}</span>
-          <span class="pill">${esc(approval)}</span>
-          <div class="muted">${advertiser ? 'Advertiser: '+esc(advertiser.name) : 'House / internal'} · ${m.duration_seconds}s · ${(Number(m.bytes||0)/1024/1024).toFixed(2)} MB</div>
-          ${reason}
+    const mediaType=String(m.mime_type||m.media_type||m.kind||'').toLowerCase();
+    const isVideo=mediaType.includes('video') || String(m.original_filename||m.name||'').toLowerCase().endsWith('.mp4');
+    const mediaUrl=`/media/${encodeURIComponent(m.id)}`;
+    const preview=isVideo
+      ? `<video class="creative-preview-media" src="${mediaUrl}" controls preload="metadata" playsinline></video>`
+      : `<button class="creative-preview-open" data-preview-media="${m.id}" type="button" aria-label="Open ${esc(m.name||'creative')} preview"><img class="creative-preview-media" src="${mediaUrl}" alt="${esc(m.name||'Creative preview')}" loading="lazy"></button>`;
+    return `<div class="media-item creative-review-item" data-media="${m.id}">
+      <div class="creative-review-grid">
+        <div class="creative-preview-frame">
+          ${preview}
+          <button class="secondary open-media-preview" data-preview-media="${m.id}" type="button">Open large preview</button>
         </div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
-          ${approval!=='approved' ? `<button class="secondary approve-media" data-media="${m.id}" type="button">Approve</button>` : ''}
-          ${approval!=='rejected' ? `<button class="secondary reject-media" data-media="${m.id}" type="button">Reject</button>` : ''}
-          ${approval!=='pending' ? `<button class="secondary reset-media-review" data-media="${m.id}" type="button">Re-review</button>` : ''}
+        <div class="creative-review-copy">
+          <div class="creative-review-title">
+            <strong>${esc(m.name||m.title||'Untitled creative')}</strong>
+            <span class="pill">${esc(m.media_type||m.kind||mediaType||'media')}</span>
+            <span class="pill">${esc(approval)}</span>
+          </div>
+          <div class="muted">${advertiser ? 'Advertiser: '+esc(advertiser.name) : 'House / internal'} · ${Number(m.duration_seconds||0)}s · ${(Number(m.bytes||m.byte_size||0)/1024/1024).toFixed(2)} MB</div>
+          ${reason}
+          <div class="creative-review-actions">
+            ${approval!=='approved' ? `<button class="approve-media" data-media="${m.id}" type="button">Approve</button>` : ''}
+            ${approval!=='rejected' ? `<button class="secondary reject-media" data-media="${m.id}" type="button">Reject</button>` : ''}
+            ${approval!=='pending' ? `<button class="secondary reset-media-review" data-media="${m.id}" type="button">Re-review</button>` : ''}
+          </div>
+          <div class="muted creative-id">${m.id}</div>
         </div>
       </div>
-      <div class="muted" style="margin-top:6px">${m.id}</div>
     </div>`;
   }).join('') || '<div class="muted">No media yet.</div>';
   $('#playlists').innerHTML = state.playlists.map(p=>`<div class="playlist" data-id="${p.id}">
@@ -1009,6 +1021,20 @@ $('#inviteUser').onsubmit=async e=>{
   }
 };
 $('#upload').onsubmit=async e=>{ e.preventDefault(); try { await api('/api/admin/media',{method:'POST',body:new FormData(e.target)}); e.target.reset(); await load(); } catch(err){ $('#error').textContent=err.message; } };
+
+const mediaPreviewDialog=$('#mediaPreviewDialog');
+const mediaPreviewStage=$('#mediaPreviewStage');
+$('#mediaPreviewClose').onclick=()=>{
+  mediaPreviewStage.innerHTML='';
+  if(mediaPreviewDialog.open) mediaPreviewDialog.close();
+};
+mediaPreviewDialog.addEventListener('close',()=>{ mediaPreviewStage.innerHTML=''; });
+mediaPreviewDialog.addEventListener('click',e=>{
+  if(e.target===mediaPreviewDialog){
+    mediaPreviewStage.innerHTML='';
+    mediaPreviewDialog.close();
+  }
+});
 $('#newPlaylist').onsubmit=async e=>{ e.preventDefault(); const name=new FormData(e.target).get('name'); try { await api('/api/admin/playlists',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name})}); e.target.reset(); await load(); } catch(err){ $('#error').textContent=err.message; } };
 
 $('#pairScreen').onsubmit=async e=>{
@@ -1211,6 +1237,32 @@ document.addEventListener('click', async e=>{
       })});
     await load();
   }
+  const previewTrigger=e.target.closest?.('[data-preview-media]');
+  if(previewTrigger && !e.target.closest('video')){
+    const id=previewTrigger.dataset.previewMedia;
+    const media=state.media.find(x=>x.id===id);
+    if(media){
+      const dialog=$('#mediaPreviewDialog');
+      const stage=$('#mediaPreviewStage');
+      const title=media.name||media.title||'Media preview';
+      const mediaType=String(media.mime_type||media.media_type||media.kind||'').toLowerCase();
+      const isVideo=mediaType.includes('video') || String(media.original_filename||media.name||'').toLowerCase().endsWith('.mp4');
+      const url=`/media/${encodeURIComponent(media.id)}`;
+      $('#mediaPreviewTitle').textContent=title;
+      $('#mediaPreviewMeta').textContent=[
+        media.media_type||media.kind||media.mime_type||'media',
+        media.duration_seconds ? `${media.duration_seconds}s` : '',
+        media.approval_status||'pending'
+      ].filter(Boolean).join(' · ');
+      stage.innerHTML=isVideo
+        ? `<video src="${url}" controls autoplay playsinline preload="metadata"></video>`
+        : `<img src="${url}" alt="${esc(title)}">`;
+      if(typeof dialog.showModal==='function') dialog.showModal();
+      else dialog.setAttribute('open','');
+    }
+    return;
+  }
+
   if(e.target.matches('.approve-media')){
     const id=e.target.dataset.media;
     await api(`/api/admin/media/${encodeURIComponent(id)}/approval`,{
