@@ -3,6 +3,8 @@ const $=s=>document.querySelector(s);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const age=ts=>{if(!ts)return'Never';let s=Math.max(0,Math.floor((Date.now()-new Date(ts))/1000));if(s<60)return`${s}s ago`;if(s<3600)return`${Math.floor(s/60)}m ago`;if(s<86400)return`${Math.floor(s/3600)}h ago`;return`${Math.floor(s/86400)}d ago`};
 const dur=x=>{x=Math.round(Number(x||0));return x>=3600?`${(x/3600).toFixed(1)} hr`:`${Math.round(x/60)} min`};
+const money=v=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(Number(v||0)/100);
+const date=v=>v?new Date(v).toLocaleDateString():'—';
 $('#account').onclick=()=>location.href='/account';
 try{
  const d=await api('/api/portal/overview');
@@ -15,6 +17,22 @@ try{
  ${b.campaigns.length?`<h2>Advertising campaigns</h2>${b.campaigns.map(c=>`
  <div class="media-item"><div class="row"><strong>${esc(c.name)}</strong><span class="pill">${esc(c.status)}</span></div>
  <div class="row" style="margin-top:12px"><div><strong>${Number(c.plays||0).toLocaleString()}</strong><div class="muted">verified plays</div></div><div><strong>${c.screen_count||0}</strong><div class="muted">screens</div></div><div><strong>${dur(c.seconds_played)}</strong><div class="muted">delivered</div></div><div><strong>${age(c.last_played_at)}</strong><div class="muted">last verified</div></div></div></div>`).join('')}`:''}
+ ${(b.invoices||[]).length?`<h2>Billing</h2>${b.invoices.map(i=>`
+ <div class="media-item">
+   <div class="row">
+     <div><strong>${esc(i.invoice_number||'Invoice')}</strong><div class="muted">${esc(String(i.provider||'manual').toUpperCase())} · due ${date(i.due_at)}</div></div>
+     <div style="display:flex;gap:10px;align-items:center"><span class="pill">${esc(i.status)}</span><strong>${money(i.total_cents)}</strong></div>
+   </div>
+   <div class="row" style="margin-top:12px">
+     <div><strong>${money(i.amount_paid_cents)}</strong><div class="muted">paid</div></div>
+     <div><strong>${money(i.amount_due_cents)}</strong><div class="muted">due</div></div>
+     ${Number(i.amount_refunded_cents||0)>0?`<div><strong>${money(i.amount_refunded_cents)}</strong><div class="muted">refunded</div></div>`:''}
+     <div style="display:flex;gap:8px;flex-wrap:wrap">
+       ${i.hosted_invoice_url?`<a class="button-link" href="${esc(i.hosted_invoice_url)}" target="_blank" rel="noopener">View / pay invoice</a>`:''}
+       ${i.invoice_pdf_url?`<a class="button-link secondary" href="${esc(i.invoice_pdf_url)}" target="_blank" rel="noopener">PDF</a>`:''}
+     </div>
+   </div>
+ </div>`).join('')}`:''}
  </section>`).join('')||'<section class="card"><h2>No business access assigned yet.</h2></section>';
 }catch(e){
  if(String(e.message).includes('401'))location.replace('/login?next=/portal');

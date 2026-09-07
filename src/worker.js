@@ -618,6 +618,7 @@ async function serveMedia(request, env, mediaId) {
   headers.set("etag", head.httpEtag);
   headers.set("cache-control", "public, max-age=31536000, immutable");
   headers.set("accept-ranges", "bytes");
+  headers.set("x-content-type-options", "nosniff");
 
   if (status === 206) {
     headers.set("content-range", `bytes ${start}-${end}/${size}`);
@@ -698,51 +699,110 @@ async function adminMedia(env) {
   }));
 }
 
+const MEDIA_MAX_BYTES = 75 * 1024 * 1024;
+const MEDIA_REQUEST_MAX_BYTES = 80 * 1024 * 1024;
+
+const MEDIA_TYPES = new Map([
+  ["image/jpeg", { kind: "image", ext: "jpg" }],
+  ["image/png",  { kind: "image", ext: "png" }],
+  ["image/gif",  { kind: "image", ext: "gif" }],
+  ["video/mp4",  { kind: "video", ext: "mp4" }],
+]);
+
+function validMediaSignature(mime, bytes) {
+  if (mime === "image/jpeg")
+    return bytes.length >= 3 &&
+      bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+
+  if (mime === "image/png")
+    return bytes.length >= 8 &&
+      [0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a]
+        .every((v,i) => bytes[i] === v);
+
+  if (mime === "image/gif") {
+    const sig = String.fromCharCode(...bytes.slice(0,6));
+    return sig === "GIF87a" || sig === "GIF89a";
+  }
+
+  if (mime === "video/mp4") {
+    const ascii = String.fromCharCode(...bytes);
+    return ascii.includes("ftyp");
+  }
+
+  return false;
+}
+
 async function uploadMedia(request, env) {
+  if (requestTooLarge(request, MEDIA_REQUEST_MAX_BYTES))
+    return json({ error: "upload too large; maximum media file is 75 MB" }, 413);
+
   const form = await request.formData();
   const file = form.get("file");
-  if (!(file instanceof File)) return json({ error: "file required" }, 400);
+  if (!(file instanceof File))
+    return json({ error: "file required" }, 400);
 
-  const kind = file.type.startsWith("video/")
-    ? "video"
-    : file.type.startsWith("image/")
-      ? "image"
-      : null;
+  if (!file.size)
+    return json({ error: "empty media file" }, 400);
 
-  if (!kind) return json({ error: "only image/video files supported" }, 400);
+  if (file.size > MEDIA_MAX_BYTES)
+    return json({ error: "upload too large; maximum media file is 75 MB" }, 413);
+
+  const mime = String(file.type || "").toLowerCase().split(";")[0].trim();
+  const spec = MEDIA_TYPES.get(mime);
+  if (!spec)
+    return json({ error: "supported media: JPEG, PNG, GIF, and MP4" }, 415);
+
+  const headBytes = new Uint8Array(
+    await file.slice(0, 64).arrayBuffer()
+  );
+  if (!validMediaSignature(mime, headBytes))
+    return json({ error: "file content does not match its media type" }, 415);
 
   const id = crypto.randomUUID();
-  const ext = (file.name.split(".").pop() || "bin")
-    .replace(/[^a-zA-Z0-9]/g, "")
-    .toLowerCase();
-  const key = `media/${id}.${ext}`;
+  const key = `media/${id}.${spec.ext}`;
+  const originalName = String(file.name || `media.${spec.ext}`)
+    .replace(/[\u0000-\u001f\u007f]/g, "")
+    .slice(0, 240) || `media.${spec.ext}`;
+
+  const rawDuration = Number(
+    form.get("duration_seconds") || (spec.kind === "image" ? 15 : 30)
+  );
+  const duration = Number.isFinite(rawDuration)
+    ? Math.max(1, Math.min(300, rawDuration))
+    : (spec.kind === "image" ? 15 : 30);
 
   await env.MEDIA.put(key, file.stream(), {
-    httpMetadata: { contentType: file.type },
+    httpMetadata: {
+      contentType: mime,
+      contentDisposition: "inline",
+    },
   });
 
-  const duration = Math.max(
-    1,
-    Math.min(300, Number(form.get("duration_seconds") || (kind === "image" ? 15 : 30)))
-  );
+  try {
+    const rows = await sb(env, "media_assets", {
+      method: "POST",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify({
+        organization_id: ORG_ID,
+        title: originalName,
+        kind: spec.kind,
+        storage_key: key,
+        original_filename: originalName,
+        mime_type: mime,
+        byte_size: file.size,
+        duration_seconds: duration,
+        status: "ready",
+      }),
+    });
 
-  const rows = await sb(env, "media_assets", {
-    method: "POST",
-    headers: { Prefer: "return=representation" },
-    body: JSON.stringify({
-      organization_id: ORG_ID,
-      title: file.name,
-      kind,
-      storage_key: key,
-      original_filename: file.name,
-      mime_type: file.type,
-      byte_size: file.size,
-      duration_seconds: duration,
-      status: "ready",
-    }),
-  });
+    if (!rows?.[0]?.id)
+      throw new Error("media metadata insert returned no row");
 
-  return json({ ok: true, id: rows?.[0]?.id });
+    return json({ ok: true, id: rows[0].id });
+  } catch (error) {
+    await env.MEDIA.delete(key).catch(() => {});
+    throw error;
+  }
 }
 
 async function listPlaylists(env) {
@@ -1653,7 +1713,7 @@ export default {
         return portalOverview(request, env);
 
       if (url.pathname === "/api/health")
-        return json({ ok: true, service: "coastloop", version: "0.26.0" });
+        return json({ ok: true, service: "coastloop", version: "0.26.1" });
 
       if (url.pathname === "/api/player/boot" && request.method === "POST")
         return bootPlayer(request, env);
@@ -1832,7 +1892,7 @@ export default {
       return json({ error: "not found" }, 404);
     } catch (error) {
       console.error(error);
-      return json({ error: "server error", detail: String(error?.message || error) }, 500);
+      return json({ error: "server error" }, 500);
     }
   },
 };

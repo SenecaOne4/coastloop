@@ -501,12 +501,13 @@ export async function portalOverview(request, env) {
   if (!businessIds.size)
     return json({ ok: true, user: { email: auth.user.email }, access: auth.access, businesses: [] });
 
-  const [businesses, locations, campaigns, screens, plays] = await Promise.all([
-    rest(env, `businesses?organization_id=eq.${ORG_ID}&select=id,name,category`),
+  const [businesses, locations, campaigns, screens, plays, invoices] = await Promise.all([
+    rest(env, `businesses?organization_id=eq.${ORG_ID}&select=id,name,category,is_host,is_advertiser`),
     rest(env, `locations?organization_id=eq.${ORG_ID}&select=id,business_id,name,address_line1,city,state,host_status`),
     rest(env, `campaigns?organization_id=eq.${ORG_ID}&select=id,advertiser_business_id,name,status,starts_at,ends_at`),
     rest(env, `screens?organization_id=eq.${ORG_ID}&select=id,location_id,name,status,last_seen_at,app_version,display_width,display_height,is_test`),
     rest(env, `playback_daily?organization_id=eq.${ORG_ID}&select=screen_id,campaign_id,play_date,play_count,seconds_played,last_played_at`),
+    rest(env, `billing_invoices?organization_id=eq.${ORG_ID}&status=neq.draft&select=id,campaign_id,advertiser_business_id,invoice_number,provider,status,currency,total_cents,amount_paid_cents,amount_due_cents,amount_refunded_cents,due_at,hosted_invoice_url,invoice_pdf_url,sent_at,paid_at,created_at&order=created_at.desc`),
   ]);
 
   const screenMap = new Map((screens || []).map(x => [x.id, x]));
@@ -518,6 +519,7 @@ export async function portalOverview(request, env) {
     const locationIds = new Set(bizLocations.map(l => l.id));
     const bizScreens = (screens || []).filter(s => locationIds.has(s.location_id) && !s.is_test);
     const bizCampaigns = (campaigns || []).filter(c => c.advertiser_business_id === b.id);
+    const bizInvoices = (invoices || []).filter(i => i.advertiser_business_id === b.id);
 
     const locationData = bizLocations.map(l => {
       const locScreens = bizScreens.filter(s => s.location_id === l.id);
@@ -554,6 +556,7 @@ export async function portalOverview(request, env) {
       is_advertiser: Boolean(b.is_advertiser),
       locations: b.is_host ? locationData : [],
       campaigns: b.is_advertiser ? campaignData : [],
+      invoices: b.is_advertiser ? bizInvoices : [],
     };
   });
 
