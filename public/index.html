@@ -22,18 +22,65 @@
 </header>
 
 <main>
-<section class="public-hero">
-  <div class="public-kicker">HYPERLOCAL DIGITAL ADVERTISING</div>
-  <h1>Your business.<br>On screens <span>that get seen.</span></h1>
-  <p>Beautiful, motion-rich local advertising inside restaurants, shops, waiting rooms and gathering places — with real proof your ads played.</p>
-  <div class="public-actions">
-    <a class="public-button" href="#contact">Advertise with CoastLoop</a>
-    <a class="public-button secondary" href="#host">Host a screen</a>
+<section class="public-hero public-hero-live">
+  <div class="hero-copy">
+    <div class="public-kicker">HYPERLOCAL DIGITAL ADVERTISING</div>
+    <h1>Local advertising<br>you can <span>watch work.</span></h1>
+    <p>Beautiful creative on screens inside real local businesses — backed by verified delivery, live screen health and campaign reporting.</p>
+
+    <div class="public-actions">
+      <a class="public-button" href="#contact">Advertise with CoastLoop</a>
+      <a class="public-button secondary" href="#host">Host a screen</a>
+    </div>
+
+    <div class="public-proof">
+      <div><strong>CREATIVE</strong><small>Built to look premium on a TV</small></div>
+      <div><strong>LOCAL</strong><small>Placed inside nearby businesses</small></div>
+      <div><strong>VERIFIED</strong><small>Every commercial play is measured</small></div>
+    </div>
   </div>
-  <div class="public-proof">
-    <div><strong>LOCAL</strong><small>Businesses & audiences</small></div>
-    <div><strong>BEAUTIFUL</strong><small>Creative built to get noticed</small></div>
-    <div><strong>MEASURABLE</strong><small>Proof-of-play reporting</small></div>
+
+  <div class="hero-network-stage" aria-label="CoastLoop live network telemetry">
+    <div class="hero-tv">
+      <div class="hero-tv-top">
+        <span class="hero-live-label"><i></i> COASTLOOP LIVE</span>
+        <span>VERIFIED DELIVERY</span>
+      </div>
+
+      <div class="hero-tv-main">
+        <div class="hero-tv-copy">
+          <small>COMMERCIAL PLAYS · 24H</small>
+          <strong id="heroNetPlays">—</strong>
+          <span id="heroLastVerified">Connecting to network…</span>
+        </div>
+
+        <div class="hero-wave" aria-hidden="true">
+          <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+          <i></i><i></i><i></i><i></i><i></i><i></i>
+        </div>
+      </div>
+
+      <div class="hero-tv-grid">
+        <div><strong id="heroNetOnline">—</strong><span>screens online</span></div>
+        <div><strong id="heroNetLocations">—</strong><span>locations</span></div>
+        <div><strong id="heroNetCampaigns">—</strong><span>campaigns live</span></div>
+      </div>
+
+      <div class="hero-tv-footer">
+        <span>PROOF OF PLAY</span>
+        <span>SCREEN HEALTH</span>
+        <span>CAMPAIGN PACING</span>
+      </div>
+    </div>
+
+    <div class="hero-float hero-float-a">
+      <span class="network-live-dot"></span>
+      SCREEN ONLINE
+    </div>
+    <div class="hero-float hero-float-b">
+      VERIFIED PLAY
+      <strong id="heroProofAge">LIVE</strong>
+    </div>
   </div>
 </section>
 
@@ -144,6 +191,13 @@ async function loadNetworkPulse(){
     document.querySelector('#netLocations').textContent = networkNumber(n.locations);
     document.querySelector('#netCampaigns').textContent = networkNumber(n.active_campaigns);
 
+    document.querySelector('#heroNetPlays').textContent = networkNumber(n.plays_24h);
+    document.querySelector('#heroNetOnline').textContent =
+      `${networkNumber(n.online)} / ${networkNumber(n.screens)}`;
+    document.querySelector('#heroNetLocations').textContent = networkNumber(n.locations);
+    document.querySelector('#heroNetCampaigns').textContent =
+      networkNumber(n.active_campaigns);
+
     const state = document.querySelector('#networkState');
     if(Number(n.online) > 0) state.textContent = 'NETWORK ONLINE';
     else if(Number(n.screens) > 0) state.textContent = 'NETWORK CHECKING IN';
@@ -173,6 +227,14 @@ async function loadNetworkPulse(){
     document.querySelector('#networkActivity').textContent = age
       ? `LATEST VERIFIED COMMERCIAL PLAY · ${age.toUpperCase()}`
       : 'AWAITING FIRST COMMERCIAL DELIVERY';
+
+    document.querySelector('#heroLastVerified').textContent = age
+      ? `Latest verified play · ${age}`
+      : 'Awaiting first commercial delivery';
+
+    document.querySelector('#heroProofAge').textContent = age
+      ? age.toUpperCase()
+      : 'READY';
 
     document.querySelector('.network-live')?.classList.toggle(
       'has-activity', Number(n.plays_24h) > 0
