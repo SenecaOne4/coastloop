@@ -2736,6 +2736,65 @@ async function financeSnapshot(env, auth = null) {
   };
 }
 
+async function publicNetworkStats(env) {
+  const [screens, locations, campaigns, plays] = await Promise.all([
+    sb(env, `screens?organization_id=eq.${ORG_ID}&select=id,location_id,last_seen_at,is_test,status,deployment_class`),
+    sb(env, `locations?organization_id=eq.${ORG_ID}&select=id,host_status`),
+    sb(env, `campaigns?organization_id=eq.${ORG_ID}&select=id,status,starts_at,ends_at`),
+    sb(env, `playback_daily?organization_id=eq.${ORG_ID}&select=screen_id,play_count,last_played_at`),
+  ]);
+
+  const now = Date.now();
+  const onlineCutoff = now - 120000;
+  const dayCutoff = now - 86400000;
+
+  const commercialScreens = (screens || []).filter(s =>
+    !s.is_test &&
+    s.status === "active" &&
+    ["pilot", "production"].includes(s.deployment_class)
+  );
+  const commercialIds = new Set(commercialScreens.map(s => s.id));
+  const commercialLocationIds = new Set(
+    commercialScreens.map(s => s.location_id).filter(Boolean)
+  );
+
+  const activeCampaigns = (campaigns || []).filter(c => {
+    const starts = c.starts_at ? new Date(c.starts_at).getTime() : null;
+    const ends = c.ends_at ? new Date(c.ends_at).getTime() : null;
+    if (starts !== null && (!Number.isFinite(starts) || starts > now)) return false;
+    if (ends !== null && (!Number.isFinite(ends) || ends <= now)) return false;
+    return c.status === "active" || (
+      c.status === "scheduled" && starts !== null && starts <= now
+    );
+  });
+
+  const recentRows = (plays || []).filter(p =>
+    commercialIds.has(p.screen_id) &&
+    p.last_played_at &&
+    new Date(p.last_played_at).getTime() > dayCutoff
+  );
+
+  const lastVerifiedAt = recentRows
+    .map(p => p.last_played_at)
+    .filter(Boolean)
+    .sort()
+    .pop() || null;
+
+  return {
+    screens: commercialScreens.length,
+    online: commercialScreens.filter(s =>
+      s.last_seen_at &&
+      new Date(s.last_seen_at).getTime() > onlineCutoff
+    ).length,
+    locations: commercialLocationIds.size,
+    active_campaigns: activeCampaigns.length,
+    plays_24h: recentRows.reduce(
+      (n, p) => n + Number(p.play_count || 0), 0
+    ),
+    last_verified_at: lastVerifiedAt,
+  };
+}
+
 async function stats(env) {
   const [screens, media, plays] = await Promise.all([
     sb(env, `screens?organization_id=eq.${ORG_ID}&select=id,last_seen_at,is_test`),
@@ -2784,7 +2843,7 @@ export default {
         return portalOverview(request, env);
 
       if (url.pathname === "/api/health")
-        return json({ ok: true, service: "coastloop", version: "0.26.8" });
+        return json({ ok: true, service: "coastloop", version: "0.26.9" });
 
       if (url.pathname === "/api/player/boot" && request.method === "POST")
         return bootPlayer(request, env);
@@ -2801,6 +2860,9 @@ export default {
       if (url.pathname.startsWith("/media/") &&
           (request.method === "GET" || request.method === "HEAD"))
         return serveMedia(request, env, url.pathname.split("/").pop());
+
+      if (url.pathname === "/api/public/network" && request.method === "GET")
+        return json(await publicNetworkStats(env));
 
       if (url.pathname === "/api/public/lead" && request.method === "POST")
         return createPublicLead(request, env);

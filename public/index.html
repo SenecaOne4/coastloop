@@ -37,6 +37,29 @@
   </div>
 </section>
 
+<section class="network-live" id="network">
+  <div class="network-live-head">
+    <div>
+      <div class="network-live-label"><span class="network-live-dot"></span> LIVE NETWORK</div>
+      <h2>Proof, not promises.</h2>
+      <p>CoastLoop reports verified commercial delivery from the network itself.</p>
+    </div>
+    <div class="network-live-state" id="networkState">CONNECTING TO NETWORK</div>
+  </div>
+
+  <div class="network-metrics">
+    <div class="network-metric"><strong id="netPlays">—</strong><span>verified plays · 24h</span></div>
+    <div class="network-metric"><strong id="netOnline">—</strong><span>screens online now</span></div>
+    <div class="network-metric"><strong id="netLocations">—</strong><span>commercial locations</span></div>
+    <div class="network-metric"><strong id="netCampaigns">—</strong><span>active campaigns</span></div>
+  </div>
+
+  <div class="network-signal">
+    <span id="networkActivity">Waiting for network telemetry…</span>
+    <div class="network-signal-line"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+  </div>
+</section>
+
 <section class="public-section" id="advertise">
   <div class="public-eyebrow">FOR ADVERTISERS</div>
   <h2>Be where your customers already are.</h2>
@@ -89,6 +112,51 @@
 </footer>
 
 <script>
+const networkNumber = value =>
+  Number(value || 0).toLocaleString('en-US');
+
+const networkAge = ts => {
+  if (!ts) return null;
+  const sec = Math.max(0, Math.floor((Date.now() - new Date(ts)) / 1000));
+  if (sec < 5) return 'just now';
+  if (sec < 60) return `${sec}s ago`;
+  if (sec < 3600) return `${Math.floor(sec/60)}m ago`;
+  return `${Math.floor(sec/3600)}h ago`;
+};
+
+async function loadNetworkPulse(){
+  try{
+    const res = await fetch('/api/public/network', {cache:'no-store'});
+    if(!res.ok) throw new Error('network unavailable');
+    const n = await res.json();
+
+    document.querySelector('#netPlays').textContent = networkNumber(n.plays_24h);
+    document.querySelector('#netOnline').textContent =
+      `${networkNumber(n.online)} / ${networkNumber(n.screens)}`;
+    document.querySelector('#netLocations').textContent = networkNumber(n.locations);
+    document.querySelector('#netCampaigns').textContent = networkNumber(n.active_campaigns);
+
+    const state = document.querySelector('#networkState');
+    if(Number(n.online) > 0) state.textContent = 'NETWORK ONLINE';
+    else if(Number(n.screens) > 0) state.textContent = 'NETWORK CHECKING IN';
+    else state.textContent = 'NETWORK COMMISSIONING';
+
+    const age = networkAge(n.last_verified_at);
+    document.querySelector('#networkActivity').textContent = age
+      ? `LATEST VERIFIED COMMERCIAL PLAY · ${age.toUpperCase()}`
+      : 'AWAITING FIRST COMMERCIAL DELIVERY';
+
+    document.querySelector('.network-live')?.classList.toggle(
+      'has-activity', Number(n.plays_24h) > 0
+    );
+  }catch{
+    document.querySelector('#networkState').textContent = 'TELEMETRY RECONNECTING';
+  }
+}
+
+loadNetworkPulse();
+setInterval(loadNetworkPulse, 15000);
+
 const form = document.querySelector('#leadForm');
 const msg = document.querySelector('#leadMessage');
 

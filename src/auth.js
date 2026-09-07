@@ -505,8 +505,8 @@ export async function portalOverview(request, env) {
 
   const [businesses, locations, campaigns, screens, plays, invoices] = await Promise.all([
     rest(env, `businesses?organization_id=eq.${ORG_ID}&select=id,name,category,is_host,is_advertiser`),
-    rest(env, `locations?organization_id=eq.${ORG_ID}&select=id,business_id,name,address_line1,city,state,host_status`),
-    rest(env, `campaigns?organization_id=eq.${ORG_ID}&select=id,advertiser_business_id,name,status,starts_at,ends_at`),
+    rest(env, `locations?organization_id=eq.${ORG_ID}&select=id,business_id,name,address_line1,city,state,host_status,timezone,operating_hours`),
+    rest(env, `campaigns?organization_id=eq.${ORG_ID}&select=id,advertiser_business_id,name,status,starts_at,ends_at,delivery_target_plays,makegood_plays,dayparts`),
     rest(env, `screens?organization_id=eq.${ORG_ID}&select=id,location_id,name,status,last_seen_at,app_version,display_width,display_height,is_test`),
     rest(env, `playback_daily?organization_id=eq.${ORG_ID}&select=screen_id,campaign_id,play_date,play_count,seconds_played,last_played_at`),
     rest(env, `billing_invoices?organization_id=eq.${ORG_ID}&status=neq.draft&select=id,campaign_id,advertiser_business_id,invoice_number,provider,status,currency,total_cents,amount_paid_cents,amount_due_cents,amount_refunded_cents,due_at,hosted_invoice_url,invoice_pdf_url,sent_at,paid_at,created_at&order=created_at.desc`),
@@ -540,14 +540,77 @@ export async function portalOverview(request, env) {
 
     const campaignData = bizCampaigns.map(c => {
       const rows = (plays || []).filter(p => p.campaign_id === c.id && !screenMap.get(p.screen_id)?.is_test);
+      const verifiedPlays = rows.reduce(
+        (n,p) => n + Number(p.play_count || 0), 0
+      );
+      const goal = c.delivery_target_plays == null
+        ? null
+        : Number(c.delivery_target_plays) + Number(c.makegood_plays || 0);
+      const screenIds = new Set(rows.map(p => p.screen_id).filter(Boolean));
+      const campaignLocationIds = new Set(
+        [...screenIds]
+          .map(id => screenMap.get(id)?.location_id)
+          .filter(Boolean)
+      );
+      const firstPlayedAt = rows
+        .map(p => p.last_played_at)
+        .filter(Boolean)
+        .sort()
+        .shift() || null;
+      const lastPlayedAt = rows
+        .map(p => p.last_played_at)
+        .filter(Boolean)
+        .sort()
+        .pop() || null;
+
       return {
         ...c,
-        plays: rows.reduce((n,p) => n + Number(p.play_count || 0), 0),
-        seconds_played: rows.reduce((n,p) => n + Number(p.seconds_played || 0), 0),
-        screen_count: new Set(rows.map(p => p.screen_id).filter(Boolean)).size,
-        last_played_at: rows.map(p => p.last_played_at).filter(Boolean).sort().pop() || null,
+        plays: verifiedPlays,
+        plays_today: rows
+          .filter(p => p.play_date === today)
+          .reduce((n,p) => n + Number(p.play_count || 0), 0),
+        seconds_played: rows.reduce(
+          (n,p) => n + Number(p.seconds_played || 0), 0
+        ),
+        screen_count: screenIds.size,
+        location_count: campaignLocationIds.size,
+        delivery_goal_plays: goal,
+        remaining_plays: goal === null ? null : Math.max(0, goal - verifiedPlays),
+        delivery_percent: goal
+          ? Math.min(100, Math.round((verifiedPlays / goal) * 1000) / 10)
+          : null,
+        pace_percent: (() => {
+          if (!goal || !c.starts_at || !c.ends_at) return null;
+          const start = new Date(c.starts_at).getTime();
+          const end = new Date(c.ends_at).getTime();
+          if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start)
+            return null;
+          const elapsed = Math.max(0, Math.min(1, (now - start) / (end - start)));
+          const expected = goal * elapsed;
+          if (expected <= 0) return null;
+          return Math.round((verifiedPlays / expected) * 1000) / 10;
+        })(),
+        first_played_at: firstPlayedAt,
+        last_played_at: lastPlayedAt,
       };
     });
+
+    const advertiserCampaignIds = new Set(bizCampaigns.map(c => c.id));
+    const advertiserRows = (plays || []).filter(p =>
+      advertiserCampaignIds.has(p.campaign_id) &&
+      !screenMap.get(p.screen_id)?.is_test
+    );
+    const advertiserScreenIds = new Set(
+      advertiserRows.map(p => p.screen_id).filter(Boolean)
+    );
+    const advertiserLocationIds = new Set(
+      [...advertiserScreenIds]
+        .map(id => screenMap.get(id)?.location_id)
+        .filter(Boolean)
+    );
+    const hostRows = (plays || []).filter(p =>
+      bizScreens.some(s => s.id === p.screen_id)
+    );
 
     return {
       id: b.id,
@@ -556,6 +619,37 @@ export async function portalOverview(request, env) {
       member_role: auth.access.businesses.find(x => x.business_id === b.id)?.role || "viewer",
       is_host: Boolean(b.is_host),
       is_advertiser: Boolean(b.is_advertiser),
+      host_summary: b.is_host ? {
+        screens: bizScreens.length,
+        online: bizScreens.filter(s =>
+          s.last_seen_at &&
+          now - new Date(s.last_seen_at).getTime() < 120000
+        ).length,
+        plays_today: hostRows
+          .filter(p => p.play_date === today)
+          .reduce((n,p) => n + Number(p.play_count || 0), 0),
+        last_verified_at: hostRows
+          .map(p => p.last_played_at)
+          .filter(Boolean)
+          .sort()
+          .pop() || null,
+      } : null,
+      advertiser_summary: b.is_advertiser ? {
+        verified_plays: advertiserRows.reduce(
+          (n,p) => n + Number(p.play_count || 0), 0
+        ),
+        plays_today: advertiserRows
+          .filter(p => p.play_date === today)
+          .reduce((n,p) => n + Number(p.play_count || 0), 0),
+        screens: advertiserScreenIds.size,
+        locations: advertiserLocationIds.size,
+        active_campaigns: bizCampaigns.filter(c => c.status === "active").length,
+        last_verified_at: advertiserRows
+          .map(p => p.last_played_at)
+          .filter(Boolean)
+          .sort()
+          .pop() || null,
+      } : null,
       locations: b.is_host ? locationData : [],
       campaigns: b.is_advertiser ? campaignData : [],
       invoices: b.is_advertiser ? bizInvoices : [],

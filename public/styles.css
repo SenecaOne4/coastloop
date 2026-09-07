@@ -175,3 +175,77 @@ form .row>input,form .row>select,form .row>label{min-width:150px}
 .top-actions{justify-content:flex-end}
 @media(max-width:900px){.form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:560px){.form-grid{grid-template-columns:1fr}.form-grid textarea{grid-column:span 1}}
+
+
+/* CoastLoop sell layer 0.26.9 */
+.network-live{
+  max-width:1280px;margin:0 auto 32px;padding:34px 38px;
+  border-radius:26px;background:#171412;color:#f4efe7;
+  box-shadow:0 26px 80px rgba(23,20,18,.15)
+}
+.network-live-head{display:flex;justify-content:space-between;gap:28px;align-items:flex-start}
+.network-live-label,.portal-eyebrow{font-size:11px;font-weight:800;letter-spacing:.17em;text-transform:uppercase;color:#b8924a}
+.network-live-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#b8924a;margin-right:8px;box-shadow:0 0 0 0 rgba(184,146,74,.45);animation:coastPulse 1.8s infinite}
+.network-live.has-activity .network-live-dot,.portal-status.live i{background:#55c98b}
+.network-live h2{font-size:clamp(32px,4vw,54px);margin:12px 0 8px;letter-spacing:-.035em}
+.network-live p{color:#aaa39c;margin:0}
+.network-live-state{font-size:11px;letter-spacing:.14em;font-weight:800;padding:10px 13px;border:1px solid rgba(244,239,231,.18);border-radius:999px;white-space:nowrap}
+.network-metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:rgba(244,239,231,.12);margin-top:30px;border-radius:17px;overflow:hidden}
+.network-metric{background:#171412;padding:23px}
+.network-metric strong{display:block;font-size:clamp(30px,4vw,47px);line-height:1}
+.network-metric span{display:block;color:#aaa39c;margin-top:8px;font-size:12px}
+.network-signal{display:flex;justify-content:space-between;align-items:center;gap:20px;margin-top:22px;color:#aaa39c;font-size:10px;letter-spacing:.12em;font-weight:800}
+.network-signal-line{display:flex;gap:4px;height:22px;align-items:center}
+.network-signal-line i{display:block;width:3px;height:6px;background:#b8924a;border-radius:3px;opacity:.55;animation:signalBeat 1.25s ease-in-out infinite}
+.network-signal-line i:nth-child(2){animation-delay:.1s}.network-signal-line i:nth-child(3){animation-delay:.2s}.network-signal-line i:nth-child(4){animation-delay:.3s}
+.network-signal-line i:nth-child(5){animation-delay:.4s}.network-signal-line i:nth-child(6){animation-delay:.5s}.network-signal-line i:nth-child(7){animation-delay:.6s}.network-signal-line i:nth-child(8){animation-delay:.7s}
+@keyframes coastPulse{70%{box-shadow:0 0 0 9px rgba(184,146,74,0)}100%{box-shadow:0 0 0 0 rgba(184,146,74,0)}}
+@keyframes signalBeat{0%,100%{height:5px;opacity:.35}50%{height:21px;opacity:1}}
+
+.portal-business{margin:0 0 38px}
+.portal-business-head{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;padding:35px 4px 28px;border-bottom:1px solid rgba(255,255,255,.09)}
+.portal-business-head h1{font-size:clamp(38px,5vw,68px);letter-spacing:-.04em;margin:8px 0 5px}
+.portal-business-head p{margin:0;color:#949ba5}
+.portal-zone{padding:32px 0;border-bottom:1px solid rgba(255,255,255,.08)}
+.portal-zone-head{display:flex;justify-content:space-between;gap:20px;align-items:flex-end;margin-bottom:18px}
+.portal-zone-head h2{font-size:30px;letter-spacing:-.025em;margin:7px 0 0}
+.portal-last{color:#949ba5;font-size:12px}
+.portal-status{display:inline-flex;align-items:center;gap:7px;font-size:10px;font-weight:800;letter-spacing:.11em}
+.portal-status i{width:7px;height:7px;border-radius:50%;background:#6b7078}
+.portal-status.live i{box-shadow:0 0 0 0 rgba(85,201,139,.45);animation:coastPulse 1.8s infinite}
+.portal-metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:10px;margin:17px 0}
+.portal-metric{padding:18px;border:1px solid rgba(255,255,255,.09);border-radius:14px;background:rgba(255,255,255,.025)}
+.portal-metric strong{display:block;font-size:25px;letter-spacing:-.025em}
+.portal-metric span,.portal-metric small{display:block;color:#949ba5;font-size:11px;margin-top:4px}
+.portal-campaign-grid,.portal-location-grid{display:grid;gap:14px;margin-top:16px}
+.portal-campaign,.portal-location{border:1px solid rgba(255,255,255,.09);border-radius:18px;padding:22px;background:rgba(255,255,255,.025)}
+.portal-card-head{display:flex;justify-content:space-between;gap:15px;align-items:flex-start}
+.portal-card-head h3{font-size:25px;margin:5px 0 0}
+.portal-card-head small,.portal-invoice small{display:block;color:#949ba5;margin-top:4px}
+.portal-progress{margin-top:22px}
+.portal-progress-head,.portal-progress-foot{display:flex;justify-content:space-between;gap:12px;font-size:10px;letter-spacing:.07em;color:#949ba5}
+.portal-progress-head strong{color:#f4efe7;font-size:14px}
+.portal-progress-track{height:8px;background:#292c31;border-radius:999px;overflow:hidden;margin:9px 0}
+.portal-progress-track i{display:block;height:100%;background:#b8924a;border-radius:999px}
+.portal-progress-note{color:#949ba5;font-size:12px;margin-top:18px}
+.portal-campaign-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:15px}
+.portal-campaign-stats .portal-metric{padding:12px}
+.portal-campaign-stats .portal-metric strong{font-size:19px}
+.portal-verified-line{margin-top:16px;padding-top:14px;border-top:1px solid rgba(255,255,255,.07);color:#949ba5;font-size:11px}
+.portal-screen{display:grid;grid-template-columns:auto 1fr auto auto;align-items:center;gap:14px;padding:13px 0;border-top:1px solid rgba(255,255,255,.07);font-size:12px;color:#949ba5}
+.portal-screen strong{color:#f4efe7}
+.portal-invoices{display:grid;gap:9px}
+.portal-invoice{display:grid;grid-template-columns:2fr auto 1fr 1fr auto;gap:16px;align-items:center;padding:16px 18px;border:1px solid rgba(255,255,255,.09);border-radius:14px}
+.portal-invoice-actions{display:flex;gap:7px}
+.portal-empty{padding:25px;color:#949ba5;border:1px dashed rgba(255,255,255,.12);border-radius:14px}
+@media(max-width:760px){
+  .network-live{margin:0 14px 24px;padding:25px 20px}
+  .network-live-head,.portal-zone-head{display:block}
+  .network-live-state{display:inline-block;margin-top:18px}
+  .network-metrics{grid-template-columns:repeat(2,1fr)}
+  .network-signal{align-items:flex-start}
+  .portal-campaign-stats{grid-template-columns:repeat(2,1fr)}
+  .portal-screen{grid-template-columns:1fr 1fr}
+  .portal-invoice{grid-template-columns:1fr 1fr}
+  .portal-invoice-actions{grid-column:1/-1}
+}
