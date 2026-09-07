@@ -525,3 +525,62 @@ form .row>input,form .row>select,form .row>label{min-width:150px}
   .hero-tv-footer{gap:10px;font-size:7px}
   .hero-float{display:none}
 }
+
+
+/* CoastLoop customer proof 0.27.2 */
+.portal-proof-block{
+  margin-top:18px;
+  padding-top:18px;
+  border-top:1px solid rgba(255,255,255,.07)
+}
+.portal-proof-head{
+  display:flex;
+  justify-content:space-between;
+  gap:14px;
+  align-items:center;
+  margin-bottom:10px
+}
+.portal-proof-head span,.portal-proof-head strong{
+  font-size:9px;
+  font-weight:900;
+  letter-spacing:.11em;
+  color:#949ba5
+}
+.portal-location-proof,.portal-activity-feed{display:grid;gap:7px}
+.portal-proof-row{
+  display:grid;
+  grid-template-columns:minmax(180px,2fr) repeat(4,minmax(80px,1fr));
+  gap:12px;
+  align-items:center;
+  padding:12px 13px;
+  border-radius:11px;
+  background:rgba(255,255,255,.025);
+  border:1px solid rgba(255,255,255,.055)
+}
+.portal-proof-row strong,.portal-activity-row strong{
+  display:block;
+  font-size:12px
+}
+.portal-proof-row small,.portal-activity-row small{
+  display:block;
+  margin-top:3px;
+  color:#858c95;
+  font-size:9px
+}
+.portal-activity-row{
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr) auto;
+  gap:10px;
+  align-items:center;
+  padding:11px 12px;
+  border-radius:11px;
+  background:rgba(255,255,255,.02)
+}
+.portal-activity-row .network-live-dot{margin:0}
+.portal-activity-row>div:last-child{text-align:right}
+@media(max-width:760px){
+  .portal-proof-row{grid-template-columns:1fr 1fr}
+  .portal-proof-row>div:first-child{grid-column:1/-1}
+  .portal-activity-row{grid-template-columns:auto 1fr}
+  .portal-activity-row>div:last-child{grid-column:2;text-align:left}
+}

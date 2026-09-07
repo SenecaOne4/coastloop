@@ -508,11 +508,13 @@ export async function portalOverview(request, env) {
     rest(env, `locations?organization_id=eq.${ORG_ID}&select=id,business_id,name,address_line1,city,state,host_status,timezone,operating_hours`),
     rest(env, `campaigns?organization_id=eq.${ORG_ID}&select=id,advertiser_business_id,name,status,starts_at,ends_at,delivery_target_plays,makegood_plays,dayparts`),
     rest(env, `screens?organization_id=eq.${ORG_ID}&select=id,location_id,name,status,last_seen_at,app_version,display_width,display_height,is_test`),
-    rest(env, `playback_daily?organization_id=eq.${ORG_ID}&select=screen_id,campaign_id,play_date,play_count,seconds_played,last_played_at`),
+    rest(env, `playback_daily?organization_id=eq.${ORG_ID}&select=screen_id,campaign_id,play_date,play_count,seconds_played,first_played_at,last_played_at`),
     rest(env, `billing_invoices?organization_id=eq.${ORG_ID}&status=neq.draft&select=id,campaign_id,advertiser_business_id,invoice_number,provider,status,currency,total_cents,amount_paid_cents,amount_due_cents,amount_refunded_cents,due_at,hosted_invoice_url,invoice_pdf_url,sent_at,paid_at,created_at&order=created_at.desc`),
   ]);
 
   const screenMap = new Map((screens || []).map(x => [x.id, x]));
+  const locationMap = new Map((locations || []).map(x => [x.id, x]));
+  const businessMap = new Map((businesses || []).map(x => [x.id, x]));
   const now = Date.now();
   const today = new Date().toISOString().slice(0, 10);
 
@@ -553,7 +555,7 @@ export async function portalOverview(request, env) {
           .filter(Boolean)
       );
       const firstPlayedAt = rows
-        .map(p => p.last_played_at)
+        .map(p => p.first_played_at || p.last_played_at)
         .filter(Boolean)
         .sort()
         .shift() || null;
@@ -573,6 +575,68 @@ export async function portalOverview(request, env) {
             .reduce((n,p) => n + Number(p.play_count || 0), 0),
         });
       }
+
+      const locationBreakdown = [...campaignLocationIds].map(locationId => {
+        const location = locationMap.get(locationId);
+        const locationScreenIds = new Set(
+          [...screenIds].filter(id => screenMap.get(id)?.location_id === locationId)
+        );
+        const locationRows = rows.filter(p => locationScreenIds.has(p.screen_id));
+        const hostBusiness = location?.business_id
+          ? businessMap.get(location.business_id)
+          : null;
+
+        return {
+          location_id: locationId,
+          location_name: location?.name || hostBusiness?.name || "Location",
+          host_name: hostBusiness?.name || null,
+          city: location?.city || null,
+          state: location?.state || null,
+          plays: locationRows.reduce(
+            (n,p) => n + Number(p.play_count || 0), 0
+          ),
+          plays_today: locationRows
+            .filter(p => p.play_date === today)
+            .reduce((n,p) => n + Number(p.play_count || 0), 0),
+          screen_count: locationScreenIds.size,
+          seconds_played: locationRows.reduce(
+            (n,p) => n + Number(p.seconds_played || 0), 0
+          ),
+          last_played_at: locationRows
+            .map(p => p.last_played_at)
+            .filter(Boolean)
+            .sort()
+            .pop() || null,
+        };
+      }).sort((a,b) => b.plays - a.plays);
+
+      const recentActivity = rows
+        .filter(p => p.last_played_at)
+        .sort((a,b) =>
+          new Date(b.last_played_at).getTime() -
+          new Date(a.last_played_at).getTime()
+        )
+        .slice(0, 8)
+        .map(p => {
+          const screen = screenMap.get(p.screen_id);
+          const location = screen?.location_id
+            ? locationMap.get(screen.location_id)
+            : null;
+          const hostBusiness = location?.business_id
+            ? businessMap.get(location.business_id)
+            : null;
+
+          return {
+            screen_name: screen?.name || "CoastLoop screen",
+            location_name: location?.name || hostBusiness?.name || "Location",
+            host_name: hostBusiness?.name || null,
+            city: location?.city || null,
+            state: location?.state || null,
+            play_date: p.play_date,
+            play_count: Number(p.play_count || 0),
+            last_played_at: p.last_played_at,
+          };
+        });
 
       return {
         ...c,
@@ -604,6 +668,8 @@ export async function portalOverview(request, env) {
         first_played_at: firstPlayedAt,
         last_played_at: lastPlayedAt,
         daily_plays: dailyPlays,
+        location_breakdown: locationBreakdown,
+        recent_activity: recentActivity,
       };
     });
 

@@ -67,6 +67,59 @@ function deliveryHealth(c){
   return{label:'ACTIVE',className:'neutral'};
 }
 
+function campaignLocations(c){
+  const rows=Array.isArray(c.location_breakdown)?c.location_breakdown:[];
+  if(!rows.length)return'';
+
+  return `<div class="portal-proof-block">
+    <div class="portal-proof-head">
+      <span>WHERE YOUR AD RAN</span>
+      <strong>${num(rows.length)} location${rows.length===1?'':'s'}</strong>
+    </div>
+    <div class="portal-location-proof">
+      ${rows.map(l=>`
+        <div class="portal-proof-row">
+          <div>
+            <strong>${esc(l.host_name||l.location_name)}</strong>
+            <small>${esc([l.city,l.state].filter(Boolean).join(', ')||l.location_name||'CoastLoop location')}</small>
+          </div>
+          <div><strong>${num(l.plays)}</strong><small>verified plays</small></div>
+          <div><strong>${num(l.plays_today)}</strong><small>today</small></div>
+          <div><strong>${num(l.screen_count)}</strong><small>screen${Number(l.screen_count)===1?'':'s'}</small></div>
+          <div><strong>${age(l.last_played_at)}</strong><small>latest</small></div>
+        </div>
+      `).join('')}
+    </div>
+  </div>`;
+}
+
+function campaignActivity(c){
+  const rows=Array.isArray(c.recent_activity)?c.recent_activity:[];
+  if(!rows.length)return'';
+
+  return `<div class="portal-proof-block">
+    <div class="portal-proof-head">
+      <span>RECENT VERIFIED DELIVERY</span>
+      <strong>PROOF FEED</strong>
+    </div>
+    <div class="portal-activity-feed">
+      ${rows.map(r=>`
+        <div class="portal-activity-row">
+          <span class="network-live-dot"></span>
+          <div>
+            <strong>${esc(r.host_name||r.location_name)}</strong>
+            <small>${esc([r.city,r.state].filter(Boolean).join(', '))} · ${esc(r.screen_name)}</small>
+          </div>
+          <div>
+            <strong>${num(r.play_count)} play${Number(r.play_count)===1?'':'s'}</strong>
+            <small>verified ${age(r.last_played_at)}</small>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  </div>`;
+}
+
 function metric(value,label,sub=''){
   return `<div class="portal-metric">
     <strong>${value}</strong>
@@ -174,6 +227,8 @@ function advertiserDashboard(b){
             ${metric(num(c.location_count),'locations')}
             ${metric(dur(c.seconds_played),'screen time')}
           </div>
+          ${campaignLocations(c)}
+          ${campaignActivity(c)}
           <div class="portal-verified-line">
             <span class="network-live-dot"></span>
             Last verified ${age(c.last_played_at)}
