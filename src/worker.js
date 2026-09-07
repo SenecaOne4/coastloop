@@ -293,6 +293,155 @@ async function bootPlayer(request, env) {
 }
 
 
+
+const WEEKLY_SCHEDULE_DAYS = [
+  "sun", "mon", "tue", "wed", "thu", "fri", "sat",
+];
+
+function weeklyScheduleConfigured(schedule) {
+  return Boolean(
+    schedule &&
+    typeof schedule === "object" &&
+    !Array.isArray(schedule) &&
+    Object.keys(schedule).length
+  );
+}
+
+function scheduleMinute(value, allow24 = false) {
+  const text = String(value || "").trim();
+  const match = /^(\d{2}):(\d{2})$/.exec(text);
+  if (!match) return null;
+
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+
+  if (allow24 && hour === 24 && minute === 0) return 1440;
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+
+  return hour * 60 + minute;
+}
+
+function normalizeWeeklySchedule(raw, label = "schedule") {
+  if (raw === null || raw === undefined || raw === "")
+    return { value: {} };
+
+  if (!raw || typeof raw !== "object" || Array.isArray(raw))
+    return { error: `${label} must be an object` };
+
+  const allowed = new Set(WEEKLY_SCHEDULE_DAYS);
+  const normalized = {};
+
+  for (const [dayRaw, windows] of Object.entries(raw)) {
+    const day = String(dayRaw || "").trim().toLowerCase();
+
+    if (!allowed.has(day))
+      return { error: `${label} contains invalid weekday ${dayRaw}` };
+
+    if (!Array.isArray(windows))
+      return { error: `${label}.${day} must be an array` };
+
+    if (windows.length > 8)
+      return { error: `${label}.${day} has too many windows` };
+
+    const parsed = [];
+
+    for (const window of windows) {
+      if (!Array.isArray(window) || window.length !== 2)
+        return { error: `${label}.${day} windows must be [start,end] pairs` };
+
+      const startText = String(window[0] || "").trim();
+      const endText = String(window[1] || "").trim();
+      const start = scheduleMinute(startText);
+      const end = scheduleMinute(endText, true);
+
+      if (start === null || end === null || start === end)
+        return { error: `${label}.${day} contains an invalid time window` };
+
+      parsed.push([startText, endText]);
+    }
+
+    parsed.sort((a, b) => scheduleMinute(a[0]) - scheduleMinute(b[0]));
+    normalized[day] = parsed;
+  }
+
+  return { value: normalized };
+}
+
+function validTimezone(timezone) {
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: timezone }).format(new Date(0));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function weeklyScheduleAllows(schedule, timezone, nowMs) {
+  if (!weeklyScheduleConfigured(schedule)) return true;
+  if (!timezone || !validTimezone(timezone)) return false;
+
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date(nowMs));
+
+  const values = Object.fromEntries(parts.map(x => [x.type, x.value]));
+  const day = String(values.weekday || "").slice(0, 3).toLowerCase();
+  const dayIndex = WEEKLY_SCHEDULE_DAYS.indexOf(day);
+  if (dayIndex < 0) return false;
+
+  const minute = Number(values.hour || 0) * 60 + Number(values.minute || 0);
+  const current = Array.isArray(schedule?.[day]) ? schedule[day] : [];
+
+  for (const window of current) {
+    const start = scheduleMinute(window?.[0]);
+    const end = scheduleMinute(window?.[1], true);
+    if (start === null || end === null) continue;
+
+    if (end > start && minute >= start && minute < end) return true;
+    if (end <= start && minute >= start) return true;
+  }
+
+  const priorDay = WEEKLY_SCHEDULE_DAYS[
+    (dayIndex + WEEKLY_SCHEDULE_DAYS.length - 1) %
+    WEEKLY_SCHEDULE_DAYS.length
+  ];
+  const prior = Array.isArray(schedule?.[priorDay]) ? schedule[priorDay] : [];
+
+  for (const window of prior) {
+    const start = scheduleMinute(window?.[0]);
+    const end = scheduleMinute(window?.[1], true);
+    if (start === null || end === null) continue;
+    if (end <= start && minute < end) return true;
+  }
+
+  return false;
+}
+
+function locationCampaignAllows(location, campaign, nowMs) {
+  if (!location) return false;
+
+  const timezone = String(
+    location.timezone || "America/New_York"
+  ).trim();
+
+  if (!weeklyScheduleAllows(
+    location.operating_hours || {},
+    timezone,
+    nowMs
+  )) return false;
+
+  if (
+    weeklyScheduleConfigured(campaign?.dayparts) &&
+    !weeklyScheduleAllows(campaign.dayparts, timezone, nowMs)
+  ) return false;
+
+  return true;
+}
+
 function pacingHash(input) {
   let h = 2166136261;
   const text = String(input || "");
@@ -353,22 +502,27 @@ async function applyInventoryPacing(
     .map(id => encodeURIComponent(id))
     .join(",");
 
-  const [plays, screens, assignments] = await Promise.all([
+  const [plays, screens, assignments, locations] = await Promise.all([
     sb(
       env,
       `playback_daily?organization_id=eq.${ORG_ID}&campaign_id=in.(${campaignFilter})&select=campaign_id,screen_id,play_count`
     ),
     sb(
       env,
-      `screens?organization_id=eq.${ORG_ID}&select=id,is_test,status,last_seen_at,deployment_class`
+      `screens?organization_id=eq.${ORG_ID}&select=id,location_id,is_test,status,last_seen_at,deployment_class`
     ),
     sb(
       env,
       `screen_playlist_assignments?organization_id=eq.${ORG_ID}&playlist_id=eq.${encodeURIComponent(playlist.id)}&select=screen_id,starts_at,ends_at`
     ),
+    sb(
+      env,
+      `locations?organization_id=eq.${ORG_ID}&select=id,timezone,operating_hours`
+    ),
   ]);
 
   const screenMap = new Map((screens || []).map(row => [row.id, row]));
+  const locationMap = new Map((locations || []).map(row => [row.id, row]));
   const delivered = new Map(targetedIds.map(id => [id, 0]));
 
   for (const row of plays || []) {
@@ -391,7 +545,7 @@ async function applyInventoryPacing(
   );
 
   const onlineCutoff = now - 120000;
-  const eligibleIds = new Set(
+  const baseEligibleIds = new Set(
     (screens || [])
       .filter(row =>
         assignedIds.has(row.id) &&
@@ -404,8 +558,7 @@ async function applyInventoryPacing(
       .map(row => row.id)
   );
 
-  const requesterEligible = eligibleIds.has(screen.id);
-  const eligibleScreens = eligibleIds.size;
+  const requesterBaseEligible = baseEligibleIds.has(screen.id);
 
   const baseLoopSeconds = Math.max(
     1,
@@ -445,6 +598,19 @@ async function applyInventoryPacing(
     const endMs = campaign.ends_at
       ? new Date(campaign.ends_at).getTime()
       : null;
+
+    const campaignEligibleIds = new Set(
+      [...baseEligibleIds].filter(screenId => {
+        const inventoryScreen = screenMap.get(screenId);
+        const location = inventoryScreen?.location_id
+          ? locationMap.get(inventoryScreen.location_id)
+          : null;
+        return locationCampaignAllows(location, campaign, now);
+      })
+    );
+
+    const requesterEligible = campaignEligibleIds.has(screen.id);
+    const eligibleScreens = campaignEligibleIds.size;
 
     let desiredPerLoop = 1;
     let copies = 1;
@@ -554,6 +720,8 @@ async function applyInventoryPacing(
         capacityRatio == null
           ? null
           : Math.round(capacityRatio * 100) / 100,
+      eligible_screens: eligibleScreens,
+      requester_eligible: requesterEligible,
       pacing_state: state,
     });
   }
@@ -580,8 +748,8 @@ async function applyInventoryPacing(
     items: output,
     meta: {
       mode: "inventory_v1",
-      eligible_screens: eligibleScreens,
-      requester_eligible: requesterEligible,
+      eligible_screens: baseEligibleIds.size,
+      requester_eligible: requesterBaseEligible,
       base_loop_seconds: baseLoopSeconds,
       effective_loop_seconds: effectiveLoopSeconds,
       campaigns: metadata,
@@ -608,18 +776,30 @@ async function playlistPayload(env, playlistId, now, screen = null) {
     ),
     sb(
       env,
-      `campaigns?organization_id=eq.${ORG_ID}&select=id,status,starts_at,ends_at,advertiser_business_id,delivery_target_plays,makegood_plays`
+      `campaigns?organization_id=eq.${ORG_ID}&select=id,status,starts_at,ends_at,advertiser_business_id,delivery_target_plays,makegood_plays,dayparts`
     )
   ]);
 
   const mediaMap = new Map((media || []).map(m => [m.id, m]));
   const campaignMap = new Map((campaigns || []).map(c => [c.id, c]));
 
+  let deliveryLocation = null;
+  if (screen?.location_id) {
+    const rows = await sb(
+      env,
+      `locations?id=eq.${encodeURIComponent(screen.location_id)}&organization_id=eq.${ORG_ID}&select=id,timezone,operating_hours`
+    );
+    deliveryLocation = rows?.[0] || null;
+  }
+
   const campaignDeliverable = campaignId => {
     if (!campaignId) return true;
 
     const campaign = campaignMap.get(campaignId);
     if (!campaign) return false;
+
+    if (!locationCampaignAllows(deliveryLocation, campaign, now))
+      return false;
 
     const starts = campaign.starts_at
       ? new Date(campaign.starts_at).getTime()
@@ -1769,6 +1949,62 @@ async function updateProspect(request, env, prospectId, auth = null) {
 }
 
 
+
+async function updateLocationSchedule(request, env, locationId, auth) {
+  const rows = await sb(
+    env,
+    `locations?id=eq.${encodeURIComponent(locationId)}&organization_id=eq.${ORG_ID}&select=*`
+  );
+  const location = rows?.[0];
+  if (!location) return json({ error: "location not found" }, 404);
+
+  const brokerId = brokerIdFromAuth(auth);
+  if (brokerId) {
+    const businesses = await sb(
+      env,
+      `businesses?id=eq.${encodeURIComponent(location.business_id)}&organization_id=eq.${ORG_ID}&broker_user_id=eq.${encodeURIComponent(brokerId)}&select=id`
+    );
+    if (!businesses?.[0])
+      return json({ error: "location not found" }, 404);
+  }
+
+  const b = await bodyJson(request);
+  const patch = { updated_at: new Date().toISOString() };
+
+  if (Object.prototype.hasOwnProperty.call(b, "timezone")) {
+    const timezone = String(b.timezone || "").trim();
+    if (!timezone || !validTimezone(timezone))
+      return json({ error: "invalid timezone" }, 400);
+    patch.timezone = timezone;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(b, "operating_hours")) {
+    const parsed = normalizeWeeklySchedule(
+      b.operating_hours,
+      "operating_hours"
+    );
+    if (parsed.error)
+      return json({ error: parsed.error }, 400);
+    patch.operating_hours = parsed.value;
+  }
+
+  if (Object.keys(patch).length === 1)
+    return json({ error: "schedule fields required" }, 400);
+
+  const changed = await sb(
+    env,
+    `locations?id=eq.${encodeURIComponent(locationId)}&organization_id=eq.${ORG_ID}`,
+    {
+      method: "PATCH",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify(patch),
+    }
+  );
+
+  return json({ ok: true, location: changed?.[0] || null });
+}
+
+
 async function adminBusinesses(env, auth = null) {
   const brokerId = brokerIdFromAuth(auth);
   const scope = brokerId ? `&broker_user_id=eq.${encodeURIComponent(brokerId)}` : "";
@@ -2103,6 +2339,13 @@ async function updateCampaignDelivery(request, env, campaignId) {
 
   const b = await bodyJson(request);
   const patch = { updated_at: new Date().toISOString() };
+
+  if (Object.prototype.hasOwnProperty.call(b, "dayparts")) {
+    const parsed = normalizeWeeklySchedule(b.dayparts, "dayparts");
+    if (parsed.error)
+      return json({ error: parsed.error }, 400);
+    patch.dayparts = parsed.value;
+  }
 
   let target = campaign.delivery_target_plays == null
     ? null
@@ -2541,7 +2784,7 @@ export default {
         return portalOverview(request, env);
 
       if (url.pathname === "/api/health")
-        return json({ ok: true, service: "coastloop", version: "0.26.7" });
+        return json({ ok: true, service: "coastloop", version: "0.26.8" });
 
       if (url.pathname === "/api/player/boot" && request.method === "POST")
         return bootPlayer(request, env);
@@ -2723,6 +2966,20 @@ export default {
 
         if (url.pathname === "/api/admin/businesses" && request.method === "GET")
           return json(await adminBusinesses(env, adminAuth));
+
+        const locationSchedule = url.pathname.match(
+          /^\/api\/admin\/locations\/([^/]+)\/schedule$/
+        );
+        if (locationSchedule && request.method === "PUT")
+          return auditMutation(request, env, adminAuth,
+            {
+              action: "location.schedule.update",
+              entity_type: "location",
+              entity_id: locationSchedule[1],
+            },
+            () => updateLocationSchedule(
+              request, env, locationSchedule[1], adminAuth
+            ));
 
         if (url.pathname === "/api/admin/campaigns" && request.method === "GET")
           return json(await adminCampaigns(env, adminAuth));

@@ -107,6 +107,91 @@ function locationOptions(selected=''){
 }
 
 
+
+const scheduleDayOrder=[
+  ['sun','Sun'],['mon','Mon'],['tue','Tue'],['wed','Wed'],
+  ['thu','Thu'],['fri','Fri'],['sat','Sat']
+];
+
+function scheduleText(schedule){
+  if(!schedule || typeof schedule!=='object' || Array.isArray(schedule)) return '';
+  return scheduleDayOrder
+    .filter(([k])=>Object.prototype.hasOwnProperty.call(schedule,k))
+    .map(([k,label])=>{
+      const windows=Array.isArray(schedule[k])?schedule[k]:[];
+      if(!windows.length) return `${label} closed`;
+      return `${label} ${windows.map(w=>`${w[0]}-${w[1]}`).join(', ')}`;
+    }).join('\n');
+}
+
+function parseScheduleText(text){
+  const raw=String(text||'').trim();
+  if(!raw) return {};
+  const days=Object.fromEntries(scheduleDayOrder.map(([k,l])=>[l.toLowerCase(),k]));
+  const out={};
+
+  for(const source of raw.split(/\n+/)){
+    const line=source.trim();
+    if(!line) continue;
+    const m=/^([A-Za-z]{3})\s+(.+)$/.exec(line);
+    if(!m) throw new Error(`Invalid schedule line: ${line}`);
+    const day=days[m[1].toLowerCase()];
+    if(!day) throw new Error(`Invalid weekday: ${m[1]}`);
+
+    const body=m[2].trim();
+    if(body.toLowerCase()==='closed'){
+      out[day]=[];
+      continue;
+    }
+
+    out[day]=body.split(',').map(part=>{
+      const pair=/^(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})$/.exec(part.trim());
+      if(!pair) throw new Error(`Invalid time window: ${part.trim()}`);
+      return [pair[1],pair[2]];
+    });
+  }
+  return out;
+}
+
+function renderScheduling(){
+  const host=document.querySelector('#scheduling');
+  if(!host) return;
+
+  const locations=allLocations();
+  const campaigns=state.campaigns.filter(c=>!['completed','canceled'].includes(c.status));
+
+  host.innerHTML=`
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:12px">
+      <div>
+        <h3 style="margin-top:0">Location operating hours</h3>
+        <p class="muted">Blank = unrestricted. Times use the location timezone.</p>
+        ${locations.map(l=>`
+          <div class="media-item schedule-location" data-location="${l.id}">
+            <strong>${esc(l.business_name||l.name||'Location')}</strong>
+            <div class="muted">${esc([l.address_line1,l.city,l.state].filter(Boolean).join(', '))}</div>
+            <input class="schedule-timezone" value="${esc(l.timezone||'America/New_York')}" style="width:100%;margin-top:8px">
+            <textarea class="schedule-hours" rows="5" style="width:100%;margin-top:8px" placeholder="Mon 09:00-17:00&#10;Fri 17:00-02:00">${esc(scheduleText(l.operating_hours||{}))}</textarea>
+            <button type="button" class="secondary save-location-schedule" style="margin-top:8px">Save hours</button>
+          </div>
+        `).join('') || '<div class="muted">No locations yet.</div>'}
+      </div>
+      <div>
+        <h3 style="margin-top:0">Campaign dayparts</h3>
+        <p class="muted">Blank = run whenever the host location is open.</p>
+        ${campaigns.map(c=>{
+          const b=state.businesses.find(x=>x.id===c.advertiser_business_id);
+          return `
+            <div class="media-item schedule-campaign" data-campaign="${c.id}">
+              <strong>${esc(b?.name||'Advertiser')} — ${esc(c.name)}</strong>
+              <div class="muted">${esc(c.status||'')}</div>
+              <textarea class="schedule-dayparts" rows="5" style="width:100%;margin-top:8px" placeholder="Mon 11:00-14:00, 17:00-21:00">${esc(scheduleText(c.dayparts||{}))}</textarea>
+              <button type="button" class="secondary save-campaign-dayparts" style="margin-top:8px">Save dayparts</button>
+            </div>`;
+        }).join('') || '<div class="muted">No campaign schedules.</div>'}
+      </div>
+    </div>`;
+}
+
 let prospectMap=null;
 let prospectLayer=null;
 
@@ -429,6 +514,8 @@ function render(){
 
   $('#mediaBusiness').innerHTML = '<option value="">House / internal</option>' +
     state.businesses.filter(b=>b.is_advertiser).map(b=>`<option value="${b.id}">${esc(b.name)}</option>`).join('');
+
+  renderScheduling();
 
   $('#pairLocation').innerHTML = locationOptions();
   $('#pairPlaylist').innerHTML = '<option value="">No playlist yet</option>' +
@@ -1175,6 +1262,43 @@ $('#newCampaign').onsubmit=async e=>{
 };
 
 
+
+
+document.addEventListener('click', async e=>{
+  try{
+    const locationButton=e.target.closest('.save-location-schedule');
+    if(locationButton){
+      const box=locationButton.closest('.schedule-location');
+      locationButton.disabled=true;
+      await api(`/api/admin/locations/${encodeURIComponent(box.dataset.location)}/schedule`,{
+        method:'PUT',
+        headers:{'content-type':'application/json'},
+        body:JSON.stringify({
+          timezone:box.querySelector('.schedule-timezone').value.trim(),
+          operating_hours:parseScheduleText(box.querySelector('.schedule-hours').value)
+        })
+      });
+      await load();
+      return;
+    }
+
+    const campaignButton=e.target.closest('.save-campaign-dayparts');
+    if(campaignButton){
+      const box=campaignButton.closest('.schedule-campaign');
+      campaignButton.disabled=true;
+      await api(`/api/admin/campaigns/${encodeURIComponent(box.dataset.campaign)}/delivery`,{
+        method:'PATCH',
+        headers:{'content-type':'application/json'},
+        body:JSON.stringify({
+          dayparts:parseScheduleText(box.querySelector('.schedule-dayparts').value)
+        })
+      });
+      await load();
+    }
+  }catch(err){
+    $('#error').textContent=err.message;
+  }
+});
 
 document.addEventListener('click', async e=>{
   const btn=e.target.closest('.save-campaign-delivery');

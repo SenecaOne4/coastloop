@@ -44,9 +44,9 @@ async function request(name, path, expected, auth = false) {
 try {
   const health = await request("HEALTH", "/api/health", 200);
   const healthData = await health.json();
-  if (healthData.version !== "0.26.7")
+  if (healthData.version !== "0.26.8")
     throw new Error(`unexpected version ${healthData.version}`);
-  console.log("VERSION_0_26_7=PASS");
+  console.log("VERSION_0_26_8=PASS");
 
   await request("ADMIN_GUARD", "/api/admin/billing/invoices", 401);
 
