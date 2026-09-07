@@ -35,6 +35,114 @@ async function api(path, options={}) {
 }
 function esc(v=''){ return String(v).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function money(cents){ return '$'+(Number(cents||0)/100).toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:2}); }
+function renderOpsCommandCenter(stats){
+  const commercialScreens=(state.screens||[]).filter(s=>!s.is_test);
+  const attentionScreens=commercialScreens.filter(s=>
+    s.status!=='active' || !online(s.last_seen_at)
+  );
+
+  const activeCampaigns=(state.campaigns||[]).filter(c=>c.status==='active');
+  const targetedReports=(state.campaignReports||[]).filter(r=>
+    Number(r.delivery_goal_plays||0)>0
+  );
+
+  const riskReports=targetedReports.filter(r=>{
+    const h=String(r.delivery_health||'').toLowerCase();
+    const pace=r.pace_percent==null?null:Number(r.pace_percent);
+    return (
+      h.includes('risk') ||
+      h.includes('behind') ||
+      h.includes('shortfall') ||
+      (pace!==null && Number.isFinite(pace) && pace<80)
+    );
+  });
+
+  const healthyReports=targetedReports.filter(r=>
+    !riskReports.includes(r) &&
+    (
+      Number(r.delivery_percent||0)>=100 ||
+      Number(r.pace_percent||0)>=95
+    )
+  );
+
+  const finance=state.finance||{};
+  const collected=Number(finance.net_collected_cents||0);
+  const booked=Number(finance.booked_revenue_cents||0);
+  const receivable=Number(finance.receivable_cents||0);
+  const hostDue=Number(finance.host_payout_due_cents||0);
+  const brokerDue=Number(finance.broker_payout_due_cents||0);
+
+  const stateLabel=commercialScreens.length
+    ? (attentionScreens.length ? 'NETWORK NEEDS ATTENTION' : 'NETWORK HEALTHY')
+    : 'COMMERCIAL NETWORK · COMMISSIONING';
+
+  const stateEl=$('#opsNetworkState');
+  if(stateEl){
+    stateEl.textContent=stateLabel;
+    stateEl.className='ops-state '+(
+      !commercialScreens.length ? 'commissioning' :
+      attentionScreens.length ? 'risk' : 'good'
+    );
+  }
+
+  const riskCards=riskReports
+    .sort((a,b)=>Number(a.pace_percent||0)-Number(b.pace_percent||0))
+    .slice(0,5)
+    .map(r=>`
+      <div class="ops-alert-row">
+        <div>
+          <strong>${esc(r.advertiser_name||'Advertiser')} · ${esc(r.campaign_name||'Campaign')}</strong>
+          <small>${esc(String(r.delivery_health||'delivery watch').replaceAll('_',' '))}</small>
+        </div>
+        <div><strong>${r.delivery_percent==null?'—':Number(r.delivery_percent).toFixed(1)+'%'}</strong><small>delivered</small></div>
+        <div><strong>${r.pace_percent==null?'—':Number(r.pace_percent).toFixed(1)+'%'}</strong><small>pace</small></div>
+        <div><strong>${r.remaining_plays==null?'—':Number(r.remaining_plays).toLocaleString()}</strong><small>remaining</small></div>
+      </div>
+    `).join('');
+
+  const screenCards=attentionScreens.slice(0,5).map(screen=>`
+    <div class="ops-alert-row">
+      <div>
+        <strong>${esc(screen.name||'Screen')}</strong>
+        <small>${esc(screen.status||'unknown')} · ${esc(screen.deployment_class||'unclassified')}</small>
+      </div>
+      <div><strong>${online(screen.last_seen_at)?'ONLINE':'OFFLINE'}</strong><small>health</small></div>
+      <div><strong>${screen.last_seen_at?age(screen.last_seen_at):'Never'}</strong><small>last seen</small></div>
+    </div>
+  `).join('');
+
+  $('#opsCommandCenter').innerHTML=`
+    <div class="ops-scoreboard">
+      <div><strong>${Number(stats.online||0)} / ${Number(stats.screens||0)}</strong><span>commercial screens online</span></div>
+      <div><strong>${Number(stats.plays_24h||0).toLocaleString()}</strong><span>verified plays · 24h</span></div>
+      <div><strong>${activeCampaigns.length}</strong><span>active campaigns</span></div>
+      <div><strong>${riskReports.length}</strong><span>delivery risks</span></div>
+      <div><strong>${money(booked)}</strong><span>booked revenue</span></div>
+      <div><strong>${money(collected)}</strong><span>net collected</span></div>
+      <div><strong>${money(receivable)}</strong><span>receivable</span></div>
+      <div><strong>${money(hostDue)}</strong><span>host payouts due</span></div>
+    </div>
+
+    <div class="ops-strip">
+      <span><b>${healthyReports.length}</b> targeted campaigns healthy</span>
+      <span><b>${attentionScreens.length}</b> screens need attention</span>
+      <span><b>${money(brokerDue)}</b> broker payouts due</span>
+      <span><b>${money(finance.contribution_cents||0)}</b> modeled contribution</span>
+    </div>
+
+    <div class="ops-panels">
+      <div class="ops-panel">
+        <div class="ops-panel-head"><span>DELIVERY WATCH</span><strong>${riskReports.length}</strong></div>
+        ${riskCards||'<div class="ops-empty">No campaign delivery risks detected.</div>'}
+      </div>
+      <div class="ops-panel">
+        <div class="ops-panel-head"><span>SCREEN ATTENTION</span><strong>${attentionScreens.length}</strong></div>
+        ${screenCards||'<div class="ops-empty">No commercial screens need attention.</div>'}
+      </div>
+    </div>
+  `;
+}
+
 function campaignActions(c){
   const actions={
     draft:[["scheduled","Schedule"],["active","Activate"],["canceled","Cancel"]],
@@ -298,6 +406,8 @@ async function load(){
       campaigns,campaignReports,userDirectory,finance,
       billingConfig,billingInvoices,billingTransactions,billingPayouts,auditEvents,authConfig
     });
+
+    renderOpsCommandCenter(stats);
 
     $('#mScreens').textContent=stats.screens;
     $('#mOnline').textContent=stats.online;
