@@ -2792,6 +2792,7 @@ async function publicNetworkStats(env) {
   }
 
   return {
+    network_state: commercialScreens.length ? "live" : "commissioning",
     screens: commercialScreens.length,
     online: commercialScreens.filter(s =>
       s.last_seen_at &&
@@ -2855,7 +2856,7 @@ export default {
         return portalOverview(request, env);
 
       if (url.pathname === "/api/health")
-        return json({ ok: true, service: "coastloop", version: "0.27.2" });
+        return json({ ok: true, service: "coastloop", version: "0.27.3" });
 
       if (url.pathname === "/api/player/boot" && request.method === "POST")
         return bootPlayer(request, env);

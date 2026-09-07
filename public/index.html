@@ -95,10 +95,10 @@
   </div>
 
   <div class="network-metrics">
-    <div class="network-metric"><strong id="netPlays">—</strong><span>verified plays · 24h</span></div>
-    <div class="network-metric"><strong id="netOnline">—</strong><span>screens online now</span></div>
-    <div class="network-metric"><strong id="netLocations">—</strong><span>commercial locations</span></div>
-    <div class="network-metric"><strong id="netCampaigns">—</strong><span>active campaigns</span></div>
+    <div class="network-metric"><strong id="netPlays">—</strong><span id="netPlaysLabel">verified plays · 24h</span></div>
+    <div class="network-metric"><strong id="netOnline">—</strong><span id="netOnlineLabel">screens online now</span></div>
+    <div class="network-metric"><strong id="netLocations">—</strong><span id="netLocationsLabel">commercial locations</span></div>
+    <div class="network-metric"><strong id="netCampaigns">—</strong><span id="netCampaignsLabel">active campaigns</span></div>
   </div>
 
   <div class="network-delivery">
@@ -185,30 +185,55 @@ async function loadNetworkPulse(){
     if(!res.ok) throw new Error('network unavailable');
     const n = await res.json();
 
-    document.querySelector('#netPlays').textContent = networkNumber(n.plays_24h);
-    document.querySelector('#netOnline').textContent =
-      `${networkNumber(n.online)} / ${networkNumber(n.screens)}`;
-    document.querySelector('#netLocations').textContent = networkNumber(n.locations);
-    document.querySelector('#netCampaigns').textContent = networkNumber(n.active_campaigns);
+    const commissioning = n.network_state === 'commissioning';
 
-    document.querySelector('#heroNetPlays').textContent = networkNumber(n.plays_24h);
-    document.querySelector('#heroNetOnline').textContent =
-      `${networkNumber(n.online)} / ${networkNumber(n.screens)}`;
-    document.querySelector('#heroNetLocations').textContent = networkNumber(n.locations);
-    document.querySelector('#heroNetCampaigns').textContent =
-      networkNumber(n.active_campaigns);
+    if(commissioning){
+      document.querySelector('#netPlays').textContent = 'READY';
+      document.querySelector('#netOnline').textContent = 'READY';
+      document.querySelector('#netLocations').textContent = 'PILOT';
+      document.querySelector('#netCampaigns').textContent = 'READY';
+
+      document.querySelector('#netPlaysLabel').textContent = 'verified delivery engine';
+      document.querySelector('#netOnlineLabel').textContent = 'screen health telemetry';
+      document.querySelector('#netLocationsLabel').textContent = 'commercial network status';
+      document.querySelector('#netCampaignsLabel').textContent = 'campaign pacing engine';
+
+      document.querySelector('#heroNetPlays').textContent = 'READY';
+      document.querySelector('#heroNetOnline').textContent = 'READY';
+      document.querySelector('#heroNetLocations').textContent = 'PILOT';
+      document.querySelector('#heroNetCampaigns').textContent = 'READY';
+    }else{
+      document.querySelector('#netPlays').textContent = networkNumber(n.plays_24h);
+      document.querySelector('#netOnline').textContent =
+        `${networkNumber(n.online)} / ${networkNumber(n.screens)}`;
+      document.querySelector('#netLocations').textContent = networkNumber(n.locations);
+      document.querySelector('#netCampaigns').textContent = networkNumber(n.active_campaigns);
+
+      document.querySelector('#netPlaysLabel').textContent = 'verified plays · 24h';
+      document.querySelector('#netOnlineLabel').textContent = 'screens online now';
+      document.querySelector('#netLocationsLabel').textContent = 'commercial locations';
+      document.querySelector('#netCampaignsLabel').textContent = 'active campaigns';
+
+      document.querySelector('#heroNetPlays').textContent = networkNumber(n.plays_24h);
+      document.querySelector('#heroNetOnline').textContent =
+        `${networkNumber(n.online)} / ${networkNumber(n.screens)}`;
+      document.querySelector('#heroNetLocations').textContent = networkNumber(n.locations);
+      document.querySelector('#heroNetCampaigns').textContent =
+        networkNumber(n.active_campaigns);
+    }
 
     const state = document.querySelector('#networkState');
     if(Number(n.online) > 0) state.textContent = 'NETWORK ONLINE';
     else if(Number(n.screens) > 0) state.textContent = 'NETWORK CHECKING IN';
-    else state.textContent = 'NETWORK COMMISSIONING';
+    else state.textContent = 'COMMERCIAL NETWORK · COMMISSIONING';
 
     const series = Array.isArray(n.daily_plays) ? n.daily_plays : [];
     const max = Math.max(1, ...series.map(x => Number(x.plays || 0)));
     const total7d = series.reduce((sum,x) => sum + Number(x.plays || 0), 0);
 
-    document.querySelector('#network7d').textContent =
-      `${networkNumber(total7d)} PLAYS`;
+    document.querySelector('#network7d').textContent = commissioning
+      ? 'LIVE DATA STARTS WITH FIRST COMMERCIAL SCREEN'
+      : `${networkNumber(total7d)} PLAYS`;
 
     document.querySelector('#networkChart').innerHTML = series.map(x => {
       const value = Number(x.plays || 0);
@@ -226,11 +251,11 @@ async function loadNetworkPulse(){
     const age = networkAge(n.last_verified_at);
     document.querySelector('#networkActivity').textContent = age
       ? `LATEST VERIFIED COMMERCIAL PLAY · ${age.toUpperCase()}`
-      : 'AWAITING FIRST COMMERCIAL DELIVERY';
+      : 'MEASUREMENT PIPELINE READY · COMMERCIAL NETWORK COMMISSIONING';
 
     document.querySelector('#heroLastVerified').textContent = age
       ? `Latest verified play · ${age}`
-      : 'Awaiting first commercial delivery';
+      : 'Proof-of-play pipeline ready';
 
     document.querySelector('#heroProofAge').textContent = age
       ? age.toUpperCase()
