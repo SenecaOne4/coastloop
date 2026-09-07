@@ -1,3 +1,4 @@
+import { auditMutation, adminAuditEvents } from "./audit.js";
 import { jsonBody, validateJsonMutation } from "./request.js";
 import {
   handleAuthRoute,
@@ -1844,7 +1845,7 @@ export default {
         return portalOverview(request, env);
 
       if (url.pathname === "/api/health")
-        return json({ ok: true, service: "coastloop", version: "0.26.3" });
+        return json({ ok: true, service: "coastloop", version: "0.26.4" });
 
       if (url.pathname === "/api/player/boot" && request.method === "POST")
         return bootPlayer(request, env);
@@ -1874,15 +1875,21 @@ export default {
           return json(await adminProspects(env, brokerAuth));
 
         if (url.pathname === "/api/broker/prospects" && request.method === "POST")
-          return createAdminProspect(request, env, brokerAuth);
+          return auditMutation(request, env, brokerAuth,
+            { action: "prospect.create", entity_type: "prospect" },
+            () => createAdminProspect(request, env, brokerAuth));
 
         const brokerPromote = url.pathname.match(/^\/api\/broker\/prospects\/([^/]+)\/promote$/);
         if (brokerPromote && request.method === "POST")
-          return promoteProspect(request, env, brokerPromote[1], brokerAuth);
+          return auditMutation(request, env, brokerAuth,
+            { action: "prospect.promote", entity_type: "prospect", entity_id: brokerPromote[1] },
+            () => promoteProspect(request, env, brokerPromote[1], brokerAuth));
 
         const brokerProspect = url.pathname.match(/^\/api\/broker\/prospects\/([^/]+)$/);
         if (brokerProspect && request.method === "PUT")
-          return updateProspect(request, env, brokerProspect[1], brokerAuth);
+          return auditMutation(request, env, brokerAuth,
+            { action: "prospect.update", entity_type: "prospect", entity_id: brokerProspect[1] },
+            () => updateProspect(request, env, brokerProspect[1], brokerAuth));
 
         if (url.pathname === "/api/broker/businesses" && request.method === "GET")
           return json(await adminBusinesses(env, brokerAuth));
@@ -1891,7 +1898,9 @@ export default {
           return json(await adminCampaigns(env, brokerAuth));
 
         if (url.pathname === "/api/broker/campaigns" && request.method === "POST")
-          return createCampaign(request, env, brokerAuth);
+          return auditMutation(request, env, brokerAuth,
+            { action: "campaign.create", entity_type: "campaign" },
+            () => createCampaign(request, env, brokerAuth));
 
         if (url.pathname === "/api/broker/finance" && request.method === "GET")
           return json(await financeSnapshot(env, brokerAuth));
@@ -1902,19 +1911,28 @@ export default {
         if (!adminAuth)
           return json({ error: "unauthorized" }, 401);
 
+        if (url.pathname === "/api/admin/audit" && request.method === "GET")
+          return json(await adminAuditEvents(env, url));
+
         if (url.pathname === "/api/admin/users" && request.method === "GET")
           return json(await adminUserDirectory(env));
 
         if (url.pathname === "/api/admin/users/invite" && request.method === "POST")
-          return createUserInvitation(request, env, adminAuth);
+          return auditMutation(request, env, adminAuth,
+            { action: "access.invitation.create", entity_type: "invitation" },
+            () => createUserInvitation(request, env, adminAuth));
 
         const userAccess = url.pathname.match(/^\/api\/admin\/users\/([^/]+)\/access$/);
         if (userAccess && request.method === "PUT")
-          return updateUserAccess(request, env, adminAuth, userAccess[1]);
+          return auditMutation(request, env, adminAuth,
+            { action: "access.user.update", entity_type: "user", entity_id: userAccess[1] },
+            () => updateUserAccess(request, env, adminAuth, userAccess[1]));
 
         const invitation = url.pathname.match(/^\/api\/admin\/invitations\/([^/]+)$/);
         if (invitation && request.method === "DELETE")
-          return revokeUserInvitation(request, env, adminAuth, invitation[1]);
+          return auditMutation(request, env, adminAuth,
+            { action: "access.invitation.revoke", entity_type: "invitation", entity_id: invitation[1] },
+            () => revokeUserInvitation(request, env, adminAuth, invitation[1]));
 
         if (url.pathname === "/api/admin/stats" && request.method === "GET")
           return json(await stats(env));
@@ -1929,19 +1947,27 @@ export default {
           return json(await adminBillingInvoices(env));
 
         if (url.pathname === "/api/admin/billing/invoices" && request.method === "POST")
-          return createBillingInvoice(request, env, adminAuth?.user?.id || null);
+          return auditMutation(request, env, adminAuth,
+            { action: "billing.invoice.create", entity_type: "invoice" },
+            () => createBillingInvoice(request, env, adminAuth?.user?.id || null));
 
         const sendInvoice = url.pathname.match(/^\/api\/admin\/billing\/invoices\/([^/]+)\/send$/);
         if (sendInvoice && request.method === "POST")
-          return sendBillingInvoice(request, env, sendInvoice[1]);
+          return auditMutation(request, env, adminAuth,
+            { action: "billing.invoice.send", entity_type: "invoice", entity_id: sendInvoice[1] },
+            () => sendBillingInvoice(request, env, sendInvoice[1]));
 
         const recordPayment = url.pathname.match(/^\/api\/admin\/billing\/invoices\/([^/]+)\/payments$/);
         if (recordPayment && request.method === "POST")
-          return recordBillingPayment(request, env, recordPayment[1], adminAuth?.user?.id || null);
+          return auditMutation(request, env, adminAuth,
+            { action: "billing.payment.record", entity_type: "invoice", entity_id: recordPayment[1] },
+            () => recordBillingPayment(request, env, recordPayment[1], adminAuth?.user?.id || null));
 
         const recordRefund = url.pathname.match(/^\/api\/admin\/billing\/invoices\/([^/]+)\/refunds$/);
         if (recordRefund && request.method === "POST")
-          return recordBillingRefund(request, env, recordRefund[1], adminAuth?.user?.id || null);
+          return auditMutation(request, env, adminAuth,
+            { action: "billing.refund.record", entity_type: "invoice", entity_id: recordRefund[1] },
+            () => recordBillingRefund(request, env, recordRefund[1], adminAuth?.user?.id || null));
 
         if (url.pathname === "/api/admin/billing/transactions" && request.method === "GET")
           return json(await adminBillingTransactions(env));
@@ -1950,38 +1976,54 @@ export default {
           return json(await adminBillingPayouts(env));
 
         if (url.pathname === "/api/admin/billing/broker-payouts" && request.method === "POST")
-          return createBrokerPayout(request, env, adminAuth?.user?.id || null);
+          return auditMutation(request, env, adminAuth,
+            { action: "billing.broker_payout.create", entity_type: "broker_payout" },
+            () => createBrokerPayout(request, env, adminAuth?.user?.id || null));
 
         const brokerPayout = url.pathname.match(/^\/api\/admin\/billing\/broker-payouts\/([^/]+)$/);
         if (brokerPayout && request.method === "PUT")
-          return updateBrokerPayout(request, env, brokerPayout[1]);
+          return auditMutation(request, env, adminAuth,
+            { action: "billing.broker_payout.update", entity_type: "broker_payout", entity_id: brokerPayout[1] },
+            () => updateBrokerPayout(request, env, brokerPayout[1]));
 
         if (url.pathname === "/api/admin/billing/host-payouts" && request.method === "POST")
-          return createHostPayout(request, env, adminAuth?.user?.id || null);
+          return auditMutation(request, env, adminAuth,
+            { action: "billing.host_payout.create", entity_type: "host_payout" },
+            () => createHostPayout(request, env, adminAuth?.user?.id || null));
 
         const hostPayout = url.pathname.match(/^\/api\/admin\/billing\/host-payouts\/([^/]+)$/);
         if (hostPayout && request.method === "PUT")
-          return updateHostPayout(request, env, hostPayout[1]);
+          return auditMutation(request, env, adminAuth,
+            { action: "billing.host_payout.update", entity_type: "host_payout", entity_id: hostPayout[1] },
+            () => updateHostPayout(request, env, hostPayout[1]));
 
         if (url.pathname === "/api/admin/screens" && request.method === "GET")
           return json(await adminScreens(env));
 
         if (url.pathname === "/api/admin/screens/pair" && request.method === "POST")
-          return pairScreen(request, env);
+          return auditMutation(request, env, adminAuth,
+            { action: "screen.pair", entity_type: "screen" },
+            () => pairScreen(request, env));
 
         if (url.pathname === "/api/admin/prospects" && request.method === "GET")
           return json(await adminProspects(env, adminAuth));
 
         if (url.pathname === "/api/admin/prospects" && request.method === "POST")
-          return createAdminProspect(request, env, adminAuth);
+          return auditMutation(request, env, adminAuth,
+            { action: "prospect.create", entity_type: "prospect" },
+            () => createAdminProspect(request, env, adminAuth));
 
         const promote = url.pathname.match(/^\/api\/admin\/prospects\/([^/]+)\/promote$/);
         if (promote && request.method === "POST")
-          return promoteProspect(request, env, promote[1], adminAuth);
+          return auditMutation(request, env, adminAuth,
+            { action: "prospect.promote", entity_type: "prospect", entity_id: promote[1] },
+            () => promoteProspect(request, env, promote[1], adminAuth));
 
         const prospect = url.pathname.match(/^\/api\/admin\/prospects\/([^/]+)$/);
         if (prospect && request.method === "PUT")
-          return updateProspect(request, env, prospect[1], adminAuth);
+          return auditMutation(request, env, adminAuth,
+            { action: "prospect.update", entity_type: "prospect", entity_id: prospect[1] },
+            () => updateProspect(request, env, prospect[1], adminAuth));
 
         if (url.pathname === "/api/admin/businesses" && request.method === "GET")
           return json(await adminBusinesses(env, adminAuth));
@@ -1993,35 +2035,49 @@ export default {
           return json(await adminCampaignReports(env));
 
         if (url.pathname === "/api/admin/campaigns" && request.method === "POST")
-          return createCampaign(request, env, adminAuth);
+          return auditMutation(request, env, adminAuth,
+            { action: "campaign.create", entity_type: "campaign" },
+            () => createCampaign(request, env, adminAuth));
 
         const campaignStatus = url.pathname.match(/^\/api\/admin\/campaigns\/([^/]+)\/status$/);
         if (campaignStatus && request.method === "PUT")
-          return updateCampaignStatus(request, env, campaignStatus[1]);
+          return auditMutation(request, env, adminAuth,
+            { action: "campaign.status", entity_type: "campaign", entity_id: campaignStatus[1] },
+            () => updateCampaignStatus(request, env, campaignStatus[1]));
 
         if (url.pathname === "/api/admin/media" && request.method === "GET")
           return json(await adminMedia(env));
 
         if (url.pathname === "/api/admin/media" && request.method === "POST")
-          return uploadMedia(request, env);
+          return auditMutation(request, env, adminAuth,
+            { action: "media.upload", entity_type: "media" },
+            () => uploadMedia(request, env));
 
         if (url.pathname === "/api/admin/playlists" && request.method === "GET")
           return json(await listPlaylists(env));
 
         if (url.pathname === "/api/admin/playlists" && request.method === "POST")
-          return createPlaylist(request, env);
+          return auditMutation(request, env, adminAuth,
+            { action: "playlist.create", entity_type: "playlist" },
+            () => createPlaylist(request, env));
 
         const assign = url.pathname.match(/^\/api\/admin\/screens\/([^/]+)\/assign$/);
         if (assign && request.method === "PUT")
-          return assignScreen(request, env, assign[1]);
+          return auditMutation(request, env, adminAuth,
+            { action: "screen.assign", entity_type: "screen", entity_id: assign[1] },
+            () => assignScreen(request, env, assign[1]));
 
         const resetPairing = url.pathname.match(/^\/api\/admin\/screens\/([^/]+)\/reset-pairing$/);
         if (resetPairing && request.method === "POST")
-          return resetTestScreenPairing(env, resetPairing[1]);
+          return auditMutation(request, env, adminAuth,
+            { action: "screen.reset_pairing", entity_type: "screen", entity_id: resetPairing[1] },
+            () => resetTestScreenPairing(env, resetPairing[1]));
 
         const items = url.pathname.match(/^\/api\/admin\/playlists\/([^/]+)\/items$/);
         if (items && request.method === "PUT")
-          return setPlaylistItems(request, env, items[1]);
+          return auditMutation(request, env, adminAuth,
+            { action: "playlist.items.set", entity_type: "playlist", entity_id: items[1] },
+            () => setPlaylistItems(request, env, items[1]));
       }
 
       return json({ error: "not found" }, 404);

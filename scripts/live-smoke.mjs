@@ -44,9 +44,9 @@ async function request(name, path, expected, auth = false) {
 try {
   const health = await request("HEALTH", "/api/health", 200);
   const healthData = await health.json();
-  if (healthData.version !== "0.26.3")
+  if (healthData.version !== "0.26.4")
     throw new Error(`unexpected version ${healthData.version}`);
-  console.log("VERSION_0_26_3=PASS");
+  console.log("VERSION_0_26_4=PASS");
 
   await request("ADMIN_GUARD", "/api/admin/billing/invoices", 401);
 
@@ -62,6 +62,7 @@ try {
   await request("TRANSACTIONS", "/api/admin/billing/transactions", 200, true);
   await request("PAYOUTS", "/api/admin/billing/payouts", 200, true);
   await request("FINANCE", "/api/admin/finance", 200, true);
+  await request("AUDIT", "/api/admin/audit?limit=1", 200, true);
 
   console.log(`STRIPE=${configData.stripe_configured ? "CONNECTED" : "NOT_CONNECTED"}`);
   console.log(`STRIPE_WEBHOOK=${configData.stripe_webhook_configured ? "CONNECTED" : "NOT_CONNECTED"}`);

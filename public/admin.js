@@ -11,6 +11,7 @@ const state = {
   billingInvoices:[],
   billingTransactions:[],
   billingPayouts:{broker:[],host:[]},
+  auditEvents:[],
   authConfig:{},
   currentInternalRole:null
 };
@@ -187,7 +188,7 @@ async function load(){
     const [
       stats,screens,media,playlists,prospects,businesses,
       campaigns,campaignReports,userDirectory,finance,
-      billingConfig,billingInvoices,billingTransactions,billingPayouts,authConfig
+      billingConfig,billingInvoices,billingTransactions,billingPayouts,auditEvents,authConfig
     ] = await Promise.all([
       api('/api/admin/stats'),
       api('/api/admin/screens'),
@@ -203,13 +204,14 @@ async function load(){
       api('/api/admin/billing/invoices'),
       api('/api/admin/billing/transactions'),
       api('/api/admin/billing/payouts'),
+      api('/api/admin/audit?limit=75'),
       fetch('/api/auth/config').then(r=>r.json())
     ]);
 
     Object.assign(state,{
       screens,media,playlists,prospects,businesses,
       campaigns,campaignReports,userDirectory,finance,
-      billingConfig,billingInvoices,billingTransactions,billingPayouts,authConfig
+      billingConfig,billingInvoices,billingTransactions,billingPayouts,auditEvents,authConfig
     });
 
     $('#mScreens').textContent=stats.screens;
@@ -249,6 +251,7 @@ async function load(){
 
     render();
     renderUsers();
+    renderAudit();
     renderProspectMap();
   } catch(e){
     $('#error').textContent=e.message;
@@ -358,6 +361,37 @@ function renderUsers(){
       </div>
     </div>`;
   }).join('')||'<div class="muted">No pending invitations.</div>';
+}
+
+function renderAudit(){
+  const box=$('#auditEvents');
+  if(!box)return;
+
+  const rows=state.auditEvents||[];
+  if($('#mAudit'))$('#mAudit').textContent=rows.length;
+
+  box.innerHTML=rows.map(e=>{
+    const actor=e.actor_type==='legacy_admin'
+      ? 'RECOVERY OWNER'
+      : String(e.actor_role||e.actor_type||'system').toUpperCase();
+    const target=[e.entity_type,e.entity_id?String(e.entity_id).slice(0,12):null]
+      .filter(Boolean).join(' · ');
+    const result=e.succeeded?`OK ${e.status_code}`:`FAILED ${e.status_code}`;
+
+    return `<div class="media-item">
+      <div class="row">
+        <div>
+          <strong>${esc(e.action)}</strong>
+          <div class="muted">${esc(actor)}${target?' · '+esc(target):''}</div>
+        </div>
+        <div style="text-align:right">
+          <span class="pill">${esc(result)}</span>
+          <div class="muted">${age(e.created_at)}</div>
+        </div>
+      </div>
+      <div class="muted" style="margin-top:7px">${esc(e.request_method)} ${esc(e.request_path)}</div>
+    </div>`;
+  }).join('')||'<div class="muted">No operator activity recorded yet.</div>';
 }
 
 function render(){
