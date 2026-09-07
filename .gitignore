@@ -7,3 +7,5 @@ node_modules/
 .coastloop/
 .DS_Store
 *.log
+
+supabase/.temp/
