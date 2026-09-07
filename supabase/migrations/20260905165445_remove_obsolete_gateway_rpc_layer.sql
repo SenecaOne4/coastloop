@@ -1,0 +1,15 @@
+drop function if exists public.gateway_admin_assign_screen(text, uuid, text, uuid);
+drop function if exists public.gateway_admin_create_media(text, text, text, text, text, text, bigint, numeric);
+drop function if exists public.gateway_admin_create_playlist(text, text);
+drop function if exists public.gateway_admin_media(text);
+drop function if exists public.gateway_admin_playlists(text);
+drop function if exists public.gateway_admin_screens(text);
+drop function if exists public.gateway_admin_set_playlist_items(text, uuid, jsonb);
+drop function if exists public.gateway_admin_stats(text);
+drop function if exists public.gateway_media_lookup(text, uuid);
+drop function if exists public.gateway_player_config(text, text, text);
+drop function if exists public.gateway_record_play(text, text, text, uuid, uuid, numeric);
+drop function if exists public.gateway_screen_boot(text, text, text, text, integer, integer);
+drop function if exists public.gateway_screen_heartbeat(text, text, text);
+drop function if exists private.secret_ok(text, text);
+drop table if exists private.app_secrets;

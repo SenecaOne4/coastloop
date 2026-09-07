@@ -1,0 +1,10 @@
+-- Historical production migration marker.
+--
+-- The original migration created a temporary gateway RPC layer and stored
+-- credential digests used only by that layer. Production subsequently removed
+-- the entire RPC layer in migration 20260905165445.
+--
+-- This local history intentionally does not preserve obsolete credential
+-- material. Replaying the complete migration chain reaches the same final
+-- schema because the objects created here were fully removed before later
+-- CoastLoop schema development.
