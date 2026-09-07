@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#f7f3ec">
+<title>CoastLoop — Placement Approval</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/styles.css">
+<style>
+:root{--ob-ink:#171412;--ob-soft:#655e58;--ob-paper:#f7f3ec;--ob-card:#fffdf9;--ob-line:rgba(23,20,18,.13);--ob-gold:#b8924a;--ob-wine:#6f243a}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ob-paper);color:var(--ob-ink);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+.ob-shell{width:min(760px,100%);margin:0 auto;padding:20px 18px 70px}
+.ob-top{display:flex;align-items:center;justify-content:space-between;padding:8px 0 22px}
+.ob-brand{display:flex;align-items:center;gap:10px;font-weight:800;letter-spacing:-.03em;font-size:21px}
+.ob-mark{width:31px;height:31px;border:2px solid var(--ob-gold);border-radius:50%;position:relative}
+.ob-mark:after{content:"";position:absolute;width:19px;height:19px;border:2px solid var(--ob-gold);border-radius:50%;right:-12px;top:4px;background:var(--ob-paper)}
+.ob-safe{font-size:12px;color:var(--ob-soft)}
+.ob-progress{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:18px}
+.ob-progress span{height:4px;border-radius:99px;background:#ded8ce}
+.ob-progress span.on{background:var(--ob-gold)}
+.ob-card{background:var(--ob-card);border:1px solid var(--ob-line);border-radius:22px;padding:22px;box-shadow:0 12px 36px rgba(23,20,18,.06);margin-bottom:14px}
+.ob-eyebrow{font-size:11px;font-weight:800;letter-spacing:.14em;color:var(--ob-wine);text-transform:uppercase;margin-bottom:9px}
+h1{font-size:clamp(31px,8vw,50px);line-height:.98;letter-spacing:-.055em;margin:0 0 13px}
+h2{font-size:22px;letter-spacing:-.035em;margin:0 0 8px}
+h3{font-size:16px;margin:0 0 8px}
+p{line-height:1.5}
+.ob-muted{color:var(--ob-soft)}
+.ob-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.ob-field{display:flex;flex-direction:column;gap:6px}
+.ob-field.full{grid-column:1/-1}
+.ob-field label{font-size:12px;font-weight:750;color:var(--ob-soft)}
+.ob-field input{width:100%;border:1px solid #d8d1c6;background:#fff;border-radius:12px;padding:13px 13px;font:inherit;color:var(--ob-ink);outline:none}
+.ob-field input:focus{border-color:var(--ob-gold);box-shadow:0 0 0 3px rgba(184,146,74,.12)}
+.ob-placement{border:1px solid var(--ob-line);border-radius:15px;padding:15px;margin-top:10px}
+.ob-kv{display:grid;grid-template-columns:minmax(105px,.8fr) 1.6fr;gap:7px 14px;margin:0}
+.ob-kv dt{color:var(--ob-soft);font-size:12px}
+.ob-kv dd{margin:0;font-size:14px;font-weight:650}
+.ob-check{display:flex;gap:11px;align-items:flex-start;padding:10px 0}
+.ob-check input{width:19px;height:19px;margin-top:1px;accent-color:var(--ob-wine);flex:0 0 auto}
+.ob-check label{font-size:14px;line-height:1.4}
+.ob-btn{appearance:none;border:0;border-radius:13px;padding:14px 17px;font:inherit;font-weight:800;cursor:pointer;background:var(--ob-ink);color:#fff;width:100%}
+.ob-btn.secondary{background:transparent;color:var(--ob-ink);border:1px solid var(--ob-line)}
+.ob-btn:disabled{opacity:.42;cursor:not-allowed}
+.ob-actions{display:grid;grid-template-columns:1fr 1.4fr;gap:10px;margin-top:15px}
+.ob-alert{border-radius:14px;padding:13px 14px;margin:0 0 14px;font-size:14px;line-height:1.45}
+.ob-alert.warn{background:#fff0ce;border:1px solid #e2c47e}
+.ob-alert.error{background:#fde8e8;border:1px solid #e7abab}
+.ob-terms{display:none;margin-top:14px;border-top:1px solid var(--ob-line);padding-top:14px}
+.ob-terms.open{display:block}
+.ob-terms iframe{display:block;width:100%;height:60vh;border:1px solid var(--ob-line);border-radius:12px;background:#fff}
+.ob-signature{font-family:Georgia,serif;font-size:22px!important;font-style:italic}
+.ob-done{text-align:center;padding:38px 22px}
+.ob-done .ring{width:62px;height:62px;border:3px solid var(--ob-gold);border-radius:50%;margin:0 auto 18px;display:grid;place-items:center;font-size:28px}
+.ob-loading{padding:90px 20px;text-align:center;color:var(--ob-soft)}
+.ob-hidden{display:none!important}
+@media(max-width:620px){.ob-shell{padding:14px 12px 50px}.ob-card{border-radius:18px;padding:18px}.ob-grid,.ob-actions{grid-template-columns:1fr}.ob-kv{grid-template-columns:1fr}.ob-kv dt{margin-top:5px}.ob-safe{display:none}}
+</style>
+</head>
+<body>
+<main class="ob-shell">
+  <header class="ob-top">
+    <a class="ob-brand" href="/" aria-label="CoastLoop home"><span class="ob-mark" aria-hidden="true"></span><span>CoastLoop</span></a>
+    <span class="ob-safe">Private placement approval</span>
+  </header>
+
+  <div id="loading" class="ob-loading">Opening your CoastLoop placement…</div>
+  <div id="fatal" class="ob-alert error ob-hidden"></div>
+
+  <div id="app" class="ob-hidden">
+    <div class="ob-progress" aria-hidden="true"><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span></div>
+
+    <section class="ob-card">
+      <div class="ob-eyebrow">Founding Network</div>
+      <h1>Review your placement.</h1>
+      <p class="ob-muted" id="intro"></p>
+      <div id="legalGate" class="ob-alert warn ob-hidden">
+        This agreement is still in counsel review. You can review this prepared placement, but electronic signing is disabled until the approved agreement version is locked.
+      </div>
+    </section>
+
+    <section class="ob-card">
+      <h2>Venue</h2>
+      <p class="ob-muted">Confirm the details CoastLoop will attach to this placement.</p>
+      <div class="ob-grid">
+        <div class="ob-field full"><label for="legalName">Legal entity</label><input id="legalName" autocomplete="organization"></div>
+        <div class="ob-field full"><label for="venueName">Venue name</label><input id="venueName"></div>
+        <div class="ob-field full"><label for="address1">Street address</label><input id="address1" autocomplete="street-address"></div>
+        <div class="ob-field"><label for="city">City</label><input id="city" autocomplete="address-level2"></div>
+        <div class="ob-field"><label for="state">State</label><input id="state" autocomplete="address-level1"></div>
+        <div class="ob-field"><label for="postal">ZIP</label><input id="postal" autocomplete="postal-code"></div>
+      </div>
+    </section>
+
+    <section class="ob-card">
+      <h2>Your screen placement</h2>
+      <p class="ob-muted">These are the exact placement permissions being approved.</p>
+      <div id="placements"></div>
+    </section>
+
+    <section class="ob-card">
+      <h2>Commercial terms</h2>
+      <dl class="ob-kv" id="termsSummary"></dl>
+    </section>
+
+    <section class="ob-card">
+      <h2>Agreement summary</h2>
+      <p id="agreementSummary"></p>
+      <button type="button" id="viewTerms" class="ob-btn secondary">View full agreement</button>
+      <div id="fullTerms" class="ob-terms">
+        <p class="ob-muted" id="termsVersion"></p>
+        <iframe id="termsFrame" sandbox="" title="Full agreement"></iframe>
+      </div>
+    </section>
+
+    <section class="ob-card" id="signCard">
+      <h2>Sign & approve placement</h2>
+      <p class="ob-muted">No printing. No scanning. Confirm your authority and sign below.</p>
+
+      <div class="ob-grid">
+        <div class="ob-field"><label for="signerName">Signer legal name</label><input id="signerName" autocomplete="name"></div>
+        <div class="ob-field"><label for="signerTitle">Title</label><input id="signerTitle" autocomplete="organization-title"></div>
+        <div class="ob-field"><label for="signerEmail">Email</label><input id="signerEmail" type="email" autocomplete="email"></div>
+        <div class="ob-field"><label for="signerMobile">Mobile</label><input id="signerMobile" type="tel" autocomplete="tel"></div>
+        <div class="ob-field full"><label for="signature">Type your legal name as your electronic signature</label><input id="signature" class="ob-signature" autocomplete="off"></div>
+      </div>
+
+      <div class="ob-check"><input id="cElectronic" type="checkbox"><label for="cElectronic">I consent to use electronic records and electronic signatures for this agreement.</label></div>
+      <div class="ob-check"><input id="cAuthority" type="checkbox"><label for="cAuthority">I represent that I am authorized to bind this venue/legal entity.</label></div>
+      <div class="ob-check"><input id="cReviewed" type="checkbox"><label for="cReviewed">I have reviewed the full agreement available above.</label></div>
+
+      <div id="signError" class="ob-alert error ob-hidden"></div>
+      <button type="button" id="signButton" class="ob-btn">Sign & approve placement</button>
+    </section>
+  </div>
+
+  <section id="complete" class="ob-card ob-done ob-hidden">
+    <div class="ring">✓</div>
+    <div class="ob-eyebrow">Placement approved</div>
+    <h1>You're in the Loop.</h1>
+    <p class="ob-muted">We'll coordinate installation / activation next. You do not need to print or email anything.</p>
+    <a id="executedLink" class="ob-btn" target="_blank" rel="noopener">View executed agreement</a>
+  </section>
+</main>
+<script src="/onboard.js" defer></script>
+</body>
+</html>

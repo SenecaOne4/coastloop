@@ -242,6 +242,89 @@ async function stripeCustomerForBusiness(env, business) {
   return rows?.[0] || null;
 }
 
+
+async function advanceAdvertiserOrderAfterInvoicePaid(env, invoice) {
+  if (!invoice || invoice.status !== "paid") return;
+
+  const orders = await sb(
+    env,
+    `advertiser_orders?organization_id=eq.${ORG_ID}&invoice_id=eq.${encodeURIComponent(invoice.id)}&select=*&limit=1`
+  );
+  const order = orders?.[0];
+  if (!order) return;
+
+  const now = invoice.paid_at || new Date().toISOString();
+  const firstPaidTransition = order.status !== "paid";
+
+  if (firstPaidTransition) {
+    await sb(env, `advertiser_orders?id=eq.${order.id}&organization_id=eq.${ORG_ID}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        status: "paid",
+        paid_at: now,
+        updated_at: new Date().toISOString(),
+      }),
+    });
+  }
+
+  const existingTasks = await sb(
+    env,
+    `onboarding_tasks?organization_id=eq.${ORG_ID}&advertiser_order_id=eq.${order.id}&task_type=eq.creative_intake&select=id&limit=1`
+  );
+
+  if (!existingTasks?.[0]) {
+    const agreements = await sb(
+      env,
+      `agreement_instances?organization_id=eq.${ORG_ID}&advertiser_order_id=eq.${order.id}&select=id&order=created_at.desc&limit=1`
+    );
+
+    await sb(env, "onboarding_tasks", {
+      method: "POST",
+      body: JSON.stringify({
+        organization_id: ORG_ID,
+        task_type: "creative_intake",
+        status: "open",
+        business_id: order.advertiser_business_id,
+        advertiser_order_id: order.id,
+        agreement_instance_id: agreements?.[0]?.id || null,
+        campaign_id: order.campaign_id || invoice.campaign_id || null,
+        metadata: {
+          source: "confirmed_payment",
+          invoice_id: invoice.id,
+        },
+      }),
+    });
+  }
+
+  if (firstPaidTransition) {
+    try {
+      await sb(env, "audit_events", {
+        method: "POST",
+        body: JSON.stringify({
+          organization_id: ORG_ID,
+          actor_user_id: null,
+          actor_type: "system",
+          actor_role: "billing_reconciliation",
+          action: "advertiser_order.paid",
+          entity_type: "advertiser_order",
+          entity_id: String(order.id),
+          request_method: "POST",
+          request_path: "/internal/billing/reconcile",
+          request_id: null,
+          status_code: 200,
+          succeeded: true,
+          metadata: {
+            invoice_id: invoice.id,
+            campaign_id: order.campaign_id || invoice.campaign_id || null,
+          },
+        }),
+      });
+    } catch (error) {
+      console.error("ORDER_PAID_AUDIT_FAILED", error?.message || error);
+    }
+  }
+}
+
 async function reconcileInvoice(env, invoice) {
   const tx = await sb(
     env,
@@ -548,6 +631,7 @@ async function recordManualTransaction(request, env, invoiceId, kind, actorUserI
   });
 
   const nextInvoice = await reconcileInvoice(env, invoice);
+  await advanceAdvertiserOrderAfterInvoicePaid(env, nextInvoice);
   return json({ ok: true, transaction: rows?.[0] || null, invoice: nextInvoice });
 }
 
@@ -826,6 +910,9 @@ async function syncStripeInvoice(env, remote, eventId = null) {
 
   if (eventId && remote.status === "paid")
     await recordStripePaymentFromInvoice(env, { ...invoice, ...patch }, remote, eventId);
+
+  if (remote.status === "paid")
+    await advanceAdvertiserOrderAfterInvoicePaid(env, { ...invoice, ...patch });
 
   return true;
 }

@@ -1,6 +1,23 @@
 import { auditMutation, adminAuditEvents } from "./audit.js";
 import { jsonBody, validateJsonMutation } from "./request.js";
 import {
+  createVenueInvite,
+  venueOnboardingSession,
+  markVenueOnboardingViewed,
+  acceptVenueOnboarding,
+  executedVenueAgreement,
+  adminOnboarding,
+} from "./onboarding.js";
+import {
+  publicAdvertisingPackages,
+  adminAdvertisingPackages,
+  createAdvertisingPackage,
+  startAdvertiserCheckout,
+  advertiserCheckoutSession,
+  acceptAdvertiserCheckout,
+  executedAdvertiserAgreement,
+} from "./advertiser-onboarding.js";
+import {
   handleAuthRoute,
   requireAdminAccess,
   requireBrokerAccess,
@@ -2856,7 +2873,7 @@ export default {
         return portalOverview(request, env);
 
       if (url.pathname === "/api/health")
-        return json({ ok: true, service: "coastloop", version: "0.27.6" });
+        return json({ ok: true, service: "coastloop", version: "0.27.7" });
 
       if (url.pathname === "/api/player/boot" && request.method === "POST")
         return bootPlayer(request, env);
@@ -2873,6 +2890,33 @@ export default {
       if (url.pathname.startsWith("/media/") &&
           (request.method === "GET" || request.method === "HEAD"))
         return serveMedia(request, env, url.pathname.split("/").pop());
+
+      if (url.pathname === "/api/onboarding/session" && request.method === "GET")
+        return venueOnboardingSession(request, env);
+
+      if (url.pathname === "/api/onboarding/viewed" && request.method === "POST")
+        return markVenueOnboardingViewed(request, env);
+
+      if (url.pathname === "/api/onboarding/accept" && request.method === "POST")
+        return acceptVenueOnboarding(request, env);
+
+      if (url.pathname === "/api/onboarding/executed" && request.method === "GET")
+        return executedVenueAgreement(request, env);
+
+      if (url.pathname === "/api/public/packages" && request.method === "GET")
+        return publicAdvertisingPackages(env);
+
+      if (url.pathname === "/api/onboarding/advertiser/start" && request.method === "POST")
+        return startAdvertiserCheckout(request, env);
+
+      if (url.pathname === "/api/onboarding/advertiser/session" && request.method === "GET")
+        return advertiserCheckoutSession(request, env);
+
+      if (url.pathname === "/api/onboarding/advertiser/accept" && request.method === "POST")
+        return acceptAdvertiserCheckout(request, env);
+
+      if (url.pathname === "/api/onboarding/advertiser/executed" && request.method === "GET")
+        return executedAdvertiserAgreement(request, env);
 
       if (url.pathname === "/api/public/network" && request.method === "GET")
         return json(await publicNetworkStats(env));
@@ -3018,6 +3062,22 @@ export default {
           return auditMutation(request, env, adminAuth,
             { action: "screen.pair", entity_type: "screen" },
             () => pairScreen(request, env));
+
+        if (url.pathname === "/api/admin/onboarding/packages" && request.method === "GET")
+          return json(await adminAdvertisingPackages(env));
+
+        if (url.pathname === "/api/admin/onboarding/packages" && request.method === "POST")
+          return auditMutation(request, env, adminAuth,
+            { action: "onboarding.package.create", entity_type: "advertising_package" },
+            () => createAdvertisingPackage(request, env, adminAuth));
+
+        if (url.pathname === "/api/admin/onboarding" && request.method === "GET")
+          return json(await adminOnboarding(env));
+
+        if (url.pathname === "/api/admin/onboarding/venue-invites" && request.method === "POST")
+          return auditMutation(request, env, adminAuth,
+            { action: "onboarding.venue_invite.create", entity_type: "agreement" },
+            () => createVenueInvite(request, env, adminAuth));
 
         if (url.pathname === "/api/admin/prospects" && request.method === "GET")
           return json(await adminProspects(env, adminAuth));

@@ -143,6 +143,135 @@ function renderOpsCommandCenter(stats){
   `;
 }
 
+
+function renderDigitalOnboarding(){
+  const box=$('#digitalOnboarding');
+  if(!box) return;
+
+  const packages=Array.isArray(state.onboardingPackages)?state.onboardingPackages:[];
+  const agreements=Array.isArray(state.onboarding?.agreements)?state.onboarding.agreements:[];
+  const tasks=Array.isArray(state.onboarding?.tasks)?state.onboarding.tasks:[];
+
+  const businessOptions=(state.businesses||[]).map(b=>
+    `<option value="${b.id}">${esc(b.name)}</option>`).join('');
+
+  const locationOptions=(state.businesses||[]).flatMap(b=>
+    (b.locations||[]).map(l=>
+      `<option value="${l.id}" data-business="${b.id}">${esc(b.name)} — ${esc(l.name||l.address_line1||'Location')}</option>`
+    )).join('');
+
+  const packageRows=packages.length ? packages.map(p=>`
+    <tr>
+      <td>${esc(p.name)}</td>
+      <td>${esc(p.package_key)} v${esc(p.version)}</td>
+      <td>${money(p.price_cents||0)}</td>
+      <td>${esc(p.market||'—')}</td>
+      <td>${esc(p.status)}</td>
+      <td>${esc(p.availability_status||'—')}</td>
+    </tr>`).join('') :
+    `<tr><td colspan="6" class="muted">No advertising packages yet. Public advertiser flow will remain in an honest zero-state.</td></tr>`;
+
+  const agreementRows=agreements.length ? agreements.slice(0,20).map(a=>{
+    const b=(state.businesses||[]).find(x=>x.id===a.business_id);
+    return `<tr>
+      <td>${esc(b?.name||'Business')}</td>
+      <td>${esc(a.template_family)}</td>
+      <td>${esc(a.status)}</td>
+      <td>${esc(a.signer_legal_name||'—')}</td>
+      <td>${esc(a.signed_at?new Date(a.signed_at).toLocaleString():(a.first_viewed_at?'Viewed':'Sent'))}</td>
+    </tr>`;
+  }).join('') :
+    `<tr><td colspan="5" class="muted">No onboarding agreements yet.</td></tr>`;
+
+  const openTasks=tasks.filter(t=>t.status==='open'||t.status==='in_progress');
+
+  box.innerHTML=`
+    <div class="row">
+      <div>
+        <h2>Digital onboarding</h2>
+        <p class="muted">Create package versions and one-tap venue approval links. Locked legal templates are required before a real signature can complete.</p>
+      </div>
+      <div class="metric">${agreements.length}</div>
+    </div>
+
+    <div class="admin-grid" style="margin-top:16px">
+      <form id="packageCreateForm" class="card inset">
+        <h3>New advertising package</h3>
+        <label>Name<input name="name" required placeholder="Founding Local"></label>
+        <label>Package key<input name="package_key" required placeholder="founding-local"></label>
+        <div class="row">
+          <label>Version<input name="version" type="number" min="1" value="1" required></label>
+          <label>Price cents<input name="price_cents" type="number" min="0" required></label>
+        </div>
+        <label>Market<input name="market" placeholder="North Myrtle Beach"></label>
+        <div class="row">
+          <label>Term days<input name="term_days" type="number" min="1"></label>
+          <label>Ad seconds<input name="ad_length_seconds" type="number" min="1" value="15"></label>
+        </div>
+        <label>Frequency label<input name="frequency_label" placeholder="Example: once per loop"></label>
+        <div class="row">
+          <label>Screen count<input name="screen_count" type="number" min="1"></label>
+          <label>Projected plays<input name="projected_plays" type="number" min="1"></label>
+        </div>
+        <label>Projection days<input name="projection_period_days" type="number" min="1"></label>
+        <button class="button" type="submit">Create draft package</button>
+        <p class="muted tiny">Draft packages are never public. No invented metrics.</p>
+      </form>
+
+      <form id="venueInviteForm" class="card inset">
+        <h3>Venue approval link</h3>
+        <label>Business<select name="business_id" required><option value="">Choose business</option>${businessOptions}</select></label>
+        <label>Location<select name="location_id" required><option value="">Choose location</option>${locationOptions}</select></label>
+        <label>Legal entity<input name="organization_legal_name" required></label>
+        <label>Signer name<input name="signer_name"></label>
+        <label>Signer title<input name="signer_title"></label>
+        <label>Signer email<input name="signer_email" type="email"></label>
+        <label>Signer mobile<input name="signer_mobile"></label>
+        <label>Placement / zone<input name="zone_label" required placeholder="Main bar"></label>
+        <label>Screen label<input name="screen_label" required placeholder="55-inch TV above bar"></label>
+        <label>Screen count<input name="screen_count" type="number" min="1" value="1" required></label>
+        <label>Operating mode
+          <select name="operating_mode">
+            <option value="dedicated_coastloop">Dedicated CoastLoop</option>
+            <option value="scheduled_coastloop">Scheduled CoastLoop</option>
+            <option value="other">Other</option>
+          </select>
+        </label>
+        <label>Operating schedule<input name="schedule_label" placeholder="During normal business hours"></label>
+        <label>Term<input name="term_type" required placeholder="12 months"></label>
+        <label>Venue house inventory<input name="house_inventory" required placeholder="Venue house content included"></label>
+        <label>Host compensation cents<input name="host_compensation_cents" type="number" min="0" value="0"></label>
+        <label>Equipment / network responsibility<input name="equipment_network_responsibility" required placeholder="CoastLoop equipment; venue power/network access"></label>
+        <label>Category exclusions<input name="category_exclusions" placeholder="Optional"></label>
+        <label><input name="public_venue_listing" type="checkbox"> Allow public venue listing</label>
+        <label><input name="venue_photo_permission" type="checkbox"> Allow approved placement photography</label>
+        <label><input name="preview" type="checkbox"> Preview-only link while agreement is in counsel review</label>
+        <button class="button" type="submit">Create approval link</button>
+        <div id="venueInviteResult" class="muted tiny"></div>
+      </form>
+    </div>
+
+    <h3 style="margin-top:22px">Package versions</h3>
+    <div style="overflow:auto"><table><thead><tr><th>Package</th><th>Version</th><th>Price</th><th>Market</th><th>Status</th><th>Availability</th></tr></thead><tbody>${packageRows}</tbody></table></div>
+
+    <h3 style="margin-top:22px">Recent agreements</h3>
+    <div style="overflow:auto"><table><thead><tr><th>Business</th><th>Family</th><th>Status</th><th>Signer</th><th>Progress</th></tr></thead><tbody>${agreementRows}</tbody></table></div>
+
+    <p class="muted" style="margin-top:14px">${openTasks.length} open onboarding task${openTasks.length===1?'':'s'}.</p>
+  `;
+
+  const businessSelect=box.querySelector('#venueInviteForm [name="business_id"]');
+  const locationSelect=box.querySelector('#venueInviteForm [name="location_id"]');
+  businessSelect?.addEventListener('change',()=>{
+    const id=businessSelect.value;
+    [...locationSelect.options].forEach((o,i)=>{
+      if(i===0) return;
+      o.hidden=!!id && o.dataset.business!==id;
+    });
+    if(locationSelect.selectedOptions[0]?.hidden) locationSelect.value='';
+  });
+}
+
 function campaignActions(c){
   const actions={
     draft:[["scheduled","Schedule"],["active","Activate"],["canceled","Cancel"]],
@@ -379,7 +508,7 @@ async function load(){
 
   try {
     const [
-      stats,screens,media,playlists,prospects,businesses,
+      stats,screens,media,playlists,prospects,businesses,onboarding,onboardingPackages,
       campaigns,campaignReports,userDirectory,finance,
       billingConfig,billingInvoices,billingTransactions,billingPayouts,auditEvents,authConfig
     ] = await Promise.all([
@@ -389,6 +518,8 @@ async function load(){
       api('/api/admin/playlists'),
       api('/api/admin/prospects'),
       api('/api/admin/businesses'),
+      api('/api/admin/onboarding'),
+      api('/api/admin/onboarding/packages'),
       api('/api/admin/campaigns'),
       api('/api/admin/reports/campaigns'),
       api('/api/admin/users'),
@@ -402,7 +533,7 @@ async function load(){
     ]);
 
     Object.assign(state,{
-      screens,media,playlists,prospects,businesses,
+      screens,media,playlists,prospects,businesses,onboarding,onboardingPackages,
       campaigns,campaignReports,userDirectory,finance,
       billingConfig,billingInvoices,billingTransactions,billingPayouts,auditEvents,authConfig
     });
@@ -415,6 +546,7 @@ async function load(){
     $('#mPlays').textContent=stats.plays_24h;
     $('#mProspects').textContent=prospects.length;
     $('#mBusinesses').textContent=businesses.length;
+    renderDigitalOnboarding();
     $('#mUsers').textContent=(userDirectory.users||[]).length;
     $('#fRevenue').textContent=money(finance.booked_revenue_cents);
     $('#fCommission').textContent=money(finance.broker_commission_cents);
@@ -1538,3 +1670,64 @@ $('#downloadCampaignReport').onclick=()=>{
   a.remove();
   URL.revokeObjectURL(url);
 };
+
+
+document.addEventListener('submit',async e=>{
+  if(e.target?.id==='packageCreateForm'){
+    e.preventDefault();
+    const f=new FormData(e.target);
+    const payload={
+      name:f.get('name'),
+      package_key:f.get('package_key'),
+      version:Number(f.get('version')),
+      price_cents:Number(f.get('price_cents')),
+      market:f.get('market'),
+      term_days:f.get('term_days')?Number(f.get('term_days')):null,
+      ad_length_seconds:f.get('ad_length_seconds')?Number(f.get('ad_length_seconds')):15,
+      frequency_label:f.get('frequency_label'),
+      screen_count:f.get('screen_count')?Number(f.get('screen_count')):null,
+      projected_plays:f.get('projected_plays')?Number(f.get('projected_plays')):null,
+      projection_period_days:f.get('projection_period_days')?Number(f.get('projection_period_days')):null
+    };
+    await api('/api/admin/onboarding/packages',{
+      method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)
+    });
+    await load();
+  }
+
+  if(e.target?.id==='venueInviteForm'){
+    e.preventDefault();
+    const f=new FormData(e.target);
+    const comp=Number(f.get('host_compensation_cents')||0);
+    const payload={
+      business_id:f.get('business_id'),
+      location_id:f.get('location_id'),
+      organization_legal_name:f.get('organization_legal_name'),
+      signer_name:f.get('signer_name'),
+      signer_title:f.get('signer_title'),
+      signer_email:f.get('signer_email'),
+      signer_mobile:f.get('signer_mobile'),
+      term_type:f.get('term_type'),
+      house_inventory:f.get('house_inventory'),
+      host_compensation:comp>0?{amount_cents:comp,schedule:'As agreed'}:null,
+      equipment_network_responsibility:f.get('equipment_network_responsibility'),
+      category_exclusions:f.get('category_exclusions'),
+      public_venue_listing:f.get('public_venue_listing')==='on',
+      venue_photo_permission:f.get('venue_photo_permission')==='on',
+      preview:f.get('preview')==='on',
+      placements:[{
+        zone_label:f.get('zone_label'),
+        screen_label:f.get('screen_label'),
+        screen_count:Number(f.get('screen_count')||1),
+        operating_mode:f.get('operating_mode'),
+        operating_schedule:{label:f.get('schedule_label')||'As agreed'}
+      }]
+    };
+    const result=await api('/api/admin/onboarding/venue-invites',{
+      method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)
+    });
+    const out=document.querySelector('#venueInviteResult');
+    if(out) out.innerHTML=`<strong>${result.preview_only?'Preview link':'Approval link'}:</strong> <a href="${result.url}" target="_blank" rel="noopener">${result.url}</a>`;
+    await load();
+  }
+});
