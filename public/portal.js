@@ -189,6 +189,53 @@ function hostDashboard(b){
   </section>`;
 }
 
+function hostEarnings(b){
+  const payouts=Array.isArray(b.host_payouts)?b.host_payouts:[];
+  const h=b.host_summary||{};
+  if(!payouts.length && !Number(h.payout_due_cents) && !Number(h.payout_paid_cents))
+    return '';
+
+  return `<section class="portal-zone">
+    <div class="portal-zone-head">
+      <div>
+        <div class="portal-eyebrow">HOST EARNINGS</div>
+        <h2>Screen compensation</h2>
+      </div>
+      <div class="portal-last">CoastLoop payout ledger</div>
+    </div>
+
+    <div class="portal-metric-grid">
+      ${metric(money(h.payout_due_cents),'due / approved')}
+      ${metric(money(h.payout_paid_cents),'paid to date')}
+      ${metric(num(payouts.length),'payout records')}
+    </div>
+
+    <div class="portal-payout-list">
+      ${payouts.map(p=>`
+        <article class="portal-payout">
+          <div>
+            <strong>${money(p.amount_cents)}</strong>
+            <small>${p.period_start||p.period_end
+              ? `${p.period_start?date(p.period_start):'—'} → ${p.period_end?date(p.period_end):'—'}`
+              : 'Host compensation'}</small>
+          </div>
+          <span class="portal-health ${p.status==='paid'?'good':p.status==='approved'?'watch':'neutral'}">
+            ${esc(String(p.status||'due').toUpperCase())}
+          </span>
+          <div>
+            <strong>${p.paid_at?date(p.paid_at):'—'}</strong>
+            <small>${p.paid_at?'paid':'payment date'}</small>
+          </div>
+          <div>
+            <strong>${esc(p.payment_reference||'—')}</strong>
+            <small>reference</small>
+          </div>
+        </article>
+      `).join('')}
+    </div>
+  </section>`;
+}
+
 function advertiserDashboard(b){
   const a=b.advertiser_summary||{};
   return `<section class="portal-zone">
@@ -277,6 +324,7 @@ function business(b){
     </header>
     ${b.is_advertiser?advertiserDashboard(b):''}
     ${b.is_host?hostDashboard(b):''}
+    ${b.is_host?hostEarnings(b):''}
     ${b.is_advertiser?billing(b):''}
   </section>`;
 }

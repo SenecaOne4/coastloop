@@ -503,13 +503,14 @@ export async function portalOverview(request, env) {
   if (!businessIds.size)
     return json({ ok: true, user: { email: auth.user.email }, access: auth.access, businesses: [] });
 
-  const [businesses, locations, campaigns, screens, plays, invoices] = await Promise.all([
+  const [businesses, locations, campaigns, screens, plays, invoices, hostPayouts] = await Promise.all([
     rest(env, `businesses?organization_id=eq.${ORG_ID}&select=id,name,category,is_host,is_advertiser`),
     rest(env, `locations?organization_id=eq.${ORG_ID}&select=id,business_id,name,address_line1,city,state,host_status,timezone,operating_hours`),
     rest(env, `campaigns?organization_id=eq.${ORG_ID}&select=id,advertiser_business_id,name,status,starts_at,ends_at,delivery_target_plays,makegood_plays,dayparts`),
     rest(env, `screens?organization_id=eq.${ORG_ID}&select=id,location_id,name,status,last_seen_at,app_version,display_width,display_height,is_test`),
     rest(env, `playback_daily?organization_id=eq.${ORG_ID}&select=screen_id,campaign_id,play_date,play_count,seconds_played,first_played_at,last_played_at`),
     rest(env, `billing_invoices?organization_id=eq.${ORG_ID}&status=neq.draft&select=id,campaign_id,advertiser_business_id,invoice_number,provider,status,currency,total_cents,amount_paid_cents,amount_due_cents,amount_refunded_cents,due_at,hosted_invoice_url,invoice_pdf_url,sent_at,paid_at,created_at&order=created_at.desc`),
+    rest(env, `host_payouts?organization_id=eq.${ORG_ID}&select=id,business_id,location_id,screen_id,period_start,period_end,amount_cents,status,payment_reference,paid_at,note,created_at&order=created_at.desc`),
   ]);
 
   const screenMap = new Map((screens || []).map(x => [x.id, x]));
@@ -524,6 +525,7 @@ export async function portalOverview(request, env) {
     const bizScreens = (screens || []).filter(s => locationIds.has(s.location_id) && !s.is_test);
     const bizCampaigns = (campaigns || []).filter(c => c.advertiser_business_id === b.id);
     const bizInvoices = (invoices || []).filter(i => i.advertiser_business_id === b.id);
+    const bizHostPayouts = (hostPayouts || []).filter(p => p.business_id === b.id);
 
     const locationData = bizLocations.map(l => {
       const locScreens = bizScreens.filter(s => s.location_id === l.id);
@@ -722,6 +724,12 @@ export async function portalOverview(request, env) {
           .filter(Boolean)
           .sort()
           .pop() || null,
+        payout_due_cents: bizHostPayouts
+          .filter(p => ["due","approved"].includes(p.status))
+          .reduce((n,p) => n + Number(p.amount_cents || 0), 0),
+        payout_paid_cents: bizHostPayouts
+          .filter(p => p.status === "paid")
+          .reduce((n,p) => n + Number(p.amount_cents || 0), 0),
       } : null,
       advertiser_summary: b.is_advertiser ? {
         verified_plays: advertiserRows.reduce(
@@ -741,6 +749,7 @@ export async function portalOverview(request, env) {
         daily_plays: advertiserDailyPlays,
       } : null,
       locations: b.is_host ? locationData : [],
+      host_payouts: b.is_host ? bizHostPayouts : [],
       campaigns: b.is_advertiser ? campaignData : [],
       invoices: b.is_advertiser ? bizInvoices : [],
     };
