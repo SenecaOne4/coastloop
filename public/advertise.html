@@ -4,63 +4,151 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Advertise with CoastLoop</title>
-<meta name="description" content="Choose a CoastLoop local TV advertising plan and reserve your founding placement.">
+<meta name="description" content="Put your business on the CoastLoop network.">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/styles.css">
 <style>
-body{margin:0;background:#f4efe7;color:#171412}.sell{width:min(1120px,calc(100% - 28px));margin:auto;padding:22px 0 80px}
-.top{display:flex;justify-content:space-between;align-items:center}.top a{color:inherit;text-decoration:none}
-.hero{padding:65px 0 35px}.hero h1{font-size:clamp(52px,8vw,92px);line-height:.88;letter-spacing:-.07em;margin:12px 0 18px}
-.lede{font-size:20px;line-height:1.5;color:#655e58;max-width:740px}.eyebrow{font-size:11px;font-weight:900;letter-spacing:.14em;color:#7b243c}
-.packs{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:24px 0 50px}
-.pack{background:#faf7f1;border:1px solid rgba(23,20,18,.13);border-radius:22px;padding:22px;display:flex;flex-direction:column;min-height:390px}
-.pack.selected{outline:3px solid #b8924a}.pack h2{font-size:28px;letter-spacing:-.045em;margin:6px 0}.price{font-size:46px;font-weight:900;letter-spacing:-.055em;margin:8px 0}
-.price small{font-size:13px;letter-spacing:0}.spec{color:#655e58;line-height:1.65;font-size:14px;margin:13px 0 24px}
-.btn{margin-top:auto;border:0;background:#171412;color:#fff;padding:14px 16px;border-radius:12px;font-weight:850;cursor:pointer;text-decoration:none;text-align:center}
-.claim{background:#171412;color:#fff;border-radius:28px;padding:clamp(24px,5vw,50px);display:grid;grid-template-columns:1fr .8fr;gap:32px;align-items:center}
-.claim h2{font-size:clamp(38px,5vw,62px);letter-spacing:-.055em;line-height:.95;margin:8px 0 12px}
-.claim p{color:#c9c0b9;line-height:1.5}.claim-box{background:#fff;color:#171412;border-radius:18px;padding:20px}
-.claim-box label{display:block;font-size:12px;font-weight:800;margin-bottom:7px}
-.claim-box input{width:100%;box-sizing:border-box;border:1px solid #d8d0c6;border-radius:11px;padding:14px;font:inherit}
-.claim-box button{width:100%;border:0;background:#171412;color:#fff;padding:14px;border-radius:11px;font-weight:850;margin-top:10px;cursor:pointer}
-.google{width:100%;display:none;align-items:center;justify-content:center;background:#fff!important;color:#171412!important;border:1px solid #d8d0c6!important}
-.google.on{display:flex}.or{display:none;text-align:center;color:#877f78;font-size:11px;margin:10px 0}.or.on{display:block}
-.note{font-size:12px;color:#877f78;line-height:1.45;margin-top:10px}.status{min-height:20px;font-size:13px;margin-top:10px}
-.measure{margin-top:28px;color:#655e58;font-size:12px}
-@media(max-width:800px){.packs{grid-template-columns:1fr}.claim{grid-template-columns:1fr}.pack{min-height:auto}}
+body{margin:0;background:#08090b;color:#f5f3ef}
+.ad-shell{width:min(760px,calc(100% - 32px));margin:auto;padding:32px 0 80px}
+.ad-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:60px}
+.ad-top a{color:inherit;text-decoration:none}
+.ad-lockup{display:flex;align-items:center;gap:10px;font-weight:800;letter-spacing:.14em}
+.ad-lockup img{width:30px;height:30px}
+.ad-card{padding:38px;border-radius:24px;background:#202126;border:1px solid rgba(255,255,255,.07);box-shadow:0 28px 80px rgba(0,0,0,.4)}
+.ad-eyebrow{font-size:11px;letter-spacing:.14em;color:#a5a6ad;text-transform:uppercase}
+.ad-card h1{font-size:42px;line-height:1.05;letter-spacing:-.04em;margin:12px 0}
+.ad-lede{color:#a8a9af;font-size:16px;line-height:1.55}
+.ad-options{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:30px 0}
+.ad-option{padding:22px;border-radius:18px;border:1px solid #3a3b41;background:#17181c;cursor:pointer}
+.ad-option.active{border-color:#caa65a;box-shadow:0 0 0 2px rgba(202,166,90,.12)}
+.ad-option strong{display:block;font-size:18px}
+.ad-option b{display:block;font-size:28px;margin-top:10px}
+.ad-option span{display:block;color:#92939a;margin-top:5px;font-size:13px}
+.ad-continue{width:100%;min-height:54px;border:0;border-radius:999px;background:#caa65a;color:#17120a;font-weight:750;cursor:pointer}
+.ad-note{margin-top:18px;color:#85868d;font-size:12px;line-height:1.5}
+@media(max-width:600px){.ad-card{padding:26px}.ad-card h1{font-size:34px}.ad-options{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
-<main class="sell">
-  <nav class="top"><a href="/"><strong>COASTLOOP</strong></a><a href="/">Home</a></nav>
+<main class="ad-shell">
+  <nav class="ad-top">
+    <a href="/" class="ad-lockup"><img src="/brand/coastloop-mark.svg"><span>COASTLOOP</span></a>
+    <a href="/login" class="muted">Sign in</a>
+  </nav>
 
-  <section class="hero">
-    <div class="eyebrow">LOCAL TV ADVERTISING · FOUNDING OFFERS</div>
-    <h1>Choose your<br>local ad run.</h1>
-    <p class="lede">The product comes first. Pick the amount of local presence you want, then claim it with one email. No “tell us about your business” questionnaire.</p>
-  </section>
+  <section class="ad-card">
+    <div class="ad-eyebrow">BUY AD SPACE</div>
+    <h1>Put your business on CoastLoop.</h1>
+    <p class="ad-lede">One advertising product. Choose how you want to pay, then sign in or create your CoastLoop account. We’ll collect the business details when they’re actually needed.</p>
 
-  <section id="packs" class="packs"></section>
-
-  <section id="claim" class="claim">
-    <div>
-      <div class="eyebrow" style="color:#d8c39a">CLAIM YOUR OFFER</div>
-      <h2 id="chosen">Pick a plan above.</h2>
-      <p id="claimCopy">Once you choose a founding offer, we’ll hold that product selection and move you into secure checkout when activation opens.</p>
+    <div class="ad-options" id="billingChoices">
+      <button type="button" class="ad-option active" data-plan="coastloop-annual">
+        <strong>Annual</strong>
+        <b>$1,000</b>
+        <span>per year</span>
+      </button>
+      <button type="button" class="ad-option" data-plan="coastloop-monthly">
+        <strong>Monthly</strong>
+        <b>$95</b>
+        <span>per month</span>
+      </button>
     </div>
-    <div class="claim-box">
-      <button id="google" class="google">G&nbsp;&nbsp;Continue with Google</button>
-      <div id="or" class="or">OR RESERVE WITH EMAIL</div>
-      <label for="email">Email</label>
-      <input id="email" type="email" autocomplete="email" placeholder="you@yourbusiness.com">
-      <button id="reserve">Reserve selected offer</button>
-      <div id="status" class="status"></div>
-      <div class="note">No charge is taken at reservation. Your selected founding price and package are recorded with the reservation.</div>
+
+    <button id="continue" class="ad-continue">Continue</button>
+
+    <div class="ad-note">
+      Includes creative production and verified-delivery reporting. CoastLoop only delivers advertising to commissioned network inventory.
     </div>
   </section>
-
-  <p class="measure">Verified plays are confirmed screen-delivery events, not human views or impressions. CoastLoop does not invent audience counts.</p>
 </main>
-<script type="module" src="/advertise.js"></script>
+
+<script type="module">
+import {api,readSession} from '/session.js';
+
+const $=s=>document.querySelector(s);
+const choices=[...document.querySelectorAll('[data-plan]')];
+const qs=new URLSearchParams(location.search);
+let plan=qs.get('plan')||'coastloop-annual';
+
+function selectPlan(){
+  choices.forEach(x=>x.classList.toggle('active',x.dataset.plan===plan));
+}
+choices.forEach(x=>x.onclick=()=>{
+  plan=x.dataset.plan;
+  history.replaceState(null,'','/advertise?plan='+encodeURIComponent(plan));
+  selectPlan();
+});
+selectPlan();
+
+if(!readSession()){
+  location.replace('/login?next='+encodeURIComponent(
+    '/advertise?plan='+plan
+  ));
+}
+
+const button=$('#continue');
+button.textContent='Continue';
+
+button.onclick=async()=>{
+  try{
+    button.disabled=true;
+    button.textContent='Loading…';
+
+    const packages=await fetch('/api/public/packages')
+      .then(r=>r.json());
+    const pkg=(packages.packages||[])
+      .find(x=>x.package_key===plan);
+
+    if(!pkg)throw new Error('Advertising option unavailable.');
+
+    const me=await api('/api/auth/identity');
+    const user=me.user||me.identity||me||{};
+    const name=user.user_metadata?.full_name||
+      user.full_name||user.name||'';
+    const email=user.email||'';
+
+    const legal=prompt('Business name');
+    if(!legal){
+      button.disabled=false;
+      button.textContent='Continue';
+      return;
+    }
+
+    const contact=prompt('Your name',name);
+    if(!contact){
+      button.disabled=false;
+      button.textContent='Continue';
+      return;
+    }
+
+    const mobile=prompt('Mobile number');
+    if(!mobile){
+      button.disabled=false;
+      button.textContent='Continue';
+      return;
+    }
+
+    const d=await api('/api/onboarding/advertiser/start',{
+      method:'POST',
+      headers:{'content-type':'application/json'},
+      body:JSON.stringify({
+        package_id:pkg.package_id,
+        advertiser_legal_name:legal,
+        advertiser_display_name:legal,
+        contact_name:contact,
+        contact_email:email,
+        contact_mobile:mobile
+      })
+    });
+
+    if(!d.url)throw new Error('Checkout could not be prepared.');
+    location.href=d.url;
+  }catch(e){
+    alert(e.message||'Could not continue.');
+    button.disabled=false;
+    button.textContent='Continue';
+  }
+};
+</script>
 </body>
 </html>

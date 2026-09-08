@@ -312,30 +312,43 @@ function billing(b){
   </section>`;
 }
 
-function business(b){
-  return `<section class="portal-business">
-    <header class="portal-business-head">
-      <div>
-        <div class="portal-eyebrow">COASTLOOP CUSTOMER</div>
-        <h1>${esc(b.name)}</h1>
-        <p>${b.is_host&&b.is_advertiser?'Host + advertiser':b.is_host?'Host location':'Advertiser'} · ${esc(b.category||'Local business')}</p>
-      </div>
-      <span class="pill">${esc(b.member_role)}</span>
-    </header>
-    ${b.is_advertiser?advertiserDashboard(b):''}
-    ${b.is_host?hostDashboard(b):''}
-    ${b.is_host?hostEarnings(b):''}
-    ${b.is_advertiser?billing(b):''}
+function actionCard(title,text,href,label){
+  return `<a class="card portal-choice" href="${href}">
+    <div class="portal-eyebrow">COASTLOOP</div>
+    <h2>${esc(title)}</h2>
+    <p class="muted">${esc(text)}</p>
+    <span class="button-link">${esc(label)}</span>
+  </a>`;
+}
+
+function customerHome(d){
+  const businesses=Array.isArray(d.businesses)?d.businesses:[];
+  const isHost=businesses.some(b=>b.is_host);
+  const isAdvertiser=businesses.some(b=>b.is_advertiser);
+
+  return `<section class="portal-section">
+    <div class="portal-eyebrow">WELCOME</div>
+    <h1>What do you want to do?</h1>
+    <p class="public-lede">CoastLoop keeps it simple. Manage your advertising, your screens, or both.</p>
+    <div class="portal-choice-grid">
+      ${actionCard('Buy Ad Space','Put your business on the CoastLoop network.','/advertise','Advertise')}
+      ${actionCard('Host a Screen','Put a TV on CoastLoop and earn.','/host','Host')}
+      ${isHost&&isAdvertiser?actionCard('My CoastLoop','Manage your advertising and hosted screens.','/portal.html','Open dashboard'):''}
+    </div>
   </section>`;
 }
 
-$('#account').onclick=()=>location.href='/account';
+const renderAccount=()=>location.href='/account';
+
+$('#account').onclick=renderAccount;
 
 try{
   const d=await api('/api/portal/overview');
-  $('#businesses').innerHTML=(d.businesses||[]).map(business).join('')||
-    '<section class="card"><h2>No business access assigned yet.</h2></section>';
+  $('#app').innerHTML=customerHome(d);
 }catch(e){
-  if(String(e.message).includes('401'))location.replace('/login?next=/portal');
-  else $('#error').textContent=e.message;
+  if(String(e.message).includes('401')){
+    location.replace('/login?next=/portal');
+  }else{
+    $('#error').textContent=e.message;
+  }
 }

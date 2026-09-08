@@ -144,7 +144,6 @@ export async function requireUserAccess(request, env) {
   const user = await authUserFromToken(env, token);
   if (!user) return null;
   const access = await accessForUser(env, user);
-  if (!access.internal_role && !access.businesses.length) return null;
   return { token, user, access };
 }
 
@@ -174,8 +173,6 @@ async function loginWithPassword(env, email, password) {
   const user = data.user || await authUserFromToken(env, data.access_token);
   if (!user) return { error: "Could not load user", status: 401 };
   const access = await accessForUser(env, user);
-  if (!access.internal_role && !access.businesses.length)
-    return { error: "This CoastLoop account has no assigned access yet.", status: 403 };
 
   return {
     session: {
@@ -251,10 +248,6 @@ async function authSignup(request, env) {
   if (!/^\S+@\S+\.\S+$/.test(email)) return json({ error: "Valid email required" }, 400);
   if (password.length < 10) return json({ error: "Password must be at least 10 characters" }, 400);
 
-  const now = new Date().toISOString();
-  const invites = await rest(env, `user_invitations?organization_id=eq.${ORG_ID}&email=eq.${encodeURIComponent(email)}&status=eq.pending&expires_at=gt.${encodeURIComponent(now)}&select=id`);
-  if (!(invites || []).length) return json({ error: "An invitation is required" }, 403);
-
   const { res, data } = await authRequest(env, "signup", {
     method: "POST",
     body: JSON.stringify({ email, password, data: { full_name: fullName || null } }),
@@ -293,7 +286,6 @@ async function authRefresh(request, env) {
 
   const user = data.user || await authUserFromToken(env, data.access_token);
   const access = await accessForUser(env, user);
-  if (!access.internal_role && !access.businesses.length) return json({ error: "Access removed" }, 403);
 
   return json({
     ok: true,

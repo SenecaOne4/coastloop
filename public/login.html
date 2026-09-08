@@ -4,21 +4,207 @@
 <title>Sign in · CoastLoop</title>
 <link rel="icon" href="/favicon.svg"><link rel="stylesheet" href="/styles.css">
 <style>
-.auth-shell{max-width:520px;margin:8vh auto}.auth-card{padding:34px}
-.auth-card form{display:grid;gap:13px}.auth-card input{width:100%}
-.auth-card button{width:100%}.auth-divider{text-align:center;margin:18px 0}
-.auth-logo{display:flex;align-items:center;gap:12px;margin-bottom:28px}
-.auth-logo img{width:38px}
+:root{
+  --auth-bg:#08090b;
+  --auth-panel:#202126;
+  --auth-panel-2:#17181c;
+  --auth-line:#34353b;
+  --auth-text:#f5f3ef;
+  --auth-muted:#9d9da4;
+  --auth-gold:#caa65a;
+}
+
+body{
+  margin:0;
+  min-height:100vh;
+  background:
+    radial-gradient(circle at 50% 15%,rgba(202,166,90,.07),transparent 34%),
+    var(--auth-bg);
+  color:var(--auth-text);
+}
+
+.auth-shell{
+  width:min(100%,760px);
+  max-width:none;
+  min-height:100vh;
+  margin:0 auto;
+  padding:28px;
+  box-sizing:border-box;
+  display:grid;
+  place-items:center;
+}
+
+.auth-card{
+  width:min(100%,470px);
+  box-sizing:border-box;
+  padding:36px;
+  border-radius:24px;
+  background:linear-gradient(180deg,#24252a 0%,#1e1f24 100%);
+  border:1px solid rgba(255,255,255,.07);
+  box-shadow:0 28px 80px rgba(0,0,0,.42);
+}
+
+.auth-logo{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  margin-bottom:34px;
+}
+
+.auth-logo img{
+  width:34px;
+  height:34px;
+}
+
+.auth-logo strong{
+  display:block;
+  letter-spacing:.14em;
+  font-size:13px;
+}
+
+.auth-logo .muted{
+  margin-top:4px;
+  font-size:12px;
+  color:var(--auth-muted);
+}
+
+.auth-card h1{
+  margin:0 0 8px;
+  font-size:30px;
+  line-height:1.15;
+  letter-spacing:-.03em;
+}
+
+.auth-card > section > p,
+.auth-card .muted{
+  color:var(--auth-muted);
+}
+
+.auth-card form{
+  display:grid;
+  gap:12px;
+  margin-top:22px;
+}
+
+.auth-card input{
+  width:100%;
+  min-height:50px;
+  box-sizing:border-box;
+  padding:0 16px;
+  border-radius:14px;
+  border:1px solid var(--auth-line);
+  background:#17181c;
+  color:var(--auth-text);
+  outline:none;
+}
+
+.auth-card input::placeholder{
+  color:#777980;
+}
+
+.auth-card input:focus{
+  border-color:rgba(202,166,90,.72);
+  box-shadow:0 0 0 3px rgba(202,166,90,.10);
+}
+
+.auth-card button{
+  width:100%;
+  min-height:50px;
+  border:0;
+  border-radius:999px;
+  font-weight:650;
+  letter-spacing:.01em;
+  cursor:pointer;
+}
+
+.auth-card form button{
+  margin-top:2px;
+  background:var(--auth-gold);
+  color:#17120a;
+}
+
+.auth-card .secondary{
+  background:#2a2b30;
+  color:var(--auth-text);
+  border:1px solid #3a3b41;
+}
+
+.auth-divider{
+  display:flex;
+  align-items:center;
+  gap:14px;
+  margin:20px 0 14px;
+  color:#7f8087;
+  font-size:11px;
+  text-transform:uppercase;
+  letter-spacing:.14em;
+}
+
+.auth-divider::before,
+.auth-divider::after{
+  content:"";
+  height:1px;
+  flex:1;
+  background:#37383e;
+}
+
+.auth-card a{
+  color:#b7a06f;
+}
+
+#inviteActivation{
+  margin-top:22px !important;
+  padding-top:20px;
+  border-top:1px solid rgba(255,255,255,.07);
+}
+
+#inviteActivation summary{
+  color:#d8d7d4;
+  cursor:pointer;
+  font-size:13px;
+}
+
+#msg{
+  min-height:20px;
+  margin-top:16px !important;
+}
+
+@media (max-width:560px){
+  .auth-shell{padding:16px}
+  .auth-card{
+    padding:26px 20px;
+    border-radius:20px;
+  }
+  .auth-card h1{font-size:27px}
+}
 </style></head>
 <body><main class="shell auth-shell"><section class="card auth-card">
 <div class="auth-logo"><img src="/brand/coastloop-mark.svg"><div><strong>COASTLOOP</strong><div class="muted">Network access</div></div></div>
 <div id="normal">
-<h1>Sign in</h1><p class="muted">Hosts, advertisers and CoastLoop staff.</p>
+<h1 id="authTitle">Log in</h1><p id="authLead" class="muted">Hosts, advertisers and CoastLoop staff.</p>
+
+<div id="authLogin">
 <form id="login">
 <input name="email" type="email" placeholder="Email" autocomplete="email" required>
 <input name="password" type="password" placeholder="Password" autocomplete="current-password" required>
 <button>Sign in</button>
 </form>
+</div>
+
+<div id="authSignup" hidden>
+<form id="signup">
+<input name="full_name" placeholder="Your name" autocomplete="name" required>
+<input name="email" type="email" placeholder="Email" autocomplete="email" required>
+<input name="password" type="password" minlength="10" placeholder="Password (10+ characters)" autocomplete="new-password" required>
+<input name="confirm" type="password" minlength="10" placeholder="Confirm password" autocomplete="new-password" required>
+<button>Create account</button>
+</form>
+</div>
+
+<p style="margin-top:18px;text-align:center">
+<span id="authPrompt" class="muted">New to CoastLoop?</span>
+<a href="#" id="authToggle">Create an account</a>
+</p>
 <div id="googleWrap" hidden><div class="auth-divider muted">or</div><button id="google" class="secondary">Continue with Google</button></div>
 <p class="muted" style="margin-top:16px"><a href="/reset-password">Forgot password?</a></p>
 
