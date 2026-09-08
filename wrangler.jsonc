@@ -43,5 +43,8 @@
         "period": 60
       }
     }
-  ]
+  ],
+  "vars": {
+    "GOOGLE_AUTH_ENABLED": "true"
+  }
 }
