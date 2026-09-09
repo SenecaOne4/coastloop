@@ -256,6 +256,27 @@ async function advanceAdvertiserOrderAfterInvoicePaid(env, invoice) {
   const now = invoice.paid_at || new Date().toISOString();
   const firstPaidTransition = order.status !== "paid";
 
+  if (firstPaidTransition && order.campaign_id) {
+    const campaignRows = await sb(
+      env,
+      `campaigns?id=eq.${encodeURIComponent(order.campaign_id)}&organization_id=eq.${ORG_ID}&select=id,status&limit=1`
+    );
+    const campaign = campaignRows?.[0];
+    if (campaign?.status === "draft") {
+      await sb(
+        env,
+        `campaigns?id=eq.${encodeURIComponent(campaign.id)}&organization_id=eq.${ORG_ID}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            status: "active",
+            updated_at: now,
+          }),
+        }
+      );
+    }
+  }
+
   if (firstPaidTransition) {
     await sb(env, `advertiser_orders?id=eq.${order.id}&organization_id=eq.${ORG_ID}`, {
       method: "PATCH",
