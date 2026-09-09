@@ -154,5 +154,5 @@ $('#activate').onsubmit=async e=>{
   }
 
   saveSession(d.session);
-  location.replace(homeFor(d.access));
+  location.replace(requestedNext || '/portal.html');
 };

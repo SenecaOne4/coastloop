@@ -35,6 +35,50 @@ body{margin:0;background:#08090b;color:#f5f3ef}
 .ad-field input{width:100%;box-sizing:border-box;padding:14px 15px;border-radius:12px;border:1px solid #3a3b41;background:#111216;color:#f5f3ef;font:inherit}
 .ad-field input:focus{outline:none;border-color:#caa65a;box-shadow:0 0 0 2px rgba(202,166,90,.12)}
 .ad-account{margin:18px 0;color:#a8a9af;font-size:13px}
+
+  .packs{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(290px,1fr));
+    gap:18px;
+    margin:24px 0;
+  }
+  .pack{
+    background:#fff !important;
+    color:#102a43 !important;
+    border:2px solid #d7e1ea !important;
+    border-radius:18px;
+    padding:24px !important;
+    box-shadow:0 10px 30px rgba(15,42,67,.10);
+    cursor:pointer;
+    transition:.18s ease;
+  }
+  .pack:hover{
+    transform:translateY(-2px);
+    border-color:#0f6f78 !important;
+    box-shadow:0 14px 34px rgba(15,42,67,.16);
+  }
+  .pack.selected{
+    border:3px solid #0f6f78 !important;
+    box-shadow:0 0 0 4px rgba(15,111,120,.12),
+      0 14px 34px rgba(15,42,67,.16);
+  }
+  .pack h2,.pack h3,.pack strong{
+    color:#102a43 !important;
+  }
+  .pack .price{
+    color:#0b5961 !important;
+    font-weight:800;
+  }
+  .pack .spec,.pack p,.pack small{
+    color:#486581 !important;
+    opacity:1 !important;
+  }
+  .pack button{
+    background:#0f6f78 !important;
+    color:#fff !important;
+    border:0;
+  }
+
 </style>
 </head>
 <body>
