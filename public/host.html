@@ -4,37 +4,85 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Host CoastLoop</title>
-<meta name="description" content="Put a CoastLoop-managed local advertising layer on an approved TV in your venue.">
-<link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/styles.css">
 <style>
-body{margin:0;background:#171412;color:#fff}.host-wrap{width:min(1050px,calc(100% - 30px));margin:auto;padding:24px 0 80px}
-.host-nav{display:flex;justify-content:space-between}.host-nav a{color:#fff;text-decoration:none}
-.host-hero{padding:82px 0 58px}.host-hero h1{font-size:clamp(56px,9vw,100px);line-height:.88;letter-spacing:-.07em;margin:13px 0 22px}
-.host-hero p{max-width:720px;color:#c9c0b9;font-size:20px;line-height:1.5}
-.host-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
-.host-card{border:1px solid #ffffff24;border-radius:20px;padding:22px;background:#ffffff08}
-.host-card h2{font-size:24px;letter-spacing:-.04em}.host-card p{color:#c9c0b9;line-height:1.5}
-.host-cta{display:inline-flex;background:#fff;color:#171412;padding:14px 18px;border-radius:12px;text-decoration:none;font-weight:850;margin-top:25px}
-.host-note{font-size:12px;color:#9f9690;margin-top:24px;max-width:760px}
-@media(max-width:700px){.host-grid{grid-template-columns:1fr}}
+*{box-sizing:border-box}body{margin:0;background:#11100f;color:#f7f3ee;font-family:Inter,Arial,sans-serif}
+a{color:inherit}.wrap{max-width:1040px;margin:auto;padding:24px}.nav{display:flex;justify-content:space-between;align-items:center}
+.nav a{text-decoration:none}.hero{padding:76px 0 38px}.eyebrow{font-size:12px;letter-spacing:.18em;color:#b9ada4;font-weight:800}
+h1{font-size:clamp(48px,8vw,86px);line-height:.92;letter-spacing:-.06em;margin:14px 0 22px;max-width:850px}
+.lede{font-size:20px;line-height:1.55;color:#cfc5bd;max-width:720px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:34px 0}
+.card,.formbox{border:1px solid #302c29;background:#191715;border-radius:18px;padding:22px}
+.card h2{font-size:22px;margin:0 0 9px}.card p{color:#bdb3ab;line-height:1.5;margin:0}
+.formbox{max-width:760px;margin:30px 0 70px;padding:28px}.formbox h2{font-size:32px;margin:0 0 8px}
+.formbox p{color:#bdb3ab;line-height:1.5}.fields{display:grid;grid-template-columns:1fr 1fr;gap:13px}
+label{display:block;font-size:12px;font-weight:800;color:#c8bdb5;margin-bottom:6px}
+input{width:100%;border:1px solid #3b3531;background:#100f0e;color:#fff;border-radius:11px;padding:13px;font:inherit}
+.full{grid-column:1/-1}button{border:0;border-radius:12px;background:#fff;color:#171412;padding:14px 20px;font-weight:900;font-size:15px;cursor:pointer}
+button:disabled{opacity:.55}.status{min-height:22px;margin-top:14px;color:#d7cdc5}.note{font-size:12px;color:#8f8680}
+@media(max-width:700px){.grid,.fields{grid-template-columns:1fr}.full{grid-column:auto}.hero{padding-top:52px}}
 </style>
 </head>
 <body>
-<main class="host-wrap">
-  <nav class="host-nav"><a href="/"><strong>COASTLOOP</strong></a><a href="/login">Sign in</a></nav>
-  <section class="host-hero">
-    <div>HOST THE LOOP</div>
-    <h1>Your screen.<br>More useful.</h1>
-    <p>CoastLoop adds a managed local advertising layer to a TV you approve. You choose the exact placement, operating mode and commercial terms before anything changes.</p>
-    <a class="host-cta" href="/login?next=%2Fhost">Get started</a>
-  </section>
-  <section class="host-grid">
-    <article class="host-card"><h2>Keep house content</h2><p>Your specials, events and announcements can live alongside CoastLoop inventory according to the placement you approve.</p></article>
-    <article class="host-card"><h2>Approve the exact TV</h2><p>No blanket rights. The agreement identifies the screen, schedule, operating mode and any category exclusions.</p></article>
-    <article class="host-card"><h2>One private link</h2><p>When your placement is prepared, open one phone-friendly link, review it, approve it and e-sign.</p></article>
-  </section>
-  <p class="host-note">Cash host compensation is deal-specific. When offered, it is shown in the placement summary before signature. CoastLoop does not claim human audience counts from screen-play telemetry.</p>
+<main class="wrap">
+<nav class="nav"><a href="/"><strong>COASTLOOP</strong></a><a href="/account">Account</a></nav>
+<section class="hero">
+<div class="eyebrow">HOST THE LOOP</div>
+<h1>Your screen.<br>More useful.</h1>
+<p class="lede">Add CoastLoop to an approved TV at your venue. You keep control of the placement, operating mode and commercial terms before anything goes live.</p>
+</section>
+<section class="grid">
+<article class="card"><h2>Your venue, your terms</h2><p>The exact screen, schedule, house content and category exclusions are approved before installation.</p></article>
+<article class="card"><h2>One CoastLoop account</h2><p>Host screens and advertise your own business from the same dashboard.</p></article>
+<article class="card"><h2>Agreement before install</h2><p>We prepare the placement terms for review and e-signature before equipment is provisioned.</p></article>
+</section>
+<section class="formbox">
+<div class="eyebrow">VENUE REQUEST</div>
+<h2>Tell us where the screen is.</h2>
+<p>This starts the placement review. It does not sign an agreement or authorize installation.</p>
+<form id="hostForm">
+<div class="fields">
+<div class="full"><label>Business / venue name</label><input name="name" required autocomplete="organization"></div>
+<div><label>Your name</label><input name="contact_name" autocomplete="name"></div>
+<div><label>Mobile</label><input name="phone" autocomplete="tel"></div>
+<div class="full"><label>Street address</label><input name="address_line1" required autocomplete="street-address"></div>
+<div><label>City</label><input name="city" required autocomplete="address-level2"></div>
+<div><label>State</label><input name="state" required autocomplete="address-level1"></div>
+<div><label>ZIP</label><input name="postal_code" required autocomplete="postal-code"></div>
+</div>
+<p><button id="submit" type="submit">Start host request</button></p>
+<div id="status" class="status"></div>
+</form>
+<p class="note">Host compensation is deal-specific. Any cash compensation offered will appear in the placement terms before signature.</p>
+</section>
 </main>
+<script type="module">
+import {api,readSession} from "/session.js";
+const session=readSession();
+if(!session){
+  location.replace("/login?next=%2Fhost");
+}else{
+  const form=document.querySelector("#hostForm");
+  const status=document.querySelector("#status");
+  const submit=document.querySelector("#submit");
+  form.addEventListener("submit",async e=>{
+    e.preventDefault();
+    submit.disabled=true;
+    status.textContent="Starting your host request...";
+    try{
+      const data=Object.fromEntries(new FormData(form).entries());
+      const out=await api("/api/onboarding/host/start",{
+        method:"POST",
+        headers:{"content-type":"application/json"},
+        body:JSON.stringify(data)
+      });
+      status.textContent=out.message||"Host request received.";
+      setTimeout(()=>location.replace(out.next||"/portal.html"),650);
+    }catch(err){
+      status.textContent=err.message||"Could not start host request.";
+      submit.disabled=false;
+    }
+  });
+}
+</script>
 </body>
 </html>

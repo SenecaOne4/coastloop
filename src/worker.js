@@ -21,6 +21,7 @@ import {
   handleAuthRoute,
   requireAdminAccess,
   requireBrokerAccess,
+  requireUserAccess,
   adminUserDirectory,
   createUserInvitation,
   updateUserAccess,
@@ -1925,6 +1926,123 @@ async function createAdminProspect(request, env, auth = null) {
   return json({ ok: true, prospect: rows?.[0] || null });
 }
 
+async function startHostRequest(request, env) {
+  const auth = await requireUserAccess(request, env);
+  if (!auth) return json({ error: "unauthorized" }, 401);
+  if (requestTooLarge(request, 32768))
+    return json({ error: "request too large" }, 413);
+
+  const b = await bodyJson(request);
+  const name = String(b.name || "").trim().slice(0, 180);
+  const contactName = String(b.contact_name || "").trim().slice(0, 180) || null;
+  const phone = String(b.phone || "").trim().slice(0, 80) || null;
+  const email = String(auth.user.email || "").trim().toLowerCase();
+  const addressLine1 = String(b.address_line1 || "").trim().slice(0, 200);
+  const city = String(b.city || "").trim().slice(0, 120);
+  const state = String(b.state || "").trim().slice(0, 40);
+  const postalCode = String(b.postal_code || "").trim().slice(0, 20);
+
+  if (!name) return json({ error: "business name required" }, 400);
+  if (!addressLine1 || !city || !state || !postalCode)
+    return json({ error: "venue address required" }, 400);
+
+  const owned = new Set((auth.access?.businesses || []).map(x => x.business_id));
+  let business = null;
+
+  if (owned.size) {
+    const ids = [...owned].map(encodeURIComponent).join(",");
+    const rows = await sb(
+      env,
+      `businesses?organization_id=eq.${ORG_ID}&id=in.(${ids})&select=*`
+    );
+    business = (rows || []).find(x =>
+      String(x.name || "").trim().toLowerCase() === name.toLowerCase()
+    ) || null;
+  }
+
+  if (business) {
+    const rows = await sb(
+      env,
+      `businesses?id=eq.${encodeURIComponent(business.id)}&organization_id=eq.${ORG_ID}`,
+      {
+        method: "PATCH",
+        headers: { Prefer: "return=representation" },
+        body: JSON.stringify({
+          is_host: true,
+          contact_name: contactName || business.contact_name || null,
+          phone: phone || business.phone || null,
+          email: email || business.email || null,
+          updated_at: new Date().toISOString(),
+        }),
+      }
+    );
+    business = rows?.[0] || business;
+  } else {
+    const rows = await sb(env, "businesses", {
+      method: "POST",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify({
+        organization_id: ORG_ID,
+        name,
+        contact_name: contactName,
+        phone,
+        email,
+        is_host: true,
+        is_advertiser: false,
+        notes: "Created by authenticated host self-service.",
+      }),
+    });
+    business = rows?.[0] || null;
+  }
+
+  if (!business) return json({ error: "business creation failed" }, 500);
+
+  await sb(env, "business_members?on_conflict=business_id,user_id", {
+    method: "POST",
+    headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+    body: JSON.stringify({
+      business_id: business.id,
+      user_id: auth.user.id,
+      role: "owner",
+      updated_at: new Date().toISOString(),
+    }),
+  });
+
+  let location = null;
+  const found = await sb(
+    env,
+    `locations?organization_id=eq.${ORG_ID}&business_id=eq.${encodeURIComponent(business.id)}&address_line1=eq.${encodeURIComponent(addressLine1)}&select=*`
+  );
+  location = found?.[0] || null;
+
+  if (!location) {
+    const rows = await sb(env, "locations", {
+      method: "POST",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify({
+        organization_id: ORG_ID,
+        business_id: business.id,
+        name,
+        address_line1: addressLine1,
+        city,
+        state,
+        postal_code: postalCode,
+        host_status: "negotiating",
+        host_annual_pay_cents: 0,
+      }),
+    });
+    location = rows?.[0] || null;
+  }
+
+  return json({
+    ok: true,
+    business,
+    location,
+    next: "/portal.html",
+    message: "Host request received. CoastLoop will prepare the placement terms for review."
+  });
+}
+
 async function adminProspects(env, auth = null) {
   const brokerId = brokerIdFromAuth(auth);
   const scope = brokerId ? `&broker_user_id=eq.${encodeURIComponent(brokerId)}` : "";
@@ -2896,6 +3014,9 @@ export default {
 
       if (url.pathname === "/api/portal/overview" && request.method === "GET")
         return portalOverview(request, env);
+
+      if (url.pathname === "/api/onboarding/host/start" && request.method === "POST")
+        return startHostRequest(request, env);
 
       if (url.pathname === "/api/health")
         return json({ ok: true, service: "coastloop", version: "0.27.8" });
