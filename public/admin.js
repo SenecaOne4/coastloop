@@ -734,6 +734,131 @@ function renderAudit(){
 }
 
 
+
+function ensureTodayOperatorPanel(){
+  if(document.getElementById('todayPriorityStrip'))return;
+
+  const anchor=document.getElementById('today');
+  if(!anchor)return;
+
+  const strip=document.createElement('div');
+  strip.id='todayPriorityStrip';
+  strip.className='today-priority-strip';
+  strip.innerHTML=`
+    <div class="today-priority primary">
+      <div class="label">Next move</div>
+      <div class="value" id="todayNextMove">Loading operations…</div>
+      <div class="sub" id="todayNextMoveSub">
+        CoastLoop is checking what needs attention first.
+      </div>
+    </div>
+    <div class="today-priority">
+      <div class="label">Screens</div>
+      <div class="value" id="todayScreens">-</div>
+      <div class="sub">commercial online</div>
+    </div>
+    <div class="today-priority">
+      <div class="label">Campaigns</div>
+      <div class="value" id="todayCampaigns">-</div>
+      <div class="sub">active now</div>
+    </div>
+    <div class="today-priority">
+      <div class="label">Queue</div>
+      <div class="value" id="todayQueue">-</div>
+      <div class="sub">items needing action</div>
+    </div>`;
+
+  const actions=document.createElement('div');
+  actions.className='today-quick-actions';
+  actions.innerHTML=`
+    <button type="button" class="primary"
+      data-today-go="network">Screens</button>
+    <button type="button"
+      data-today-go="sales">Advertisers</button>
+    <button type="button"
+      data-today-go="creative">Creative</button>
+    <button type="button"
+      data-today-go="finance">Finance</button>`;
+
+  anchor.insertAdjacentElement('afterend',strip);
+  strip.insertAdjacentElement('afterend',actions);
+
+  actions.querySelectorAll('[data-today-go]').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const key=btn.dataset.todayGo;
+      const nav=document.querySelector(
+        `.admin-nav a[href="#${key}"]`
+      );
+      if(nav)nav.click();
+    });
+  });
+}
+
+function renderTodayOperatorPanel(){
+  ensureTodayOperatorPanel();
+
+  const commercial=(state.screens||[]).filter(x=>!x.is_test);
+  const onlineScreens=commercial.filter(
+    x=>online(x.last_seen_at)
+  );
+
+  const campaigns=state.campaigns||[];
+  const activeCampaigns=campaigns.filter(
+    x=>String(x.status||'').toLowerCase()==='active'
+  );
+
+  const media=state.media||[];
+  const pendingMedia=media.filter(x=>{
+    const v=String(
+      x.approval_status||x.status||''
+    ).toLowerCase();
+    return v==='pending'||v==='review';
+  });
+
+  const tasks=(state.tasks||[]).filter(x=>{
+    const v=String(x.status||'').toLowerCase();
+    return v==='open'||v==='in_progress';
+  });
+
+  const offline=Math.max(
+    0,
+    commercial.length-onlineScreens.length
+  );
+
+  const queue=offline+pendingMedia.length+tasks.length;
+
+  const set=(id,value)=>{
+    const el=document.getElementById(id);
+    if(el)el.textContent=value;
+  };
+
+  set('todayScreens',
+    `${onlineScreens.length}/${commercial.length}`);
+  set('todayCampaigns',String(activeCampaigns.length));
+  set('todayQueue',String(queue));
+
+  let move='Network is healthy';
+  let sub='No immediate operational exception is showing.';
+
+  if(offline>0){
+    move=`Restore ${offline} offline screen${offline===1?'':'s'}`;
+    sub='Screen delivery health is the first operational priority.';
+  }else if(pendingMedia.length>0){
+    move=`Review ${pendingMedia.length} creative asset${
+      pendingMedia.length===1?'':'s'
+    }`;
+    sub='Creative is waiting before it can move into delivery.';
+  }else if(tasks.length>0){
+    move=`Clear ${tasks.length} open task${tasks.length===1?'':'s'}`;
+    sub='The operations queue has follow-up waiting.';
+  }else if(activeCampaigns.length===0){
+    move='Activate the first campaign';
+    sub='Infrastructure is ready; revenue delivery is the next move.';
+  }
+
+  set('todayNextMove',move);
+  set('todayNextMoveSub',sub);
+}
 function renderCommandCenter(){
   const screens=state.screens||[];
   const commercial=screens.filter(s=>!s.is_test);
@@ -1100,7 +1225,8 @@ function render(){
   </div>`).join('') || '<div class="muted">No playlists yet.</div>';
 
   if(window.refreshAdminSidebar)window.refreshAdminSidebar();
-  renderWorkspaceMetrics();}
+  renderWorkspaceMetrics();
+  renderTodayOperatorPanel();}
 
 $('#saveToken').onclick=()=>{
   state.token=$('#token').value.trim();

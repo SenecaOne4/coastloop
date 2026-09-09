@@ -405,6 +405,90 @@ summary{cursor:pointer;font-weight:750}
  }
 }
 </style>
+
+<style id="today-operator-polish">
+.today-priority-strip{
+ display:grid;
+ grid-template-columns:minmax(0,1.5fr) repeat(3,minmax(120px,.7fr));
+ gap:12px;
+ margin:0 0 16px;
+}
+.today-priority{
+ border:1px solid rgba(23,20,18,.08);
+ border-radius:15px;
+ background:rgba(255,255,255,.88);
+ padding:16px;
+ min-height:94px;
+}
+.today-priority.primary{
+ background:#171412;
+ color:#fff;
+ border-color:#171412;
+}
+.today-priority .label{
+ font-size:10px;
+ font-weight:850;
+ letter-spacing:.08em;
+ text-transform:uppercase;
+ opacity:.55;
+}
+.today-priority .value{
+ margin-top:7px;
+ font-size:25px;
+ line-height:1.05;
+ font-weight:850;
+ letter-spacing:-.035em;
+}
+.today-priority.primary .value{
+ font-size:19px;
+ line-height:1.25;
+ letter-spacing:-.015em;
+}
+.today-priority .sub{
+ margin-top:6px;
+ font-size:11px;
+ line-height:1.35;
+ opacity:.58;
+}
+.today-quick-actions{
+ display:flex;
+ flex-wrap:wrap;
+ gap:8px;
+ margin:0 0 18px;
+}
+.today-quick-actions button{
+ min-height:36px;
+ padding:8px 12px!important;
+ background:#fff!important;
+ color:#171412!important;
+ border:1px solid rgba(23,20,18,.11)!important;
+ box-shadow:none!important;
+}
+.today-quick-actions button:hover{
+ border-color:rgba(123,36,60,.4)!important;
+}
+.today-quick-actions button.primary{
+ background:#7b243c!important;
+ color:#fff!important;
+ border-color:#7b243c!important;
+}
+@media(max-width:1000px){
+ .today-priority-strip{
+  grid-template-columns:1fr 1fr;
+ }
+ .today-priority.primary{
+  grid-column:1/-1;
+ }
+}
+@media(max-width:560px){
+ .today-priority-strip{
+  grid-template-columns:1fr;
+ }
+ .today-priority.primary{
+  grid-column:auto;
+ }
+}
+</style>
 </head>
 <body><main class="shell">
 <div class="topbar"><div><div class="brand coastloop-lockup admin-lockup">
