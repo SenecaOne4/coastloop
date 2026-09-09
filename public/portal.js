@@ -389,7 +389,7 @@ function customerHome(d){
     <p>Start an advertising order or submit a venue to host a screen. It will appear here automatically.</p>
   </section>`}`;
 }
-const renderAccount=()=>location.href='/account';
+const renderAccount=()=>location.href='/account.html';
 
 $('#account').onclick=renderAccount;
 

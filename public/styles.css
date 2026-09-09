@@ -851,3 +851,17 @@ form .row>input,form .row>select,form .row>label{min-width:150px}
 @media(max-width:800px){
   .broker-nav{top:6px;margin-left:-4px;margin-right:-4px}
 }
+
+/* Account launch surface */
+.account-password-form{display:grid;gap:14px;margin-top:18px}
+.account-password-form label{display:grid;gap:7px}
+.account-password-form label span{
+  font-size:11px;font-weight:800;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--muted)
+}
+.account-password-form input{width:100%;box-sizing:border-box}
+.account-message{min-height:20px;margin-top:14px}
+.account-actions{
+  display:flex;justify-content:flex-end;margin-top:28px;
+  padding-top:20px;border-top:1px solid var(--line)
+}
