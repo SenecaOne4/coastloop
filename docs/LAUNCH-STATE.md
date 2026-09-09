@@ -5,6 +5,16 @@
 - Worker version 0.27.8
 - Repository clean
 
+## Stripe live billing ready
+- Live Stripe secret installed in the Worker
+- Live Stripe webhook signing secret installed
+- Signed webhook verification enforced
+- Monthly package: $100, version 2
+- Annual package: $1,000
+- Superseded $95 monthly package blocked from new checkout
+- Advertiser agreement acceptance creates and sends the Stripe invoice
+- `invoice.paid` advances the advertiser order and activates its draft campaign
+
 ## Customer flow ready
 - Unified authentication and portal
 - Host self-service request flow
@@ -40,7 +50,7 @@
    - Google OAuth works, but consent currently exposes Supabase hostname
    - Requires Supabase paid/custom-domain setup, DNS, and Google callback update
 
-3. North Beach hardware validation
+2. North Beach hardware validation
    - Install/sideload current Roku build
    - Pair real venue screen
    - Confirm boot/config/playback/heartbeat/proof on venue network
@@ -51,7 +61,6 @@ Roku currently caches playlist metadata, not media binaries.
 Do not claim full offline media playback.
 
 ## Next execution order
-1. Connect Stripe when business/payment credentials are available.
-2. Configure auth.coastloop.site when Supabase custom domain is available.
-3. Run North Beach live hardware validation.
+1. Configure auth.coastloop.site when Supabase custom domain is available.
+2. Run North Beach live hardware validation.
 4. Begin advertiser/host onboarding.
