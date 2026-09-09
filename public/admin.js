@@ -2103,6 +2103,71 @@ function improveAdminEmptyStates(){
     el.classList.add('admin-empty-state');
   });
 }
+
+function applyAdminWorkspaceOwnership(groups){
+  const byId=id=>document.getElementById(id);
+  const sectionOf=id=>byId(id)?.closest('section')||null;
+
+  const ownership={
+    network:[
+      sectionOf('opsCommandCenter'),
+      sectionOf('pairScreen'),
+      sectionOf('screens'),
+      sectionOf('scheduling')
+    ],
+    sales:[
+      sectionOf('prospectMap'),
+      sectionOf('newProspect'),
+      sectionOf('prospects'),
+      sectionOf('businesses'),
+      sectionOf('campaigns')
+    ],
+    creative:[
+      sectionOf('upload'),
+      sectionOf('newPlaylist')
+    ],
+    finance:[
+      sectionOf('fRevenue'),
+      sectionOf('fInvoiced'),
+      sectionOf('newBillingInvoice')
+    ],
+    people:[
+      sectionOf('inviteUser'),
+      sectionOf('digitalOnboarding')
+    ],
+    system:[
+      sectionOf('auditEvents')
+    ]
+  };
+
+  const howItWorks=[...document.querySelectorAll('section')]
+    .find(section=>
+      section.querySelector('h2')?.textContent?.trim()===
+      'How CoastLoop works'
+    );
+
+  if(howItWorks)ownership.system.push(howItWorks);
+
+  const assigned=new Set();
+
+  for(const [key,nodes] of Object.entries(ownership)){
+    const clean=[...new Set(nodes.filter(Boolean))];
+    groups[key]=clean;
+    clean.forEach(node=>{
+      node.dataset.workspaceOwner=key;
+      assigned.add(node);
+    });
+  }
+
+  // Keep Today limited to its command-center overview cards.
+  // Any explicitly owned operational section is removed from
+  // historical anchor-based membership.
+  if(groups.today){
+    groups.today=groups.today.filter(node=>!assigned.has(node));
+  }
+
+  return groups;
+}
 function initAdminSidebar(){
   const nav=document.querySelector('.admin-nav');
   organizeAdminActions();
@@ -2172,7 +2237,8 @@ function initAdminSidebar(){
 
     document.body.classList.add('admin-workspace-mode');
 
-    Object.entries(groups).forEach(([name,nodes])=>{
+      applyAdminWorkspaceOwnership(groups);
+Object.entries(groups).forEach(([name,nodes])=>{
       nodes.forEach(node=>{
         node.classList.toggle('admin-workspace-hidden',name!==key);
       });
