@@ -18,10 +18,19 @@
     </div>
   </details>
 </div></div>
-<div id="error" class="error"></div>
-<div class="grid"><div class="card"><div id="mScreens" class="metric">-</div><div class="muted">Screens</div></div><div class="card"><div id="mOnline" class="metric">-</div><div class="muted">Online</div></div><div class="card"><div id="mMedia" class="metric">-</div><div class="muted">Media</div></div><div class="card"><div id="mPlays" class="metric">-</div><div class="muted">Plays / 24h</div></div></div>
+<div id="error" class="error"></div><nav class="admin-nav" aria-label="Admin sections">
+  <a href="#today">Today</a>
+  <a href="#network">Hosts & Screens</a>
+  <a href="#sales">Advertisers</a>
+  <a href="#creative">Creative</a>
+  <a href="#finance">Finance</a>
+  <a href="#people">People</a>
+  <a href="#system">System</a>
+</nav>
 
-<section class="card ops-command-card">
+<div id="today" class="admin-anchor"></div><div class="grid"><div class="card"><div id="mScreens" class="metric">-</div><div class="muted">Screens</div></div><div class="card"><div id="mOnline" class="metric">-</div><div class="muted">Online</div></div><div class="card"><div id="mMedia" class="metric">-</div><div class="muted">Media</div></div><div class="card"><div id="mPlays" class="metric">-</div><div class="muted">Plays / 24h</div></div></div>
+
+<div id="network" class="admin-anchor"></div><section class="card ops-command-card">
   <div class="ops-command-head">
     <div>
       <div class="ops-kicker">COASTLOOP NETWORK OPERATIONS</div>
@@ -161,11 +170,11 @@
 </section>
 
 
-<section class="card" id="digitalOnboarding">
+<div id="people" class="admin-anchor"></div><section class="card" id="digitalOnboarding">
   <div class="row"><div><h2>Digital onboarding</h2><p class="muted">Loading packages, agreements and onboarding tasks…</p></div></div>
 </section>
 
-<section class="card"><div class="row"><div><h2>Sales pipeline</h2><p class="muted">A prospect becomes a customer only when you or a broker presses Promote.</p></div><div id="mProspects" class="metric">-</div></div><div style="overflow:auto"><table><thead><tr><th>Business</th><th>Interest</th><th>Contact</th><th>Stage</th><th>Score</th><th>Follow-up</th><th></th></tr></thead><tbody id="prospects"></tbody></table></div></section>
+<div id="sales" class="admin-anchor"></div><section class="card"><div class="row"><div><h2>Sales pipeline</h2><p class="muted">A prospect becomes a customer only when you or a broker presses Promote.</p></div><div id="mProspects" class="metric">-</div></div><div style="overflow:auto"><table><thead><tr><th>Business</th><th>Interest</th><th>Contact</th><th>Stage</th><th>Score</th><th>Follow-up</th><th></th></tr></thead><tbody id="prospects"></tbody></table></div></section>
 <section class="card">
 <div class="row"><div><h2>Customers</h2><p class="muted">Customers are promoted prospects. HOST means they display a TV; ADVERTISER means they buy airtime; a business can be both.</p></div><div id="mBusinesses" class="metric">-</div></div>
 <div id="businesses" class="business-list"></div>
@@ -194,7 +203,7 @@
 <section class="card">
   <div class="row section-heading">
     <div>
-      <h2>Billing center</h2>
+      <div id="finance" class="admin-anchor"></div><h2>Billing center</h2>
       <p class="muted">Create receivables from campaigns. Manual invoices work now; Stripe adds a hosted payment page using the payment methods enabled in Stripe.</p>
     </div>
     <span id="billingStatus" class="pill">BILLING</span>
@@ -291,7 +300,7 @@
   <p class="muted">Host operating hours and advertiser dayparts feed the player and pacing engine directly.</p>
   <div id="scheduling"></div>
 </section>
-<section class="card">
+<div id="creative" class="admin-anchor"></div><section class="card">
   <h2>Creative review</h2>
   <p class="muted">Upload creative, bind advertiser work to the correct customer, then approve it before campaign delivery. House media stays separate from advertiser campaigns.</p>
   <form id="upload" class="row">
@@ -308,7 +317,7 @@
 <section class="card"><h2>Playlists</h2><form id="newPlaylist" class="row"><input name="name" placeholder="South Strand Demo" required><button>Create playlist</button></form><div id="playlists" class="playlist-list"></div></section>
 </main>
 
-<dialog id="mediaPreviewDialog" class="media-preview-dialog">
+<div id="system" class="admin-anchor"></div><dialog id="mediaPreviewDialog" class="media-preview-dialog">
   <div class="media-preview-shell">
     <div class="media-preview-head">
       <div>
