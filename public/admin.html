@@ -106,6 +106,45 @@ body>.container{
  .admin-nav a{width:auto;flex:0 0 auto}
 }
 </style>
+
+<style id="admin-workspace-ui">
+.admin-nav a{
+ position:relative;
+ transition:background .15s ease,transform .15s ease;
+}
+.admin-nav a.admin-nav-active{
+ background:rgba(127,127,127,.15);
+ transform:translateX(2px);
+}
+.admin-nav a .nav-badge{
+ float:right;
+ min-width:20px;
+ padding:1px 6px;
+ margin-left:8px;
+ border-radius:999px;
+ text-align:center;
+ font-size:10px;
+ background:rgba(127,127,127,.14);
+}
+.workspace-title{
+ display:flex;
+ justify-content:space-between;
+ align-items:flex-end;
+ gap:18px;
+ margin:8px 0 18px;
+ padding:0 2px 15px;
+ border-bottom:1px solid var(--line,#ddd);
+}
+.workspace-title h1{margin:3px 0 0;font-size:30px}
+.workspace-title p{margin:5px 0 0}
+.admin-workspace-hidden{display:none!important}
+.admin-workspace-visible{display:block}
+body.admin-workspace-mode .admin-anchor{scroll-margin-top:12px}
+@media(min-width:901px){
+ .admin-nav{box-shadow:4px 0 18px rgba(0,0,0,.035)}
+ .admin-nav a{padding:11px 12px}
+}
+</style>
 </head>
 <body><main class="shell">
 <div class="topbar"><div><div class="brand coastloop-lockup admin-lockup">
@@ -136,7 +175,7 @@ body>.container{
   <a href="#system">System</a>
 </nav>
 
-<div id="today" class="admin-anchor"></div>
+<div id="today" class="admin-anchor" data-workspace="today"></div>
 <section class="command-hero">
   <div>
     <div class="eyebrow">COASTLOOP COMMAND CENTER</div>
@@ -169,6 +208,7 @@ body>.container{
   </div>
 </div>
 
+<div id="network" class="admin-anchor" data-workspace="network"></div>
 <section class="command-grid">
   <div class="card command-primary">
     <div class="section-heading">
@@ -176,7 +216,7 @@ body>.container{
         <div class="eyebrow">OPERATIONS</div>
         <h2>Needs your attention</h2>
       </div>
-      <a href="#operations">View operations</a>
+      <a href="#system">View operations</a>
     </div>
     <div id="commandAttention" class="command-list"></div>
   </div>
@@ -187,7 +227,7 @@ body>.container{
         <div class="eyebrow">NETWORK</div>
         <h2>Screen health</h2>
       </div>
-      <a href="#screens">All screens</a>
+      <a href="#network">All screens</a>
     </div>
     <div id="commandScreens" class="command-list"></div>
   </div>
@@ -359,11 +399,11 @@ body>.container{
 </section>
 
 
-<div id="people" class="admin-anchor"></div><section class="card" id="digitalOnboarding">
+<div id="people" class="admin-anchor" data-workspace="people"></div><section class="card" id="digitalOnboarding">
   <div class="row"><div><h2>Digital onboarding</h2><p class="muted">Loading packages, agreements and onboarding tasks…</p></div></div>
 </section>
 
-<div id="sales" class="admin-anchor"></div><section class="card"><div class="row"><div><h2>Sales pipeline</h2><p class="muted">A prospect becomes a customer only when you or a broker presses Promote.</p></div><div id="mProspects" class="metric">-</div></div><div style="overflow:auto"><table><thead><tr><th>Business</th><th>Interest</th><th>Contact</th><th>Stage</th><th>Score</th><th>Follow-up</th><th></th></tr></thead><tbody id="prospects"></tbody></table></div></section>
+<div id="sales" class="admin-anchor" data-workspace="sales"></div><section class="card"><div class="row"><div><h2>Sales pipeline</h2><p class="muted">A prospect becomes a customer only when you or a broker presses Promote.</p></div><div id="mProspects" class="metric">-</div></div><div style="overflow:auto"><table><thead><tr><th>Business</th><th>Interest</th><th>Contact</th><th>Stage</th><th>Score</th><th>Follow-up</th><th></th></tr></thead><tbody id="prospects"></tbody></table></div></section>
 <section class="card">
 <div class="row"><div><h2>Customers</h2><p class="muted">Customers are promoted prospects. HOST means they display a TV; ADVERTISER means they buy airtime; a business can be both.</p></div><div id="mBusinesses" class="metric">-</div></div>
 <div id="businesses" class="business-list"></div>
@@ -392,7 +432,7 @@ body>.container{
 <section class="card">
   <div class="row section-heading">
     <div>
-      <div id="finance" class="admin-anchor"></div><h2>Billing center</h2>
+      <div id="finance" class="admin-anchor" data-workspace="finance"></div><h2>Billing center</h2>
       <p class="muted">Create receivables from campaigns. Manual invoices work now; Stripe adds a hosted payment page using the payment methods enabled in Stripe.</p>
     </div>
     <span id="billingStatus" class="pill">BILLING</span>
@@ -489,7 +529,7 @@ body>.container{
   <p class="muted">Host operating hours and advertiser dayparts feed the player and pacing engine directly.</p>
   <div id="scheduling"></div>
 </section>
-<div id="creative" class="admin-anchor"></div><section class="card">
+<div id="creative" class="admin-anchor" data-workspace="creative"></div><section class="card">
   <h2>Creative review</h2>
   <p class="muted">Upload creative, bind advertiser work to the correct customer, then approve it before campaign delivery. House media stays separate from advertiser campaigns.</p>
   <form id="upload" class="row">
@@ -506,7 +546,7 @@ body>.container{
 <section class="card"><h2>Playlists</h2><form id="newPlaylist" class="row"><input name="name" placeholder="South Strand Demo" required><button>Create playlist</button></form><div id="playlists" class="playlist-list"></div></section>
 </main>
 
-<div id="system" class="admin-anchor"></div><dialog id="mediaPreviewDialog" class="media-preview-dialog">
+<div id="system" class="admin-anchor" data-workspace="system"></div><dialog id="mediaPreviewDialog" class="media-preview-dialog">
   <div class="media-preview-shell">
     <div class="media-preview-head">
       <div>

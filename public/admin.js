@@ -1098,7 +1098,8 @@ function render(){
       return `<li>${esc(i.name)} <span class="pill">${esc(label)}</span> <button class="secondary remove-item" data-media="${i.media_id}" data-item="${i.id}" style="padding:4px 7px">remove</button></li>`;
     }).join('')}</ol>
   </div>`).join('') || '<div class="muted">No playlists yet.</div>';
-}
+
+  if(window.refreshAdminSidebar)window.refreshAdminSidebar();}
 
 $('#saveToken').onclick=()=>{
   state.token=$('#token').value.trim();
@@ -1839,28 +1840,136 @@ function initAdminSidebar(){
   const nav=document.querySelector('.admin-nav');
   if(!nav)return;
 
-  const links=[...nav.querySelectorAll('a[href^="#"]')];
-  const targets=links.map(a=>{
-    const id=a.getAttribute('href').slice(1);
-    return [a,document.getElementById(id)];
-  }).filter(x=>x[1]);
-
-  const activate=()=>{
-    let current=targets[0];
-    for(const pair of targets){
-      if(pair[1].getBoundingClientRect().top<=140) current=pair;
-    }
-    links.forEach(a=>a.classList.remove('admin-nav-active'));
-    if(current)current[0].classList.add('admin-nav-active');
+  const labels={
+    today:['Today','Your CoastLoop command center'],
+    network:['Hosts & Screens','Locations, screens, pairing and playback'],
+    sales:['Advertisers','Prospects, orders, campaigns and delivery'],
+    creative:['Creative','Media library, approvals and campaign assets'],
+    finance:['Finance','Billing, invoices, compensation and commissions'],
+    people:['People','Accounts, invitations, roles and access'],
+    system:['System','Operational tools, audit and diagnostics']
   };
 
-  links.forEach(a=>a.addEventListener('click',()=>{
-    links.forEach(x=>x.classList.remove('admin-nav-active'));
-    a.classList.add('admin-nav-active');
-  }));
+  const links=[...nav.querySelectorAll('a[href^="#"]')]
+    .filter(a=>labels[a.getAttribute('href').slice(1)]);
 
-  window.addEventListener('scroll',activate,{passive:true});
-  activate();
+  const boundaries=[...document.querySelectorAll(
+    '.admin-anchor[data-workspace]'
+  )];
+
+  // Each workspace owns everything from its boundary until the next
+  // top-level boundary. Nodes are preserved; only visibility changes.
+  const groups={};
+  boundaries.forEach((anchor,i)=>{
+    const key=anchor.dataset.workspace;
+    const next=boundaries[i+1]||null;
+    const nodes=[];
+    let n=anchor;
+    while(n && n!==next){
+      nodes.push(n);
+      n=n.nextElementSibling;
+    }
+    groups[key]=nodes;
+  });
+
+  function badge(link,key){
+    let value='';
+    if(key==='network'){
+      value=(state.screens||[]).filter(x=>!x.is_test).length;
+    }else if(key==='sales'){
+      value=(state.campaigns||[]).filter(x=>x.status==='active').length;
+    }else if(key==='creative'){
+      value=(state.media||[]).filter(x=>
+        x.approval_status==='pending'||x.status==='pending').length;
+    }else if(key==='people'){
+      value=(state.users||state.members||[]).length||'';
+    }
+    let b=link.querySelector('.nav-badge');
+    if(value!==''&&value!==0){
+      if(!b){
+        b=document.createElement('span');
+        b.className='nav-badge';
+        link.appendChild(b);
+      }
+      b.textContent=value;
+    }else if(b){
+      b.remove();
+    }
+  }
+
+  function show(key,push=true){
+    if(!groups[key])key='today';
+
+    document.body.classList.add('admin-workspace-mode');
+
+    Object.entries(groups).forEach(([name,nodes])=>{
+      nodes.forEach(node=>{
+        node.classList.toggle('admin-workspace-hidden',name!==key);
+      });
+    });
+
+    links.forEach(a=>{
+      const active=a.getAttribute('href')==='#'+key;
+      a.classList.toggle('admin-nav-active',active);
+      a.setAttribute('aria-current',active?'page':'false');
+      badge(a,a.getAttribute('href').slice(1));
+    });
+
+    if(push && location.hash!=='#'+key){
+      history.replaceState(null,'','#'+key);
+    }
+
+    window.scrollTo({top:0,behavior:'instant'});
+  }
+
+  links.forEach(a=>{
+    a.addEventListener('click',e=>{
+      e.preventDefault();
+      show(a.getAttribute('href').slice(1));
+    });
+  });
+
+  // Command-center deep links open the appropriate workspace rather
+  // than attempting to scroll through hidden content.
+  document.querySelectorAll(
+    '.command-grid a[href^="#"]'
+  ).forEach(a=>{
+    a.addEventListener('click',e=>{
+      const raw=a.getAttribute('href').slice(1);
+      const route={
+        screens:'network',
+        campaigns:'sales',
+        operations:'system'
+      }[raw]||raw;
+      if(groups[route]){
+        e.preventDefault();
+        show(route);
+      }
+    });
+  });
+
+  const requested=location.hash.slice(1);
+  const route={
+    screens:'network',
+    campaigns:'sales',
+    operations:'system'
+  }[requested]||requested;
+
+  show(groups[route]?route:'today',false);
+
+  window.addEventListener('hashchange',()=>{
+    const raw=location.hash.slice(1);
+    const key={
+      screens:'network',
+      campaigns:'sales',
+      operations:'system'
+    }[raw]||raw;
+    if(groups[key])show(key,false);
+  });
+
+  window.refreshAdminSidebar=()=>{
+    links.forEach(a=>badge(a,a.getAttribute('href').slice(1)));
+  };
 }
 
 if(document.readyState==='loading'){
