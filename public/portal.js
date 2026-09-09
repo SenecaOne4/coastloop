@@ -323,21 +323,72 @@ function actionCard(title,text,href,label){
 
 function customerHome(d){
   const businesses=Array.isArray(d.businesses)?d.businesses:[];
-  const isHost=businesses.some(b=>b.is_host);
-  const isAdvertiser=businesses.some(b=>b.is_advertiser);
+  const email=d?.user?.email||'';
+  const hosts=businesses.filter(b=>b.is_host);
+  const advertisers=businesses.filter(b=>b.is_advertiser);
+  const access=d?.access||{};
+  const internal=String(access.internal_role||'').toLowerCase();
+  const broker=internal==='broker';
+  const admin=['owner','admin'].includes(internal);
 
-  return `<section class="portal-section">
-    <div class="portal-eyebrow">WELCOME</div>
-    <h1>What do you want to do?</h1>
-    <p class="public-lede">CoastLoop keeps it simple. Manage your advertising, your screens, or both.</p>
-    <div class="portal-choice-grid">
-      ${actionCard('Buy Ad Space','Put your business on the CoastLoop network.','/advertise','Advertise')}
-      ${actionCard('Host a Screen','Put a TV on CoastLoop and earn.','/host','Host')}
-      ${isHost&&isAdvertiser?actionCard('My CoastLoop','Manage your advertising and hosted screens.','/portal.html','Open dashboard'):''}
+  const hostScreens=hosts.reduce((n,b)=>n+Number(b?.host?.screens||0),0);
+  const hostOnline=hosts.reduce((n,b)=>n+Number(b?.host?.online||0),0);
+  const adCampaigns=advertisers.reduce((n,b)=>n+(Array.isArray(b?.advertiser?.campaigns)?b.advertiser.campaigns.length:0),0);
+
+  const roleTools=[
+    broker?actionCard('Broker desk','Pipeline, customers, sales and commissions.','/broker.html','Open broker desk'):'',
+    admin?actionCard('CoastLoop admin','Network operations, customers, creative and finance.','/admin.html','Open admin'):''
+  ].join('');
+
+  const businessDashboards=businesses.map(b=>{
+    const sections=[];
+    if(b.is_advertiser) sections.push(advertiserDashboard(b));
+    if(b.is_host) sections.push(hostDashboard(b));
+    return `<section class="portal-business">
+      <div class="portal-business-title">
+        <div>
+          <div class="portal-eyebrow">${b.is_host&&b.is_advertiser?'HOST + ADVERTISER':b.is_host?'HOST':'ADVERTISER'}</div>
+          <h2>${esc(b.name||'My business')}</h2>
+        </div>
+      </div>
+      ${sections.join('')}
+    </section>`;
+  }).join('');
+
+  return `<section class="portal-command">
+    <div class="portal-welcome">
+      <div>
+        <div class="portal-eyebrow">MY COASTLOOP</div>
+        <h1>Welcome back.</h1>
+        <p class="public-lede">${esc(email)} · Run your advertising and hosted screens from one place.</p>
+      </div>
     </div>
-  </section>`;
-}
 
+    <div class="portal-summary-grid">
+      ${metric(num(adCampaigns),'advertising campaigns')}
+      ${metric(num(hostScreens),'hosted screens')}
+      ${metric(num(hostOnline),'screens online now')}
+    </div>
+
+    <div class="portal-section-head">
+      <div>
+        <div class="portal-eyebrow">QUICK ACTIONS</div>
+        <h2>Grow your CoastLoop presence</h2>
+      </div>
+    </div>
+    <div class="portal-choice-grid">
+      ${actionCard('Buy Ad Space','Put your business across eligible CoastLoop inventory.','/advertise','Start advertising')}
+      ${actionCard('Host a Screen','Add an approved venue TV to the CoastLoop network.','/host','Add a venue')}
+      ${roleTools}
+    </div>
+  </section>
+
+  ${businessDashboards||`<section class="portal-empty-state">
+    <div class="portal-eyebrow">READY WHEN YOU ARE</div>
+    <h2>Your dashboard is ready.</h2>
+    <p>Start an advertising order or submit a venue to host a screen. It will appear here automatically.</p>
+  </section>`}`;
+}
 const renderAccount=()=>location.href='/account';
 
 $('#account').onclick=renderAccount;
