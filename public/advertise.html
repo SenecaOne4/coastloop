@@ -27,6 +27,14 @@ body{margin:0;background:#08090b;color:#f5f3ef}
 .ad-continue{width:100%;min-height:54px;border:0;border-radius:999px;background:#caa65a;color:#17120a;font-weight:750;cursor:pointer}
 .ad-note{margin-top:18px;color:#85868d;font-size:12px;line-height:1.5}
 @media(max-width:600px){.ad-card{padding:26px}.ad-card h1{font-size:34px}.ad-options{grid-template-columns:1fr}}
+
+.ad-details{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:24px 0}
+.ad-field{display:grid;gap:7px}
+.ad-field.wide{grid-column:1/-1}
+.ad-field label{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#a5a6ad}
+.ad-field input{width:100%;box-sizing:border-box;padding:14px 15px;border-radius:12px;border:1px solid #3a3b41;background:#111216;color:#f5f3ef;font:inherit}
+.ad-field input:focus{outline:none;border-color:#caa65a;box-shadow:0 0 0 2px rgba(202,166,90,.12)}
+.ad-account{margin:18px 0;color:#a8a9af;font-size:13px}
 </style>
 </head>
 <body>
@@ -54,7 +62,22 @@ body{margin:0;background:#08090b;color:#f5f3ef}
       </button>
     </div>
 
-    <button id="continue" class="ad-continue">Continue</button>
+    <div class="ad-details">
+  <div class="ad-field wide">
+    <label for="businessName">Business name</label>
+    <input id="businessName" autocomplete="organization" required>
+  </div>
+  <div class="ad-field">
+    <label for="contactName">Contact name</label>
+    <input id="contactName" autocomplete="name" required>
+  </div>
+  <div class="ad-field">
+    <label for="contactMobile">Mobile</label>
+    <input id="contactMobile" type="tel" autocomplete="tel" required>
+  </div>
+</div>
+<div id="accountEmail" class="ad-account"></div>
+<button id="continue" class="ad-continue">Continue</button>
 
     <div class="ad-note">
       Includes creative production and verified-delivery reporting. CoastLoop only delivers advertising to commissioned network inventory.
@@ -106,26 +129,17 @@ button.onclick=async()=>{
     const name=user.user_metadata?.full_name||
       user.full_name||user.name||'';
     const email=user.email||'';
+    const accountEmail=document.querySelector('#accountEmail');
+    if(accountEmail&&email)accountEmail.textContent='Signed in as '+email;
+    const contactField=document.querySelector('#contactName');
+    if(contactField&&!contactField.value&&name)contactField.value=name;
 
-    const legal=prompt('Business name');
-    if(!legal){
-      button.disabled=false;
-      button.textContent='Continue';
-      return;
-    }
+    const legal=document.querySelector('#businessName').value.trim();
+    const contact=document.querySelector('#contactName').value.trim();
+    const mobile=document.querySelector('#contactMobile').value.trim();
 
-    const contact=prompt('Your name',name);
-    if(!contact){
-      button.disabled=false;
-      button.textContent='Continue';
-      return;
-    }
-
-    const mobile=prompt('Mobile number');
-    if(!mobile){
-      button.disabled=false;
-      button.textContent='Continue';
-      return;
+    if(!legal||!contact||!mobile){
+      throw new Error('Add your business name, contact name, and mobile number.');
     }
 
     const d=await api('/api/onboarding/advertiser/start',{
