@@ -125,8 +125,17 @@ export async function publicAdvertisingPackages(env) {
       env,
       `advertising_packages?organization_id=eq.${ORG_ID}&status=eq.active&availability_status=in.(available,limited)&select=*&order=version.desc,price_cents.asc`
     );
+    const latestByKey = new Map();
+    for (const row of rows || []) {
+      const current = latestByKey.get(row.package_key);
+      if (!current || Number(row.version) > Number(current.version))
+        latestByKey.set(row.package_key, row);
+    }
+
     return json({
-      packages: (rows || []).map(packageSnapshot),
+      packages: [...latestByKey.values()]
+        .sort((a, b) => Number(a.price_cents) - Number(b.price_cents))
+        .map(packageSnapshot),
       measurement_note: "Projected plays are delivery projections, not human views.",
     });
   } catch {
