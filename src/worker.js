@@ -2998,6 +2998,191 @@ async function stats(env) {
   };
 }
 
+
+async function currentPlatformTerms(env, auth) {
+  const rows = await sb(
+    env,
+    `platform_terms?organization_id=eq.${ORG_ID}` +
+    `&status=eq.published&select=*` +
+    `&order=version.desc&limit=1`
+  );
+  const terms = rows?.[0] || null;
+  if (!terms) return { required: false, terms: null, accepted: true };
+
+  const userId = auth?.user?.id;
+  if (!userId)
+    return { required: true, terms, accepted: false };
+
+  const accepted = await sb(
+    env,
+    `platform_terms_acceptances?organization_id=eq.${ORG_ID}` +
+    `&terms_id=eq.${terms.id}&user_id=eq.${userId}` +
+    `&select=id,accepted_at&limit=1`
+  );
+
+  return {
+    required: true,
+    terms: {
+      id: terms.id,
+      version: terms.version,
+      title: terms.title,
+      body_html: terms.body_html,
+      content_sha256: terms.content_sha256,
+      published_at: terms.published_at,
+      has_source: Boolean(terms.source_storage_key)
+    },
+    accepted: Boolean(accepted?.[0]),
+    accepted_at: accepted?.[0]?.accepted_at || null
+  };
+}
+
+async function acceptPlatformTerms(request, env, auth) {
+  const current = await currentPlatformTerms(env, auth);
+  if (!current.required || !current.terms)
+    return { ok: true, accepted: false, reason: "no published terms" };
+
+  if (current.accepted)
+    return {
+      ok: true,
+      accepted: true,
+      version: current.terms.version
+    };
+
+  const ip = request.headers.get("CF-Connecting-IP") || null;
+  const ua = request.headers.get("User-Agent") || null;
+
+  await sb(env, "platform_terms_acceptances", {
+    method: "POST",
+    headers: { Prefer: "return=representation" },
+    body: JSON.stringify({
+      organization_id: ORG_ID,
+      terms_id: current.terms.id,
+      user_id: auth.user.id,
+      version: current.terms.version,
+      content_sha256: current.terms.content_sha256,
+      ip_address: ip,
+      user_agent: ua
+    })
+  });
+
+  return {
+    ok: true,
+    accepted: true,
+    version: current.terms.version
+  };
+}
+
+async function adminPlatformTerms(env) {
+  const rows = await sb(
+    env,
+    `platform_terms?organization_id=eq.${ORG_ID}` +
+    `&select=id,version,title,status,content_sha256,source_sha256,` +
+    `published_at,created_at&order=version.desc&limit=25`
+  );
+  return { terms: rows || [] };
+}
+
+async function publishPlatformTerms(request, env, auth) {
+  const form = await request.formData();
+  const title = String(form.get("title") || "").trim();
+  const bodyHtml = String(form.get("body_html") || "").trim();
+  const source = form.get("source");
+
+  if (!title || !bodyHtml)
+    throw new Error("title and terms content are required");
+
+  const bytes = new TextEncoder().encode(bodyHtml);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  const hex = [...new Uint8Array(digest)]
+    .map(b => b.toString(16).padStart(2, "0")).join("");
+
+  const existing = await sb(
+    env,
+    `platform_terms?organization_id=eq.${ORG_ID}` +
+    `&select=id,version,status&order=version.desc&limit=1`
+  );
+  const version = Number(existing?.[0]?.version || 0) + 1;
+
+  let sourceKey = null;
+  let sourceSha = null;
+
+  if (source && typeof source.arrayBuffer === "function" && source.size) {
+    if (source.size > 20 * 1024 * 1024)
+      throw new Error("legal source document exceeds 20 MB");
+
+    const allowed = new Set([
+      "application/pdf",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "text/plain",
+      "text/html"
+    ]);
+    if (source.type && !allowed.has(source.type))
+      throw new Error("unsupported legal source document type");
+
+    const raw = await source.arrayBuffer();
+    const sd = await crypto.subtle.digest("SHA-256", raw);
+    sourceSha = [...new Uint8Array(sd)]
+      .map(b => b.toString(16).padStart(2, "0")).join("");
+
+    const safe = String(source.name || "terms-source")
+      .replace(/[^a-zA-Z0-9._-]+/g, "-")
+      .slice(0, 120);
+    sourceKey = `legal/platform-terms/v${version}/${safe}`;
+
+    await env.MEDIA.put(sourceKey, raw, {
+      httpMetadata: {
+        contentType: source.type || "application/octet-stream"
+      }
+    });
+  }
+
+  const oldPublished = await sb(
+    env,
+    `platform_terms?organization_id=eq.${ORG_ID}` +
+    `&status=eq.published&select=id`
+  );
+
+  for (const old of oldPublished || []) {
+    await sb(env, `platform_terms?id=eq.${old.id}`, {
+      method: "PATCH",
+      headers: { Prefer: "return=minimal" },
+      body: JSON.stringify({ status: "retired" })
+    });
+  }
+
+  const rows = await sb(env, "platform_terms", {
+    method: "POST",
+    headers: { Prefer: "return=representation" },
+    body: JSON.stringify({
+      organization_id: ORG_ID,
+      version,
+      title,
+      body_html: bodyHtml,
+      source_storage_key: sourceKey,
+      source_sha256: sourceSha,
+      content_sha256: hex,
+      status: "published",
+      require_reacceptance: true,
+      published_at: new Date().toISOString(),
+      created_by: auth?.user?.id || null
+    })
+  });
+
+  if (!rows?.[0]) throw new Error("terms publication failed");
+
+  return {
+    ok: true,
+    terms: {
+      id: rows[0].id,
+      version,
+      title,
+      status: "published",
+      content_sha256: hex
+    }
+  };
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -3139,10 +3324,40 @@ export default {
           return json(await financeSnapshot(env, brokerAuth));
       }
 
+
+      if (url.pathname === "/api/legal/current" &&
+          request.method === "GET") {
+        const legalAuth = await requireUserAccess(request, env);
+        if (!legalAuth) return json({ error: "unauthorized" }, 401);
+        return json(await currentPlatformTerms(env, legalAuth));
+      }
+
+      if (url.pathname === "/api/legal/accept" &&
+          request.method === "POST") {
+        const legalAuth = await requireUserAccess(request, env);
+        if (!legalAuth) return json({ error: "unauthorized" }, 401);
+        return json(await acceptPlatformTerms(request, env, legalAuth));
+      }
+
       if (url.pathname.startsWith("/api/admin/")) {
         const adminAuth = await requireAdminAccess(request, env);
         if (!adminAuth)
           return json({ error: "unauthorized" }, 401);
+
+
+        if (url.pathname === "/api/admin/legal/terms" &&
+            request.method === "GET")
+          return json(await adminPlatformTerms(env));
+
+        if (url.pathname === "/api/admin/legal/terms" &&
+            request.method === "POST")
+          return auditMutation(
+            request,
+            env,
+            adminAuth,
+            "platform_terms.publish",
+            () => publishPlatformTerms(request, env, adminAuth)
+          );
 
         if (url.pathname === "/api/admin/audit" && request.method === "GET")
           return json(await adminAuditEvents(env, url));

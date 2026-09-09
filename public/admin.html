@@ -489,6 +489,52 @@ summary{cursor:pointer;font-weight:750}
  }
 }
 </style>
+
+<style id="workspace-container-repair">
+.admin-workspace-mode main{
+ min-width:0;
+}
+.admin-workspace-mode .admin-workspace-hidden{
+ display:none!important;
+}
+.admin-workspace-mode section.card,
+.admin-workspace-mode .workspace-banner,
+.admin-workspace-mode .workspace-metrics{
+ width:100%;
+ max-width:100%;
+ box-sizing:border-box;
+ min-width:0;
+}
+.admin-workspace-mode #people~section,
+.admin-workspace-mode #creative~section,
+.admin-workspace-mode #system~section{
+ min-width:0;
+}
+.admin-workspace-mode .media-list,
+.admin-workspace-mode .playlist-list,
+.admin-workspace-mode .media-preview-stage{
+ max-width:100%;
+ min-width:0;
+ overflow-wrap:anywhere;
+}
+.admin-workspace-mode .media-preview-dialog{
+ max-width:100vw;
+ box-sizing:border-box;
+}
+.admin-workspace-mode .workspace-action-grid,
+.admin-workspace-mode .row{
+ max-width:100%;
+ min-width:0;
+}
+@media(max-width:760px){
+ .admin-workspace-mode section.card{
+  overflow:hidden;
+ }
+ .admin-workspace-mode .row{
+  flex-wrap:wrap;
+ }
+}
+</style>
 </head>
 <body><main class="shell">
 <div class="topbar"><div><div class="brand coastloop-lockup admin-lockup">
@@ -890,7 +936,51 @@ summary{cursor:pointer;font-weight:750}
 <section class="card"><h2>Playlists</h2><form id="newPlaylist" class="row"><input name="name" placeholder="South Strand Demo" required><button>Create playlist</button></form><div id="playlists" class="playlist-list"></div></section>
 </main>
 
-<div id="system" class="admin-anchor" data-workspace="system"></div><dialog id="mediaPreviewDialog" class="media-preview-dialog">
+<div id="system" class="admin-anchor" data-workspace="system"></div>
+<section class="card" id="platformTermsAdmin">
+  <div class="ops-kicker">PLATFORM LEGAL</div>
+  <h2>Terms & click-through</h2>
+  <p class="muted">
+    Publish a new platform terms version whenever CoastLoop needs
+    every signed-in user to accept updated terms on their next use.
+    Historical acceptances remain recorded.
+  </p>
+
+  <div id="platformTermsCurrent" class="muted">
+    Loading current terms…
+  </div>
+
+  <details class="admin-action-card">
+    <summary>Publish new terms version</summary>
+    <form id="publishPlatformTerms">
+      <label>
+        Title
+        <input name="title" required
+          placeholder="CoastLoop Terms of Service">
+      </label>
+
+      <label>
+        Terms text / HTML
+        <textarea name="body_html" rows="12" required
+          placeholder="Paste the current terms here."></textarea>
+      </label>
+
+      <label>
+        Source document
+        <input name="source" type="file"
+          accept=".pdf,.doc,.docx,.txt,.html">
+      </label>
+
+      <p class="muted">
+        Publishing creates a new required version. Existing users
+        must accept that version before continuing.
+      </p>
+
+      <button type="submit">Publish & require acceptance</button>
+    </form>
+  </details>
+</section>
+<dialog id="mediaPreviewDialog" class="media-preview-dialog">
   <div class="media-preview-shell">
     <div class="media-preview-head">
       <div>
@@ -902,6 +992,7 @@ summary{cursor:pointer;font-weight:750}
     </div>
     <div id="mediaPreviewStage" class="media-preview-stage"></div>
   </div>
-</dialog><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script type="module" src="/admin.js"></script></body></html>
+</dialog><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script type="module" src="/admin.js"></script><script src="/legal-gate.js"></script>
+</body></html>
 
 <!-- asset-refresh-20260906T182552Z -->

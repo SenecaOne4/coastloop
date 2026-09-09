@@ -2465,3 +2465,57 @@ if(document.readyState==='loading'){
 }else{
   initAdminSidebar();
 }
+
+async function loadPlatformTermsAdmin(){
+  const box=document.getElementById("platformTermsCurrent");
+  if(!box) return;
+  try{
+    const data=await api("/api/admin/legal/terms");
+    const current=(data.terms||[]).find(x=>x.status==="published");
+    box.innerHTML=current
+      ? `<strong>${esc(current.title)}</strong> · v${current.version} · published`
+      : "No platform terms are currently published.";
+  }catch(err){
+    box.textContent=`Terms status unavailable: ${err.message}`;
+  }
+}
+
+function initPlatformTermsAdmin(){
+  const form=document.getElementById("publishPlatformTerms");
+  if(!form || form.dataset.bound==="1") return;
+  form.dataset.bound="1";
+
+  form.addEventListener("submit",async event=>{
+    event.preventDefault();
+    const button=form.querySelector('button[type="submit"]');
+    if(button) button.disabled=true;
+    try{
+      const data=new FormData(form);
+      const headers=state.token
+        ? {authorization:`Bearer ${state.token}`}
+        : {};
+      const res=await fetch("/api/admin/legal/terms",{
+        method:"POST",
+        headers,
+        body:data
+      });
+      const out=await res.json().catch(()=>({}));
+      if(!res.ok) throw new Error(out.error||`${res.status}`);
+      form.reset();
+      await loadPlatformTermsAdmin();
+      alert(`Terms v${out.terms.version} published. Re-acceptance is now required.`);
+    }catch(err){
+      alert(`Could not publish terms: ${err.message}`);
+    }finally{
+      if(button) button.disabled=false;
+    }
+  });
+
+  loadPlatformTermsAdmin();
+}
+
+if(document.readyState==="loading"){
+  document.addEventListener("DOMContentLoaded",initPlatformTermsAdmin);
+}else{
+  initPlatformTermsAdmin();
+}
