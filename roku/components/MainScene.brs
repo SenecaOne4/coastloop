@@ -368,8 +368,11 @@ sub handleConfig(data as Object)
         cachedConfig = {
             items: data.items
         }
-        reg.Write("last_config", FormatJson(cachedConfig))
-        reg.Flush()
+        cachedJson = FormatJson(cachedConfig)
+        if cachedJson <> invalid and Len(cachedJson) <= 12000
+            reg.Write("last_config", cachedJson)
+            reg.Flush()
+        end if
         m.pairing.visible = false
         m.heartbeatTimer.control = "start"
         m.configClock = CreateObject("roTimespan")
