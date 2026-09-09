@@ -608,7 +608,7 @@ export async function acceptAdvertiserCheckout(request, env) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           campaign_id: campaignId,
-          provider: "manual",
+          provider: env.STRIPE_SECRET_KEY ? "stripe" : "manual",
           total_cents: Number(c.order.amount_cents),
           days_until_due: 7,
         }),
