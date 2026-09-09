@@ -3015,6 +3015,35 @@ export default {
       if (url.pathname === "/api/portal/overview" && request.method === "GET")
         return portalOverview(request, env);
 
+      if (url.pathname === "/api/portal/media" && request.method === "POST") {
+        const userAuth = await requireUserAccess(request, env);
+        if (!userAuth) return json({ error: "unauthorized" }, 401);
+
+        const form = await request.formData();
+        const businessId =
+          String(form.get("advertiser_business_id") || "").trim();
+
+        const owned = (userAuth.access?.businesses || []).some(
+          x => String(x.business_id) === businessId
+        );
+        if (!owned)
+          return json({ error: "advertiser access required" }, 403);
+
+        const businessRows = await sb(
+          env,
+          `businesses?id=eq.${encodeURIComponent(businessId)}&organization_id=eq.${ORG_ID}&is_advertiser=eq.true&select=id&limit=1`
+        );
+        if (!businessRows?.[0])
+          return json({ error: "advertiser access required" }, 403);
+
+        const forwarded = new Request(request.url, {
+          method: "POST",
+          headers: request.headers,
+          body: form,
+        });
+        return uploadMedia(forwarded, env, userAuth);
+      }
+
       if (url.pathname === "/api/onboarding/host/start" && request.method === "POST")
         return startHostRequest(request, env);
 
