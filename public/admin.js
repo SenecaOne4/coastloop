@@ -1836,6 +1836,62 @@ document.addEventListener('submit',async e=>{
 });
 
 
+
+function enhanceAdminWorkspace(key,nodes){
+  const labels={
+    network:[
+      'NETWORK OPERATIONS',
+      'Hosts & Screens',
+      'Venues, screens, pairing, playlists and delivery health.'
+    ],
+    sales:[
+      'REVENUE ENGINE',
+      'Advertisers',
+      'Prospects, orders, campaigns and delivery.'
+    ],
+    creative:[
+      'CONTENT OPERATIONS',
+      'Creative',
+      'Media library, approvals and campaign-ready assets.'
+    ],
+    finance:[
+      'MONEY',
+      'Finance',
+      'Billing, invoices, compensation and commissions.'
+    ],
+    people:[
+      'ACCESS',
+      'People',
+      'Accounts, invitations, roles and permissions.'
+    ],
+    system:[
+      'OPERATIONS',
+      'System',
+      'Pairing tools, audit history and diagnostics.'
+    ]
+  };
+
+  if(key==='today'||!labels[key]||!nodes.length)return;
+  if(nodes.some(n=>n.classList &&
+    n.classList.contains('workspace-banner')))return;
+
+  const d=labels[key];
+  const banner=document.createElement('section');
+  banner.className='workspace-banner';
+  banner.dataset.workspaceOwner=key;
+  banner.innerHTML=`
+    <div>
+      <div class="eyebrow">${d[0]}</div>
+      <h1>${d[1]}</h1>
+      <p>${d[2]}</p>
+    </div>
+    <div class="workspace-tools">
+      <span class="status-chip">Live workspace</span>
+    </div>`;
+
+  nodes[0].insertAdjacentElement('afterend',banner);
+  nodes.splice(1,0,banner);
+}
 function initAdminSidebar(){
   const nav=document.querySelector('.admin-nav');
   if(!nav)return;
@@ -1870,6 +1926,7 @@ function initAdminSidebar(){
       n=n.nextElementSibling;
     }
     groups[key]=nodes;
+    enhanceAdminWorkspace(key,nodes);
   });
 
   function badge(link,key){
