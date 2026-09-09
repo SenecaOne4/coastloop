@@ -105,6 +105,19 @@ sub init()
 
     reg = CreateObject("roRegistrySection", "CoastLoop")
     m.deviceKey = reg.Read("device_key")
+    cached = reg.Read("last_config")
+    if cached <> invalid and cached <> ""
+        cachedData = ParseJson(cached)
+        if cachedData <> invalid
+            if cachedData.items <> invalid and cachedData.items.Count() > 0
+                m.items = cachedData.items
+                m.index = 0
+                m.pairing.visible = false
+                m.status.text = "Starting saved CoastLoop"
+                playCurrent()
+            end if
+        end if
+    end if
 
     m.top.setFocus(true)
     boot()
@@ -323,6 +336,8 @@ sub clearDeviceKey()
     m.deviceKey = ""
     reg = CreateObject("roRegistrySection", "CoastLoop")
     reg.Delete("device_key")
+    reg.Delete("last_config")
+    reg.Flush()
     reg.Flush()
 end sub
 
@@ -349,6 +364,12 @@ sub handleConfig(data as Object)
     if data.items <> invalid and data.items.Count() > 0
         m.items = data.items
         m.index = 0
+        reg = CreateObject("roRegistrySection", "CoastLoop")
+        cachedConfig = {
+            items: data.items
+        }
+        reg.Write("last_config", FormatJson(cachedConfig))
+        reg.Flush()
         m.pairing.visible = false
         m.heartbeatTimer.control = "start"
         m.configClock = CreateObject("roTimespan")
