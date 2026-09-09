@@ -2381,7 +2381,33 @@ Object.entries(groups).forEach(([name,nodes])=>{
       history.replaceState(null,'','#'+key);
     }
 
-    window.scrollTo({top:0,behavior:'instant'});
+    // The sidebar changes which workspace is visible. Scroll to the
+    // actual visible workspace content, not the document top. Several
+    // workspace anchors remain at their historical HTML positions, so
+    // relying on the anchor itself can land in the wrong area.
+    const visibleNodes=(groups[key]||[]).filter(node=>
+      node &&
+      node.nodeType===1 &&
+      !node.classList.contains('admin-workspace-hidden')
+    );
+
+    const target=
+      visibleNodes.find(node=>
+        node.classList.contains('workspace-banner')
+      ) ||
+      visibleNodes.find(node=>
+        !node.classList.contains('admin-anchor')
+      ) ||
+      document.getElementById(key);
+
+    if(target){
+      target.scrollIntoView({
+        behavior:'instant',
+        block:'start'
+      });
+    }else{
+      window.scrollTo({top:0,behavior:'instant'});
+    }
   }
 
   links.forEach(a=>{
