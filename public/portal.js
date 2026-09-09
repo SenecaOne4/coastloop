@@ -283,7 +283,22 @@ function advertiserDashboard(b){
         </article>`;
       }).join('')||'<div class="portal-empty">No advertising campaigns yet.</div>'}
     </div>
-  </section>`;
+  
+<div class="portal-card creative-intake">
+<div>
+<div class="portal-eyebrow">CREATIVE</div>
+<h3>Send us your ad.</h3>
+<p>Upload a JPG, PNG, GIF, or MP4. We review every creative before it enters the loop.</p>
+</div>
+<form class="creative-upload" data-business-id="${esc(b.id)}">
+<input type="file" name="file" accept="image/jpeg,image/png,image/gif,video/mp4" required>
+<input type="text" name="title" maxlength="120" placeholder="Creative name (optional)">
+<button type="submit">Upload Creative</button>
+<div class="creative-upload-status" aria-live="polite"></div>
+</form>
+</div>
+
+</section>`;
 }
 
 function billing(b){
@@ -392,6 +407,30 @@ function customerHome(d){
 const renderAccount=()=>location.href='/account.html';
 
 $('#account').onclick=renderAccount;
+
+document.querySelectorAll('.creative-upload').forEach(form=>{
+form.addEventListener('submit',async e=>{
+e.preventDefault();
+const status=form.querySelector('.creative-upload-status');
+const button=form.querySelector('button[type="submit"]');
+const data=new FormData(form);
+data.set('advertiser_business_id',form.dataset.businessId||'');
+status.textContent='Uploading…';
+button.disabled=true;
+try{
+const d=await api('/api/portal/media',{method:'POST',body:data});
+status.textContent=d.ok
+  ? 'Uploaded. Your creative is now pending review.'
+  : 'Upload received.';
+form.reset();
+}catch(err){
+status.textContent=err.message||'Upload failed.';
+}finally{
+button.disabled=false;
+}
+});
+});
+
 
 try{
   const d=await api('/api/portal/overview');

@@ -865,3 +865,23 @@ form .row>input,form .row>select,form .row>label{min-width:150px}
   display:flex;justify-content:flex-end;margin-top:28px;
   padding-top:20px;border-top:1px solid var(--line)
 }
+
+.creative-intake{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(280px,420px);
+  gap:24px;
+  align-items:center;
+  margin-top:18px
+}
+.creative-intake h3{margin:4px 0 8px}
+.creative-intake p{margin:0;opacity:.72;max-width:620px}
+.creative-upload{display:grid;gap:10px}
+.creative-upload input[type="file"],
+.creative-upload input[type="text"]{
+  width:100%;
+  box-sizing:border-box
+}
+.creative-upload-status{min-height:20px;font-size:.9rem;opacity:.78}
+@media(max-width:760px){
+  .creative-intake{grid-template-columns:1fr}
+}
