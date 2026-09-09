@@ -232,15 +232,41 @@ async function readContext(env, token) {
   };
 }
 
+
+function bearerToken(request) {
+  return request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") || "";
+}
+
+async function authenticatedUser(request, env) {
+  const token = bearerToken(request);
+  if (!token) return null;
+  const base = String(env.SUPABASE_AUTH_URL || env.SUPABASE_URL || "").replace(/\/$/, "");
+  const res = await fetch(`${base}/auth/v1/user`, {
+    headers: {
+      apikey: env.SUPABASE_SECRET_KEY,
+      authorization: `Bearer ${token}`,
+    },
+  });
+  if (!res.ok) return null;
+  return await res.json();
+}
+
 export async function startAdvertiserCheckout(request, env) {
   try {
+    const user = await authenticatedUser(request, env);
+    if (!user) throw new HttpError(401, "unauthorized");
+
     const b = await bodyJson(request);
     const packageId = clean(b.package_id, 80);
     const legalName = clean(b.advertiser_legal_name, 240);
     const displayName = clean(b.advertiser_display_name, 240) || legalName;
     const contactName = clean(b.contact_name, 180);
-    const email = clean(b.contact_email, 180).toLowerCase();
+    const email = clean(user.email, 180).toLowerCase();
+    const requestedEmail = clean(b.contact_email, 180).toLowerCase();
     const mobile = clean(b.contact_mobile, 80);
+
+    if (requestedEmail && requestedEmail !== email)
+      throw new HttpError(403, "contact email must match signed-in account");
 
     if (!packageId || !legalName || !contactName || !email || !mobile)
       throw new HttpError(400, "business, contact, email, mobile, and package required");
@@ -281,6 +307,36 @@ export async function startAdvertiserCheckout(request, env) {
       business = businesses?.[0];
     }
     if (!business) throw new Error("business creation failed");
+
+    await sb(env, "business_members?on_conflict=business_id,user_id", {
+      method: "POST",
+      headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+      body: JSON.stringify({
+        business_id: business.id,
+        user_id: user.id,
+        role: "owner",
+        updated_at: new Date().toISOString(),
+      }),
+    });
+
+    if (!business.is_advertiser) {
+      const updated = await sb(
+        env,
+        `businesses?id=eq.${enc(business.id)}&organization_id=eq.${ORG_ID}`,
+        {
+          method: "PATCH",
+          headers: { Prefer: "return=representation" },
+          body: JSON.stringify({
+            is_advertiser: true,
+            email,
+            contact_name: contactName,
+            phone: mobile,
+            updated_at: new Date().toISOString(),
+          }),
+        }
+      );
+      business = updated?.[0] || business;
+    }
 
     const snapshot = packageSnapshot(pkg);
     const orders = await sb(env, "advertiser_orders", {
