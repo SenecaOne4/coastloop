@@ -2491,14 +2491,19 @@ function initPlatformTermsAdmin(){
     if(button) button.disabled=true;
     try{
       const data=new FormData(form);
-      const headers=state.token
-        ? {authorization:`Bearer ${state.token}`}
-        : {};
-      const res=await fetch("/api/admin/legal/terms",{
-        method:"POST",
-        headers,
-        body:data
-      });
+      let res;
+      if(state.token){
+        res=await fetch("/api/admin/legal/terms",{
+          method:"POST",
+          headers:{authorization:`Bearer ${state.token}`},
+          body:data
+        });
+      }else{
+        res=await sessionApi("/api/admin/legal/terms",{
+          method:"POST",
+          body:data
+        });
+      }
       const out=await res.json().catch(()=>({}));
       if(!res.ok) throw new Error(out.error||`${res.status}`);
       form.reset();
