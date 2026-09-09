@@ -274,6 +274,94 @@ summary{cursor:pointer;font-weight:750}
  .workspace-tools{margin-top:12px}
 }
 </style>
+
+<style id="admin-action-polish">
+.admin-action-card{
+ position:relative;
+}
+.admin-action-card.admin-action-collapsed{
+ padding:0!important;
+ overflow:hidden;
+}
+.admin-action-card.admin-action-collapsed>form,
+.admin-action-card.admin-action-collapsed>.admin-action-body{
+ display:none!important;
+}
+.admin-action-toggle{
+ width:100%;
+ display:flex;
+ justify-content:space-between;
+ align-items:center;
+ gap:14px;
+ padding:15px 17px;
+ border:0!important;
+ background:transparent!important;
+ color:inherit!important;
+ text-align:left;
+ cursor:pointer;
+}
+.admin-action-toggle:hover{
+ background:rgba(23,20,18,.025)!important;
+}
+.admin-action-toggle-copy strong{
+ display:block;
+ font-size:14px;
+}
+.admin-action-toggle-copy small{
+ display:block;
+ margin-top:3px;
+ font-weight:500;
+ opacity:.55;
+}
+.admin-action-chevron{
+ font-size:18px;
+ opacity:.4;
+ transition:transform .15s ease;
+}
+.admin-action-card:not(.admin-action-collapsed)
+ .admin-action-chevron{
+ transform:rotate(180deg);
+}
+.admin-action-card:not(.admin-action-collapsed)
+ .admin-action-toggle{
+ border-bottom:1px solid rgba(23,20,18,.07)!important;
+}
+.admin-action-card>form{
+ padding:17px;
+ margin:0!important;
+}
+.admin-section-actions{
+ display:grid;
+ grid-template-columns:repeat(2,minmax(0,1fr));
+ gap:10px;
+ margin:0 0 16px;
+}
+.admin-section-actions .admin-action-card{
+ margin:0!important;
+ min-height:0!important;
+}
+.admin-data-card{
+ overflow:auto;
+}
+.admin-data-card table{
+ min-width:720px;
+}
+.admin-empty-state{
+ padding:30px 20px;
+ text-align:center;
+ border:1px dashed rgba(23,20,18,.14);
+ border-radius:12px;
+ color:rgba(23,20,18,.52);
+}
+.admin-empty-state strong{
+ display:block;
+ color:#171412;
+ margin-bottom:5px;
+}
+@media(max-width:760px){
+ .admin-section-actions{grid-template-columns:1fr}
+}
+</style>
 </head>
 <body><main class="shell">
 <div class="topbar"><div><div class="brand coastloop-lockup admin-lockup">

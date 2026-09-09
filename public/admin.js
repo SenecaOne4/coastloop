@@ -1892,8 +1892,111 @@ function enhanceAdminWorkspace(key,nodes){
   nodes[0].insertAdjacentElement('afterend',banner);
   nodes.splice(1,0,banner);
 }
+
+function organizeAdminActions(){
+  const formLabels={
+    pairScreen:[
+      'Pair a screen',
+      'Connect a TV using its six-character code.'
+    ],
+    newPlaylist:[
+      'Create playlist',
+      'Build a new playback rotation.'
+    ],
+    upload:[
+      'Upload media',
+      'Add an image or video to the library.'
+    ],
+    inviteUser:[
+      'Invite person',
+      'Create access for a team member or broker.'
+    ],
+    newBillingInvoice:[
+      'Create invoice',
+      'Prepare a billing action for an advertiser.'
+    ]
+  };
+
+  document.querySelectorAll('.card form').forEach(form=>{
+    const card=form.closest('.card');
+    if(!card||card.dataset.actionOrganized==='1')return;
+
+    const info=formLabels[form.id];
+    const heading=card.querySelector('h2,h3');
+    const title=info?.[0] ||
+      heading?.textContent?.trim() ||
+      'Manage';
+
+    const desc=info?.[1] ||
+      card.querySelector('.muted')?.textContent?.trim() ||
+      'Open controls';
+
+    card.dataset.actionOrganized='1';
+    card.classList.add('admin-action-card','admin-action-collapsed');
+
+    const toggle=document.createElement('button');
+    toggle.type='button';
+    toggle.className='admin-action-toggle';
+    toggle.setAttribute('aria-expanded','false');
+    toggle.innerHTML=`
+      <span class="admin-action-toggle-copy">
+        <strong>${esc(title)}</strong>
+        <small>${esc(desc)}</small>
+      </span>
+      <span class="admin-action-chevron">⌄</span>`;
+
+    // Hide duplicate heading text once the compact action header exists.
+    if(heading)heading.style.display='none';
+
+    card.insertBefore(toggle,card.firstChild);
+
+    toggle.addEventListener('click',()=>{
+      const closed=card.classList.toggle('admin-action-collapsed');
+      toggle.setAttribute('aria-expanded',String(!closed));
+    });
+  });
+
+  // Group adjacent compact action cards so controls read as a toolbar,
+  // rather than a stack of giant forms.
+  document.querySelectorAll('.admin-anchor[data-workspace]')
+    .forEach(anchor=>{
+      const key=anchor.dataset.workspace;
+      if(key==='today')return;
+
+      let n=anchor.nextElementSibling;
+      const stop=document.querySelector(
+        `.admin-anchor[data-workspace]:not(#${key})`
+      );
+
+      const cards=[];
+      while(n && n!==stop){
+        if(n.matches?.('.admin-action-card'))cards.push(n);
+        n=n.nextElementSibling;
+      }
+
+      if(cards.length<2)return;
+      const first=cards[0];
+      if(first.parentElement?.classList.contains(
+        'admin-section-actions'))return;
+
+      const group=document.createElement('div');
+      group.className='admin-section-actions';
+      first.parentNode.insertBefore(group,first);
+      cards.forEach(card=>group.appendChild(card));
+    });
+}
+
+function improveAdminEmptyStates(){
+  document.querySelectorAll(
+    '.command-empty'
+  ).forEach(el=>{
+    el.classList.add('admin-empty-state');
+  });
+}
 function initAdminSidebar(){
   const nav=document.querySelector('.admin-nav');
+  organizeAdminActions();
+  improveAdminEmptyStates();
   if(!nav)return;
 
   const labels={
