@@ -733,7 +733,86 @@ function renderAudit(){
   }).join('')||'<div class="muted">No operator activity recorded yet.</div>';
 }
 
+
+function renderCommandCenter(){
+  const screens=state.screens||[];
+  const commercial=screens.filter(s=>!s.is_test);
+  const onlineScreens=commercial.filter(s=>online(s.last_seen_at));
+  const campaigns=state.campaigns||[];
+  const active=campaigns.filter(c=>c.status==='active');
+  const tasks=state.tasks||[];
+  const openTasks=tasks.filter(t=>t.status==='open'||t.status==='in_progress');
+  const prospects=state.prospects||[];
+
+  const set=(id,v)=>{
+    const e=document.getElementById(id);
+    if(e)e.textContent=v;
+  };
+  const put=(id,html)=>{
+    const e=document.getElementById(id);
+    if(e)e.innerHTML=html;
+  };
+  const item=(title,detail,value='')=>`
+    <div class="command-item">
+      <div><strong>${esc(title)}</strong><small>${esc(detail||'')}</small></div>
+      <div class="command-value">${esc(String(value||''))}</div>
+    </div>`;
+
+  set('mCampaigns',active.length);
+  set('mAttention',openTasks.length);
+  set('mScreenDetail',`${onlineScreens.length} of ${commercial.length} commercial screens`);
+  set('mCampaignDetail',`${campaigns.length} total campaigns`);
+
+  const offline=commercial.filter(s=>!online(s.last_seen_at));
+  const health=offline.length
+    ? `${offline.length} screen${offline.length===1?'':'s'} offline`
+    : commercial.length
+      ? 'Network healthy'
+      : 'Ready for first screen';
+  set('commandHealth',health);
+
+  const attention=[];
+  offline.slice(0,4).forEach(x=>
+    attention.push(item(x.name||'Screen offline',
+      x.last_seen_at?`Last seen ${age(x.last_seen_at)}`:'Never checked in',
+      'OFFLINE')));
+  openTasks.slice(0,6-attention.length).forEach(x=>
+    attention.push(item(x.title||x.task_type||'Open task',
+      x.status||'open',
+      'ACTION')));
+  put('commandAttention',
+    attention.join('')||
+    '<div class="command-empty">Nothing urgent right now.</div>');
+
+  put('commandScreens',
+    commercial.slice(0,5).map(x=>item(
+      x.name||'Screen',
+      x.location_name||x.status||'CoastLoop screen',
+      online(x.last_seen_at)?'ONLINE':'OFFLINE'
+    )).join('')||
+    '<div class="command-empty">No commercial screens paired yet.</div>');
+
+  put('commandCampaigns',
+    active.slice(0,5).map(x=>item(
+      x.name||x.campaign_name||'Campaign',
+      x.business_name||x.status||'active',
+      'ACTIVE'
+    )).join('')||
+    '<div class="command-empty">No active campaigns yet.</div>');
+
+  const hot=prospects.filter(x=>
+    !['won','lost','closed'].includes(String(x.status||'').toLowerCase()));
+  put('commandSales',
+    hot.slice(0,5).map(x=>item(
+      x.business_name||x.name||'Prospect',
+      x.status||'prospect',
+      x.value_cents?money(x.value_cents):''
+    )).join('')||
+    '<div class="command-empty">No open sales prospects yet.</div>');
+}
+
 function render(){
+  renderCommandCenter();
   $('#prospects').innerHTML = state.prospects.map(p=>`<tr data-id="${p.id}">
     <td><strong>${esc(p.name)}</strong><div class="muted">${esc(p.city||'')}${p.state?', '+esc(p.state):''}</div></td>
     <td><span class="pill">${prospectInterest(p)}</span></td>

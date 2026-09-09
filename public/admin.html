@@ -1,4 +1,39 @@
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CoastLoop Admin</title><link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/styles.css"><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"></head>
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CoastLoop Admin</title><link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/styles.css"><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+.command-hero{display:flex;justify-content:space-between;gap:24px;align-items:flex-end;margin:10px 0 18px;padding:22px 2px}
+.command-hero h1{font-size:36px;line-height:1;margin:5px 0 8px}
+.eyebrow{font-size:11px;font-weight:800;letter-spacing:.14em;opacity:.58}
+.command-health{font-weight:800;padding:10px 14px;border:1px solid var(--line,#ddd);border-radius:999px;white-space:nowrap}
+.command-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:14px}
+.command-stat{min-height:118px}
+.command-stat .metric{font-size:32px;margin-bottom:5px}
+.command-stat small{display:block;margin-top:8px;opacity:.58}
+.command-grid{display:grid;grid-template-columns:1.2fr .8fr;gap:14px;margin-bottom:26px}
+.command-grid>.card{min-height:230px}
+.command-primary{grid-row:span 2}
+.section-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px}
+.section-heading h2{margin:4px 0 0}
+.section-heading a{font-size:12px}
+.command-list{display:grid;gap:8px}
+.command-item{display:flex;justify-content:space-between;gap:14px;padding:10px 0;border-bottom:1px solid var(--line,#e7e7e7)}
+.command-item:last-child{border-bottom:0}
+.command-item strong,.command-item small{display:block}
+.command-item small{opacity:.6;margin-top:3px}
+.command-value{text-align:right;font-weight:800;white-space:nowrap}
+.command-empty{padding:18px 0;opacity:.58}
+.legacy-metric-source{display:none!important}
+@media(max-width:900px){
+ .command-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .command-grid{grid-template-columns:1fr}
+ .command-primary{grid-row:auto}
+}
+@media(max-width:560px){
+ .command-hero{display:block}
+ .command-health{display:inline-block;margin-top:10px}
+ .command-metrics{grid-template-columns:1fr 1fr}
+}
+</style>
+</head>
 <body><main class="shell">
 <div class="topbar"><div><div class="brand coastloop-lockup admin-lockup">
       <img class="coastloop-mark" src="/brand/coastloop-mark.svg" alt="">
@@ -28,9 +63,90 @@
   <a href="#system">System</a>
 </nav>
 
-<div id="today" class="admin-anchor"></div><div class="grid"><div class="card"><div id="mScreens" class="metric">-</div><div class="muted">Screens</div></div><div class="card"><div id="mOnline" class="metric">-</div><div class="muted">Online</div></div><div class="card"><div id="mMedia" class="metric">-</div><div class="muted">Media</div></div><div class="card"><div id="mPlays" class="metric">-</div><div class="muted">Plays / 24h</div></div></div>
+<div id="today" class="admin-anchor"></div>
+<section class="command-hero">
+  <div>
+    <div class="eyebrow">COASTLOOP COMMAND CENTER</div>
+    <h1>Today</h1>
+    <p class="muted">Network, advertising, revenue and anything that needs you.</p>
+  </div>
+  <div id="commandHealth" class="command-health">Loading network…</div>
+</section>
 
-<div id="network" class="admin-anchor"></div><section class="card ops-command-card">
+<div class="command-metrics">
+  <div class="card command-stat">
+    <div id="mOnline" class="metric">-</div>
+    <div class="muted">Screens online</div>
+    <small id="mScreenDetail">-</small>
+  </div>
+  <div class="card command-stat">
+    <div id="mPlays" class="metric">-</div>
+    <div class="muted">Plays / 24h</div>
+    <small>Verified delivery activity</small>
+  </div>
+  <div class="card command-stat">
+    <div id="mCampaigns" class="metric">-</div>
+    <div class="muted">Active campaigns</div>
+    <small id="mCampaignDetail">-</small>
+  </div>
+  <div class="card command-stat">
+    <div id="mAttention" class="metric">-</div>
+    <div class="muted">Needs attention</div>
+    <small>Open operational items</small>
+  </div>
+</div>
+
+<section class="command-grid">
+  <div class="card command-primary">
+    <div class="section-heading">
+      <div>
+        <div class="eyebrow">OPERATIONS</div>
+        <h2>Needs your attention</h2>
+      </div>
+      <a href="#operations">View operations</a>
+    </div>
+    <div id="commandAttention" class="command-list"></div>
+  </div>
+
+  <div class="card">
+    <div class="section-heading">
+      <div>
+        <div class="eyebrow">NETWORK</div>
+        <h2>Screen health</h2>
+      </div>
+      <a href="#screens">All screens</a>
+    </div>
+    <div id="commandScreens" class="command-list"></div>
+  </div>
+
+  <div class="card">
+    <div class="section-heading">
+      <div>
+        <div class="eyebrow">ADVERTISING</div>
+        <h2>Campaign pulse</h2>
+      </div>
+      <a href="#campaigns">Campaigns</a>
+    </div>
+    <div id="commandCampaigns" class="command-list"></div>
+  </div>
+
+  <div class="card">
+    <div class="section-heading">
+      <div>
+        <div class="eyebrow">BUSINESS</div>
+        <h2>Sales pipeline</h2>
+      </div>
+      <a href="#sales">Sales</a>
+    </div>
+    <div id="commandSales" class="command-list"></div>
+  </div>
+</section>
+
+<div class="legacy-metric-source" aria-hidden="true">
+  <span id="mScreens">-</span>
+  <span id="mMedia">-</span>
+</div>
+<section class="card ops-command-card">
   <div class="ops-command-head">
     <div>
       <div class="ops-kicker">COASTLOOP NETWORK OPERATIONS</div>
