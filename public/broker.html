@@ -6,8 +6,14 @@
 <title>CoastLoop Broker Desk</title>
 <link rel="stylesheet" href="/styles.css">
 </head>
-<body>
+<body class="broker-app">
 <main class="shell">
+<nav class="broker-nav" aria-label="Broker dashboard">
+  <a href="#pipeline">Pipeline</a>
+  <a href="#customers">Customers</a>
+  <a href="#campaign-sales">Campaigns</a>
+  <a href="#commissions">Commissions</a>
+</nav>
 <header class="topbar">
   <div>
     <div class="eyebrow">COASTLOOP · BROKER DESK</div>
@@ -34,7 +40,7 @@
 </section>
 
 <section class="card">
-  <h2>My money</h2>
+  <div id="commissions" class="broker-anchor"></div><h2>My money</h2>
   <p class="muted">Booked commission is frozen when a campaign is created. Earned commission only grows when advertiser money is actually collected.</p>
   <div class="money-grid">
     <div><span>Booked ad sales</span><strong id="fRevenue">—</strong></div>
@@ -77,7 +83,7 @@
 
 <section class="card">
   <div class="row">
-    <div><h2>My pipeline</h2><p class="muted">Only leads assigned to you appear here.</p></div>
+    <div><div id="pipeline" class="broker-anchor"></div><h2>My pipeline</h2><p class="muted">Only leads assigned to you appear here.</p></div>
     <div id="mProspects" class="metric">0</div>
   </div>
   <div class="table-wrap">
@@ -90,14 +96,14 @@
 
 <section class="card">
   <div class="row">
-    <div><h2>My customers</h2><p class="muted">Customers created from your promoted leads.</p></div>
+    <div><div id="customers" class="broker-anchor"></div><h2>My customers</h2><p class="muted">Customers created from your promoted leads.</p></div>
     <div id="mBusinesses" class="metric">0</div>
   </div>
   <div id="businesses" class="business-list"></div>
 </section>
 
 <section class="card">
-  <h2>Sell advertiser campaign</h2>
+  <div id="campaign-sales" class="broker-anchor"></div><h2>Sell advertiser campaign</h2>
   <p class="muted">Only Advertiser customers assigned to you can be selected.</p>
   <form id="newCampaign" class="form-grid">
     <select name="advertiser_business_id" id="campaignBusiness" required></select>
