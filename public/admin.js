@@ -1099,7 +1099,8 @@ function render(){
     }).join('')}</ol>
   </div>`).join('') || '<div class="muted">No playlists yet.</div>';
 
-  if(window.refreshAdminSidebar)window.refreshAdminSidebar();}
+  if(window.refreshAdminSidebar)window.refreshAdminSidebar();
+  renderWorkspaceMetrics();}
 
 $('#saveToken').onclick=()=>{
   state.token=$('#token').value.trim();
@@ -1837,6 +1838,109 @@ document.addEventListener('submit',async e=>{
 
 
 
+
+function workspaceMetricData(key){
+  const screens=(state.screens||[]).filter(x=>!x.is_test);
+  const campaigns=state.campaigns||[];
+  const media=state.media||[];
+  const prospects=state.prospects||[];
+  const tasks=state.tasks||[];
+
+  const openTasks=tasks.filter(x=>
+    x.status==='open'||x.status==='in_progress');
+
+  const pendingMedia=media.filter(x=>{
+    const v=String(
+      x.approval_status||x.status||''
+    ).toLowerCase();
+    return v==='pending'||v==='review';
+  });
+
+  const activeCampaigns=campaigns.filter(
+    x=>x.status==='active');
+
+  const openProspects=prospects.filter(x=>
+    !['won','lost','closed'].includes(
+      String(x.status||'').toLowerCase()));
+
+  const sets={
+    network:[
+      [screens.filter(x=>online(x.last_seen_at)).length,
+       'Online','commercial screens'],
+      [screens.length,'Screens','commercial network'],
+      [screens.filter(x=>!online(x.last_seen_at)).length,
+       'Offline','needs review'],
+      [(state.playlists||[]).length,
+       'Playlists','available rotations']
+    ],
+    sales:[
+      [activeCampaigns.length,
+       'Active campaigns','delivering now'],
+      [campaigns.length,
+       'Campaigns','all statuses'],
+      [openProspects.length,
+       'Open prospects','sales pipeline'],
+      [openTasks.length,
+       'Open tasks','follow-up queue']
+    ],
+    creative:[
+      [media.length,
+       'Media assets','library'],
+      [pendingMedia.length,
+       'Pending review','approval queue'],
+      [activeCampaigns.length,
+       'Live campaigns','using creative'],
+      [(state.playlists||[]).length,
+       'Playlists','delivery rotations']
+    ],
+    finance:[
+      [(state.invoices||state.billingInvoices||[]).length,
+       'Invoices','billing records'],
+      [activeCampaigns.length,
+       'Active accounts','campaign proxy'],
+      [(state.brokers||[]).length,
+       'Brokers','sales channel'],
+      [openTasks.length,
+       'Open items','operations']
+    ],
+    people:[
+      [(state.users||state.members||[]).length,
+       'Users','platform access'],
+      [(state.brokers||[]).length,
+       'Brokers','sales access'],
+      [(state.businesses||[]).length,
+       'Businesses','organizations'],
+      [openTasks.length,
+       'Open tasks','team queue']
+    ],
+    system:[
+      [screens.filter(x=>online(x.last_seen_at)).length,
+       'Online','screen heartbeat'],
+      [screens.length,
+       'Screens','registered commercial'],
+      [openTasks.length,
+       'Open tasks','operational queue'],
+      [media.length,
+       'Media','stored assets']
+    ]
+  };
+
+  return sets[key]||[];
+}
+
+function renderWorkspaceMetrics(){
+  document.querySelectorAll(
+    '.workspace-metrics[data-metric-workspace]'
+  ).forEach(box=>{
+    const key=box.dataset.metricWorkspace;
+    box.innerHTML=workspaceMetricData(key).map(x=>`
+      <div class="workspace-metric">
+        <strong>${esc(String(x[0]))}</strong>
+        <span>${esc(x[1])}</span>
+        <small>${esc(x[2])}</small>
+      </div>`).join('');
+  });
+}
 function enhanceAdminWorkspace(key,nodes){
   const labels={
     network:[
@@ -1891,6 +1995,12 @@ function enhanceAdminWorkspace(key,nodes){
 
   nodes[0].insertAdjacentElement('afterend',banner);
   nodes.splice(1,0,banner);
+  const metrics=document.createElement('div');
+  metrics.className='workspace-metrics';
+  metrics.dataset.metricWorkspace=key;
+  banner.insertAdjacentElement('afterend',metrics);
+  nodes.splice(2,0,metrics);
+  renderWorkspaceMetrics();
 }
 
 function organizeAdminActions(){

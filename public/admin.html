@@ -362,6 +362,49 @@ summary{cursor:pointer;font-weight:750}
  .admin-section-actions{grid-template-columns:1fr}
 }
 </style>
+
+<style id="workspace-metric-polish">
+.workspace-metrics{
+ display:grid;
+ grid-template-columns:repeat(4,minmax(0,1fr));
+ gap:10px;
+ margin:-5px 0 18px;
+}
+.workspace-metric{
+ padding:14px 16px;
+ border:1px solid rgba(23,20,18,.08);
+ border-radius:13px;
+ background:rgba(255,255,255,.72);
+}
+.workspace-metric strong{
+ display:block;
+ font-size:24px;
+ line-height:1.1;
+ letter-spacing:-.03em;
+}
+.workspace-metric span{
+ display:block;
+ margin-top:5px;
+ font-size:11px;
+ color:rgba(23,20,18,.55);
+}
+.workspace-metric small{
+ display:block;
+ margin-top:3px;
+ font-size:10px;
+ color:rgba(23,20,18,.4);
+}
+@media(max-width:1050px){
+ .workspace-metrics{
+  grid-template-columns:repeat(2,minmax(0,1fr));
+ }
+}
+@media(max-width:520px){
+ .workspace-metrics{
+  grid-template-columns:1fr 1fr;
+ }
+}
+</style>
 </head>
 <body><main class="shell">
 <div class="topbar"><div><div class="brand coastloop-lockup admin-lockup">
