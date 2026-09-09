@@ -240,7 +240,19 @@ function renderDigitalOnboarding(){
         <label>Operating schedule<input name="schedule_label" placeholder="During normal business hours"></label>
         <label>Term<input name="term_type" required placeholder="12 months"></label>
         <label>Venue house inventory<input name="house_inventory" required placeholder="Venue house content included"></label>
-        <label>Host compensation cents<input name="host_compensation_cents" type="number" min="0" value="0"></label>
+        <label>Host compensation
+  <select name="host_compensation_type">
+    <option value="waived">No cash compensation</option>
+    <option value="cash">Cash compensation</option>
+    <option value="other">Other agreed consideration</option>
+  </select>
+</label>
+<label>Cash compensation cents
+  <input name="host_compensation_cents" type="number" min="0" value="0">
+</label>
+<label>Compensation terms
+  <input name="compensation_schedule" placeholder="Optional terms or description">
+</label>
         <label>Equipment / network responsibility<input name="equipment_network_responsibility" required placeholder="CoastLoop equipment; venue power/network access"></label>
         <label>Category exclusions<input name="category_exclusions" placeholder="Optional"></label>
         <label><input name="public_venue_listing" type="checkbox"> Allow public venue listing</label>
@@ -1698,7 +1710,15 @@ document.addEventListener('submit',async e=>{
   if(e.target?.id==='venueInviteForm'){
     e.preventDefault();
     const f=new FormData(e.target);
+    const compType=String(f.get('host_compensation_type')||'waived');
     const comp=Number(f.get('host_compensation_cents')||0);
+    const compTerms=String(f.get('compensation_schedule')||'').trim();
+    const hostCompensation=
+      compType==='cash'
+        ? {type:'cash',amount_cents:Math.max(0,comp)}
+        : compType==='other'
+          ? {type:'other',description:compTerms||'As agreed'}
+          : {type:'waived',amount_cents:0};
     const payload={
       business_id:f.get('business_id'),
       location_id:f.get('location_id'),
@@ -1709,7 +1729,10 @@ document.addEventListener('submit',async e=>{
       signer_mobile:f.get('signer_mobile'),
       term_type:f.get('term_type'),
       house_inventory:f.get('house_inventory'),
-      host_compensation:comp>0?{amount_cents:comp,schedule:'As agreed'}:null,
+      host_compensation:hostCompensation,
+      compensation_schedule:compType==='cash'
+        ? (compTerms||'As agreed')
+        : (compType==='other'?compTerms:null),
       equipment_network_responsibility:f.get('equipment_network_responsibility'),
       category_exclusions:f.get('category_exclusions'),
       public_venue_listing:f.get('public_venue_listing')==='on',
