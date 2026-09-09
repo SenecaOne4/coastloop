@@ -1833,3 +1833,38 @@ document.addEventListener('submit',async e=>{
     await load();
   }
 });
+
+
+function initAdminSidebar(){
+  const nav=document.querySelector('.admin-nav');
+  if(!nav)return;
+
+  const links=[...nav.querySelectorAll('a[href^="#"]')];
+  const targets=links.map(a=>{
+    const id=a.getAttribute('href').slice(1);
+    return [a,document.getElementById(id)];
+  }).filter(x=>x[1]);
+
+  const activate=()=>{
+    let current=targets[0];
+    for(const pair of targets){
+      if(pair[1].getBoundingClientRect().top<=140) current=pair;
+    }
+    links.forEach(a=>a.classList.remove('admin-nav-active'));
+    if(current)current[0].classList.add('admin-nav-active');
+  };
+
+  links.forEach(a=>a.addEventListener('click',()=>{
+    links.forEach(x=>x.classList.remove('admin-nav-active'));
+    a.classList.add('admin-nav-active');
+  }));
+
+  window.addEventListener('scroll',activate,{passive:true});
+  activate();
+}
+
+if(document.readyState==='loading'){
+  document.addEventListener('DOMContentLoaded',initAdminSidebar);
+}else{
+  initAdminSidebar();
+}
