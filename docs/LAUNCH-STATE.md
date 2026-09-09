@@ -64,3 +64,13 @@ Do not claim full offline media playback.
 1. Configure auth.coastloop.site when Supabase custom domain is available.
 2. Run North Beach live hardware validation.
 4. Begin advertiser/host onboarding.
+
+
+## Advertising checkout legal gate
+- Stripe live billing is configured and healthy.
+- Public products expose only the current offers: $100 monthly and $1,000 annual.
+- Superseded $95 monthly checkout is blocked server-side.
+- Advertising checkout currently stops before signature because the only advertising terms template is `counsel_review`.
+- The stored template explicitly says not to lock or sign until the CoastLoop contracting entity is completed and South Carolina counsel approves.
+- This is an intentional legal gate, not a Stripe or checkout infrastructure failure.
+- Do not bypass or relabel counsel approval in code.
