@@ -275,13 +275,25 @@ export async function startAdvertiserCheckout(request, env) {
       throw new HttpError(400, "business, contact, email, mobile, and package required");
 
     const [packages, templates] = await Promise.all([
-      sb(env, `advertising_packages?id=eq.${enc(packageId)}&organization_id=eq.${ORG_ID}&status=eq.active&select=*&limit=1`),
+      sb(env, `advertising_packages?id=eq.${enc(packageId)}&organization_id=eq.${ORG_ID}&status=eq.active&availability_status=in.(available,limited)&select=*&limit=1`),
       sb(env, `agreement_templates?organization_id=eq.${ORG_ID}&template_family=eq.advertising_order_terms&status=eq.locked&select=*&order=created_at.desc&limit=1`),
     ]);
     const pkg = packages?.[0];
     const template = templates?.[0];
 
     if (!pkg) throw new HttpError(404, "placement package is not available");
+
+    const latestPackages = await sb(
+      env,
+      `advertising_packages?organization_id=eq.${ORG_ID}&package_key=eq.${enc(pkg.package_key)}&status=eq.active&availability_status=in.(available,limited)&select=id,version&order=version.desc&limit=1`
+    );
+    const latestPkg = latestPackages?.[0];
+    if (!latestPkg || latestPkg.id !== pkg.id)
+      throw new HttpError(
+        409,
+        "a newer version of this advertising package is available"
+      );
+
     if (!template)
       throw new HttpError(409, "advertising terms are still in legal review");
 
