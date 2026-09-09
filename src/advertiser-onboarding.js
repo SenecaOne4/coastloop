@@ -123,7 +123,7 @@ export async function publicAdvertisingPackages(env) {
   try {
     const rows = await sb(
       env,
-      `advertising_packages?organization_id=eq.${ORG_ID}&status=eq.active&availability_status=in.(available,limited)&select=*&order=price_cents.asc`
+      `advertising_packages?organization_id=eq.${ORG_ID}&status=eq.active&availability_status=in.(available,limited)&select=*&order=version.desc,price_cents.asc`
     );
     return json({
       packages: (rows || []).map(packageSnapshot),
