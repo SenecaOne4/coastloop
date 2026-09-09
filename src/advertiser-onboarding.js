@@ -1,4 +1,7 @@
-import { createBillingInvoice } from "./billing.js";
+import {
+  createBillingInvoice,
+  sendBillingInvoice,
+} from "./billing.js";
 
 const ORG_ID = "28ad55e4-d32d-423b-80b5-481bd15dec9e";
 
@@ -619,6 +622,21 @@ export async function acceptAdvertiserCheckout(request, env) {
         throw new HttpError(invoiceResponse.status, invoiceData?.error || "invoice creation failed");
       invoice = invoiceData.invoice;
       invoiceId = invoice.id;
+
+      if (invoice.provider === "stripe") {
+        const sendResponse = await sendBillingInvoice(
+          new Request(request.url, { method: "POST" }),
+          env,
+          invoiceId
+        );
+        const sendData = await sendResponse.json();
+        if (!sendResponse.ok)
+          throw new HttpError(
+            sendResponse.status,
+            sendData?.error || "invoice send failed"
+          );
+        invoice = sendData.invoice || invoice;
+      }
     }
 
     await Promise.all([
