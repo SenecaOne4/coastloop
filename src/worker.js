@@ -3191,8 +3191,17 @@ export default {
       if (url.pathname === "/api/billing/webhook/stripe" && request.method === "POST")
         return stripeWebhook(request, env);
 
-      const jsonGuard = await validateJsonMutation(request, url);
-      if (jsonGuard) return jsonGuard;
+      const isLegalTermsMultipart =
+        url.pathname === "/api/admin/legal/terms" &&
+        request.method === "POST" &&
+        String(request.headers.get("content-type") || "")
+          .toLowerCase()
+          .startsWith("multipart/form-data");
+
+      if (!isLegalTermsMultipart) {
+        const jsonGuard = await validateJsonMutation(request, url);
+        if (jsonGuard) return jsonGuard;
+      }
 
       const authRoute = await handleAuthRoute(request, env, url);
       if (authRoute) return authRoute;
@@ -3356,7 +3365,9 @@ export default {
             env,
             adminAuth,
             "platform_terms.publish",
-            () => publishPlatformTerms(request, env, adminAuth)
+            async () => json(
+              await publishPlatformTerms(request, env, adminAuth)
+            )
           );
 
         if (url.pathname === "/api/admin/audit" && request.method === "GET")
