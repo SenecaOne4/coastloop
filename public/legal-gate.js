@@ -109,6 +109,86 @@ function legalGateStyle(){
   }
   .cl-legal-accept:hover{background:#29231f}
   .cl-legal-actions button:disabled{opacity:.58;cursor:wait;transform:none}
+
+  /* CoastLoop legal surface — premium account gate */
+  .cl-legal-gate{
+    background:
+      radial-gradient(circle at 50% -20%,rgba(184,146,74,.15),transparent 42%),
+      rgba(15,13,12,.78)
+  }
+  .cl-legal-card{
+    position:relative;
+    width:min(860px,100%);
+    border-radius:22px;
+    border:1px solid rgba(255,255,255,.22);
+    box-shadow:
+      0 38px 110px rgba(0,0,0,.42),
+      0 2px 8px rgba(0,0,0,.12)
+  }
+  .cl-legal-card:before{
+    content:"";height:4px;flex:0 0 4px;
+    background:linear-gradient(90deg,#7b243c,#b8924a);
+    pointer-events:none
+  }
+  .cl-legal-actions{
+    position:relative;z-index:5;pointer-events:auto
+  }
+  .cl-legal-actions button{
+    position:relative;z-index:6;pointer-events:auto
+  }
+  .cl-legal-head{
+    padding:27px 32px 21px;
+    background:linear-gradient(180deg,#fff 0%,#fbfaf7 100%)
+  }
+  .cl-legal-brand{
+    margin-bottom:10px;color:#7b243c;font-size:12px;
+    letter-spacing:.19em
+  }
+  .cl-legal-version{
+    float:right;margin:0 0 10px 18px;
+    background:#f5f1eb;border:1px solid rgba(23,20,18,.07);
+    color:#71665d
+  }
+  .cl-legal-head h2{
+    clear:both;max-width:680px;font-size:clamp(27px,3vw,36px)
+  }
+  .cl-legal-head p{max-width:680px;color:#6d645d}
+  .cl-legal-body{
+    margin:18px 24px 0;padding:25px 28px;
+    background:#fffdf9;
+    border-color:rgba(23,20,18,.09);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.9);
+    font-size:14px;line-height:1.72
+  }
+  .cl-legal-body h1{font-size:24px}
+  .cl-legal-body h2{font-size:19px}
+  .cl-legal-body h3{font-size:16px}
+  .cl-legal-body strong{color:#211d1a}
+  .cl-legal-body li{margin:.35em 0}
+  .cl-legal-actions{
+    margin-top:0;padding:18px 24px 23px;
+    background:#fbfaf7;
+    border-top:1px solid rgba(23,20,18,.06)
+  }
+  .cl-legal-actions button{
+    min-height:48px;padding:0 21px;border-radius:10px;
+    letter-spacing:-.01em
+  }
+  #clLegalLogout:hover{background:#f1ede7;color:#171412}
+  .cl-legal-accept{
+    min-width:190px;
+    background:#7b243c;border-color:#7b243c;
+    box-shadow:0 10px 24px rgba(123,36,60,.20)
+  }
+  .cl-legal-accept:hover{
+    background:#681d32;border-color:#681d32;
+    box-shadow:0 12px 28px rgba(123,36,60,.25)
+  }
+  .cl-legal-actions button:focus-visible,
+  .cl-legal-body a:focus-visible{
+    outline:3px solid rgba(184,146,74,.48);outline-offset:3px
+  }
+
   @media(max-width:640px){
     .cl-legal-gate{padding:12px}
     .cl-legal-card{max-height:94vh;border-radius:18px}

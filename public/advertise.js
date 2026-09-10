@@ -81,15 +81,41 @@ $("reserve").onclick=async()=>{
   $("reserve").disabled=true;
   $("reserve").textContent="Reserving…";
   try{
-    const r=await fetch("/api/public/lead",{
+    const session=readSession();
+    if(!session?.access_token){
+      location.href="/login?next="+encodeURIComponent(
+        "/advertise?package="+selected.package_id
+      );
+      return;
+    }
+
+    const payload={
+      package_id:selected.package_id,
+      advertiser_legal_name:$("advertiser_legal_name")?.value?.trim()||"",
+      advertiser_display_name:$("advertiser_display_name")?.value?.trim()||"",
+      contact_name:$("contact_name")?.value?.trim()||"",
+      contact_email:email,
+      contact_mobile:$("contact_mobile")?.value?.trim()||""
+    };
+
+    const r=await fetch("/api/onboarding/advertiser/start",{
       method:"POST",
-      headers:{"content-type":"application/json"},
-      body:JSON.stringify({package_id:selected.package_id,email,interest:"advertiser"})
+      headers:{
+        "content-type":"application/json",
+        authorization:`Bearer ${session.access_token}`
+      },
+      body:JSON.stringify(payload)
     });
+
     const d=await r.json().catch(()=>({}));
-    if(!r.ok)throw new Error(d.error||"Could not reserve offer");
-    $("status").textContent=`Reserved — ${selected.name} is attached to ${email}.`;
-    $("reserve").textContent="Offer reserved ✓";
+    if(!r.ok)throw new Error(d.error||"Could not start checkout");
+
+    if(d.url){
+      location.href=d.url;
+      return;
+    }
+
+    throw new Error("Checkout link was not returned");
   }catch(err){
     $("status").textContent=err.message;
     $("reserve").disabled=false;
