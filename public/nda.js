@@ -4,7 +4,6 @@ const rawNext=params.get('next')||'/portal.html',next=rawNext.startsWith('/')&&!
 const session=readSession();
 if(!session?.access_token)location.replace('/login?next='+encodeURIComponent('/nda.html?next='+next));
 else{
- $('#back').href='/login?next='+encodeURIComponent(next);
  const headers={authorization:`Bearer ${session.access_token}`};
  try{
   const r=await fetch('/api/auth/nda/status',{headers}),d=await r.json().catch(()=>({}));
