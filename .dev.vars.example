@@ -1,5 +1,6 @@
 ADMIN_TOKEN=change-me-to-a-long-random-secret
 
-# Leave unset until approved NDA text is published at an immutable versioned URL.
+# Keep enforcement off while accounts are manually reviewed. Enable only after NDA text is approved and published.
+NDA_ENFORCEMENT_ENABLED=false
 NDA_CURRENT_VERSION=
 NDA_DOCUMENT_URL=
