@@ -351,10 +351,11 @@ async function authNdaStatus(request, env) {
   if(!user)return json({error:"unauthorized"},401);
   const config=ndaConfig(env);
   if(!config)return json({ok:true,user:{id:user.id,email:user.email||null},nda:{required:ndaEnforcementEnabled(env),configured:false,accepted:false,current_version:null,document_url:null}});
-  try {
-    const acceptance=await findNdaAcceptance(env,user.id,config.version);
-    return json({ok:true,user:{id:user.id,email:user.email||null},nda:{required:ndaEnforcementEnabled(env),configured:true,accepted:Boolean(acceptance),current_version:config.version,document_url:config.documentUrl,accepted_at:acceptance?.accepted_at||null}});
-  } catch { return json({error:"nda_status_unavailable"},503); }
+  const required=ndaEnforcementEnabled(env);
+  let acceptance=null;
+  try { acceptance=await findNdaAcceptance(env,user.id,config.version); }
+  catch { if(required)return json({error:"nda_status_unavailable"},503); }
+  return json({ok:true,user:{id:user.id,email:user.email||null},nda:{required,configured:true,accepted:Boolean(acceptance),current_version:config.version,document_url:config.documentUrl,accepted_at:acceptance?.accepted_at||null}});
 }
 async function authNdaAccept(request,env) {
   const user=await authUserFromToken(env,bearer(request));
