@@ -1,25 +1,25 @@
-# CoastLoop platform NDA gate
+# CoastLoop platform NDA acceptance
 
-The platform NDA is distinct from advertiser and venue agreements. Those role-specific signing flows continue to use their existing records.
+The platform NDA is separate from advertiser and venue agreements. Their existing signatures and checkout behavior stay unchanged.
 
-## Configuration
+## Current manual-review mode
 
-After the approved NDA text is published at an immutable, version-specific HTTPS URL or CoastLoop path, set both Worker variables:
+Set `NDA_ENFORCEMENT_ENABLED=false` (the default) so a user can continue after sign-in without accepting the platform NDA. This keeps the NDA page and versioned acceptance records available, but acceptance does not block account access. CoastLoop staff can review and approve account access through the existing account authorization workflow.
 
-- `NDA_CURRENT_VERSION`: the exact document version identifier, such as `1.0`.
-- `NDA_DOCUMENT_URL`: the URL the user opens to review that version.
+Advertiser checkout remains available. This change does not add cash collection or mark an invoice paid; record any in-person cash payment using the existing operational process.
 
-Do not set these values to a draft or placeholder. If either value is absent or invalid, the acceptance page reports that the NDA is not configured, acceptance writes are rejected, and protected account APIs fail closed. Public advertiser checkout endpoints remain available.
+## Enable an NDA gate later
 
-Never replace the content behind an existing version URL. For each revised NDA, publish a new immutable URL and change `NDA_CURRENT_VERSION` and `NDA_DOCUMENT_URL` together. Existing users must accept the new version before protected account access resumes.
+After the NDA language is approved and published at an immutable, version-specific URL, configure:
 
-## Deploy sequence
+- `NDA_ENFORCEMENT_ENABLED=true`
+- `NDA_CURRENT_VERSION`: exact document version, such as `1.0`
+- `NDA_DOCUMENT_URL`: HTTPS URL or CoastLoop path for that version
 
-1. Review and approve the legal text and publish its versioned document.
-2. Apply the new Supabase migration. It creates an append-only acceptance table with RLS enabled and access limited to the Worker's service role.
-3. Configure the two Worker variables for the approved version.
-4. Deploy the Worker and static assets together.
-5. Verify a new Google sign-in reaches the NDA page, acceptance is recorded, the same version is not shown again, and a version change prompts again.
-6. Verify direct calls to protected APIs fail before acceptance and advertiser checkout remains usable.
+Apply the Supabase migration before enabling enforcement. If enforcement is enabled but the document or database is unavailable, protected account APIs fail closed. Never replace the content behind an existing version URL. For revised language, publish a new version and update the version and URL together.
 
-This repository change does not publish NDA terms, configure production secrets, apply the database migration, or deploy to production.
+## Source validation
+
+With enforcement disabled, new and returning users can continue whether or not an acceptance record exists. With enforcement enabled, users must accept the configured current version before protected account access resumes. Public advertiser checkout routes are unaffected.
+
+The migration, production Worker settings, deployment, and production behavior still require a controlled rollout and validation.
