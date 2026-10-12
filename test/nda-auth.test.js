@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {handleAuthRoute,requireUserAccess} from '../src/auth.js';
 const user={id:'123e4567-e89b-12d3-a456-426614174000',email:'tester@example.com',user_metadata:{full_name:'Test User'}};
-let store=new Map(),failAcceptanceWrite=false;
+let store=new Map(),failAcceptanceWrite=false,failAcceptanceRead=false;
 globalThis.fetch=async(input,init={})=>{
  const url=new URL(input);
  if(url.pathname==='/auth/v1/user')return Response.json(user);
@@ -11,6 +11,7 @@ globalThis.fetch=async(input,init={})=>{
  if(url.pathname==='/rest/v1/organization_members')return Response.json([{role:'admin'}]);
  if(url.pathname==='/rest/v1/business_members'||url.pathname==='/rest/v1/businesses')return Response.json([]);
  if(url.pathname==='/rest/v1/platform_nda_acceptances'){
+  if(failAcceptanceRead&&init.method!=='POST')return Response.json({message:'table missing'},{status:500});
   if(init.method==='POST'){
    if(failAcceptanceWrite)return Response.json({message:'write denied'},{status:500});
    const b=JSON.parse(init.body),key=b.user_id+':'+b.document_version;
@@ -25,7 +26,7 @@ globalThis.fetch=async(input,init={})=>{
 const env={SUPABASE_URL:'https://supabase.test',SUPABASE_AUTH_URL:'https://supabase.test',SUPABASE_SECRET_KEY:'test',NDA_ENFORCEMENT_ENABLED:'false',NDA_CURRENT_VERSION:'v1',NDA_DOCUMENT_URL:'/legal/platform-nda-v1.pdf'};
 function req(path,method='GET',body){return new Request('https://coastloop.test'+path,{method,headers:{authorization:'Bearer token',...(body?{'content-type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});}
 const call=async(path='/api/auth/nda/status',method='GET',body)=>handleAuthRoute(req(path,method,body),env,new URL('https://coastloop.test'+path));
-test.beforeEach(()=>{store=new Map();failAcceptanceWrite=false;env.NDA_ENFORCEMENT_ENABLED='false';env.NDA_CURRENT_VERSION='v1';env.NDA_DOCUMENT_URL='/legal/platform-nda-v1.pdf';});
+test.beforeEach(()=>{store=new Map();failAcceptanceWrite=false;failAcceptanceRead=false;env.NDA_ENFORCEMENT_ENABLED='false';env.NDA_CURRENT_VERSION='v1';env.NDA_DOCUMENT_URL='/legal/platform-nda-v1.pdf';});
 test('first user can continue without acceptance in manual-review mode, then may record acceptance',async()=>{
  let r=await call();assert.equal((await r.json()).nda.accepted,false);
  const me=await call('/api/auth/me');assert.equal(me.status,200);
@@ -55,6 +56,12 @@ test('direct account API access is blocked before acceptance when enforcement is
  assert.equal((await call('/api/auth/me')).status,401);
  await call('/api/auth/nda/accept','POST',{version:'v1'});
  assert.equal((await call('/api/auth/me')).status,200);
+});
+test('NDA status fails open only for optional manual-review mode if the migration is pending',async()=>{
+ failAcceptanceRead=true;
+ const optional=await call();assert.equal(optional.status,200);assert.equal((await optional.json()).nda.required,false);
+ env.NDA_ENFORCEMENT_ENABLED='true';
+ const enforced=await call();assert.equal(enforced.status,503);assert.equal((await enforced.json()).error,'nda_status_unavailable');
 });
 test('failed acceptance writes never return success',async()=>{
  failAcceptanceWrite=true;const r=await call('/api/auth/nda/accept','POST',{version:'v1'});
