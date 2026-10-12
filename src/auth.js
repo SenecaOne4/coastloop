@@ -145,9 +145,15 @@ export async function requireUserAccess(request, env) {
   if (!user) return null;
   const access = await accessForUser(env, user);
   if (!access.internal_role && !access.businesses.length) return null;
-  const config = ndaConfig(env);
-  if (!config || !(await findNdaAcceptance(env, user.id, config.version))) return null;
+  if (ndaEnforcementEnabled(env)) {
+    const config = ndaConfig(env);
+    if (!config || !(await findNdaAcceptance(env, user.id, config.version))) return null;
+  }
   return { token, user, access };
+}
+
+function ndaEnforcementEnabled(env) {
+  return String(env.NDA_ENFORCEMENT_ENABLED || "").trim().toLowerCase() === "true";
 }
 
 function ndaConfig(env) {
@@ -344,10 +350,10 @@ async function authNdaStatus(request, env) {
   const user=await authUserFromToken(env,bearer(request));
   if(!user)return json({error:"unauthorized"},401);
   const config=ndaConfig(env);
-  if(!config)return json({ok:true,user:{id:user.id,email:user.email||null},nda:{required:true,configured:false,accepted:false,current_version:null,document_url:null}});
+  if(!config)return json({ok:true,user:{id:user.id,email:user.email||null},nda:{required:ndaEnforcementEnabled(env),configured:false,accepted:false,current_version:null,document_url:null}});
   try {
     const acceptance=await findNdaAcceptance(env,user.id,config.version);
-    return json({ok:true,user:{id:user.id,email:user.email||null},nda:{required:true,configured:true,accepted:Boolean(acceptance),current_version:config.version,document_url:config.documentUrl,accepted_at:acceptance?.accepted_at||null}});
+    return json({ok:true,user:{id:user.id,email:user.email||null},nda:{required:ndaEnforcementEnabled(env),configured:true,accepted:Boolean(acceptance),current_version:config.version,document_url:config.documentUrl,accepted_at:acceptance?.accepted_at||null}});
   } catch { return json({error:"nda_status_unavailable"},503); }
 }
 async function authNdaAccept(request,env) {
@@ -384,9 +390,11 @@ async function authPassword(request, env) {
   const token = bearer(request);
   const user = await authUserFromToken(env, token);
   if (!user) return json({ error: "unauthorized" }, 401);
-  const config = ndaConfig(env);
-  if (!config || !(await findNdaAcceptance(env, user.id, config.version)))
-    return json({ error: "unauthorized" }, 401);
+  if (ndaEnforcementEnabled(env)) {
+    const config = ndaConfig(env);
+    if (!config || !(await findNdaAcceptance(env, user.id, config.version)))
+      return json({ error: "unauthorized" }, 401);
+  }
   const b = await bodyJson(request);
   const password = String(b.password || "");
   if (password.length < 10) return json({ error: "Password must be at least 10 characters" }, 400);
