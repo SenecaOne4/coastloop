@@ -1,1 +1,5 @@
 ADMIN_TOKEN=change-me-to-a-long-random-secret
+
+# Leave unset until approved NDA text is published at an immutable versioned URL.
+NDA_CURRENT_VERSION=
+NDA_DOCUMENT_URL=
