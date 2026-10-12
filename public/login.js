@@ -10,7 +10,7 @@ const requestedNext=new URLSearchParams(location.search).get('next')||'';
 const validNext=value=>value.startsWith('/')&&!value.startsWith('//')?value:'';
 async function routeAfterLogin(fallback){
  const session=readSession();if(!session?.access_token){location.replace(fallback);return;}
- const next=validNext(requestedNext)||fallback;
+ const next=validNext(requestedNext)||fallback||'/login';
  const r=await fetch('/api/auth/nda/status',{headers:{authorization:`Bearer ${session.access_token}`}});
  const d=await r.json().catch(()=>({}));
  if(!r.ok){$('#msg').textContent=d.error==='nda_status_unavailable'?'Could not verify NDA acceptance. Please retry.':(d.error||'Could not verify account.');return;}
