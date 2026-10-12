@@ -6,7 +6,7 @@ The platform NDA is separate from advertiser and venue agreements. Their existin
 
 Set `NDA_ENFORCEMENT_ENABLED=false` (the default) so a user can continue after sign-in without accepting the platform NDA. This keeps the NDA page and versioned acceptance records available, but acceptance does not block account access. CoastLoop staff can review and approve account access through the existing account authorization workflow.
 
-Advertiser checkout remains available. This change does not add cash collection or mark an invoice paid; record any in-person cash payment using the existing operational process.
+Advertiser checkout remains available. This change does not add cash collection or mark an invoice paid; handle any in-person cash payment through your manual process.
 
 ## Enable an NDA gate later
 
