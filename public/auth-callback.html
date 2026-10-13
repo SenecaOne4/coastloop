@@ -1,7 +1,13 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Signing in — CoastLoop</title><link rel="stylesheet" href="/styles.css"></head>
-<body class="public-site"><main class="public-section"><div class="public-eyebrow">COASTLOOP</div><h2>Signing you in…</h2><p id="msg" class="public-lede">Connecting your Google account.</p></main>
+<title>Signing in — CoastLoop</title><link rel="stylesheet" href="/styles.css">
+<style>
+:root{color-scheme:dark}
+html,body.auth-flow{background:#0b0c0e;color:#f4f4f2}
+.auth-flow .public-eyebrow{color:#f0c36a}
+.auth-flow .public-lede{color:#9ca3af}
+</style></head>
+<body class="auth-flow"><main class="public-section"><div class="public-eyebrow">COASTLOOP</div><h2>Signing you in…</h2><p id="msg" class="public-lede">Connecting your Google account.</p></main>
 <script type="module">
 import {saveSession} from '/session.js';
 const q=new URLSearchParams(location.search),h=new URLSearchParams(location.hash.slice(1));
