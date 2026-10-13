@@ -145,7 +145,30 @@ export async function requireUserAccess(request, env) {
   if (!user) return null;
   const access = await accessForUser(env, user);
   if (!access.internal_role && !access.businesses.length) return null;
+  if (ndaEnforcementEnabled(env)) {
+    const config = ndaConfig(env);
+    if (!config || !(await findNdaAcceptance(env, user.id, config.version))) return null;
+  }
   return { token, user, access };
+}
+
+function ndaEnforcementEnabled(env) {
+  return String(env.NDA_ENFORCEMENT_ENABLED || "").trim().toLowerCase() === "true";
+}
+
+function ndaConfig(env) {
+  const version=String(env.NDA_CURRENT_VERSION||"").trim(), raw=String(env.NDA_DOCUMENT_URL||"").trim();
+  if(!version||!raw)return null;
+  let documentUrl=null;
+  try {
+    if(raw.startsWith("/")&&!raw.startsWith("//"))documentUrl=raw;
+    else {const u=new URL(raw);if(u.protocol==="https:")documentUrl=u.toString();}
+  } catch {}
+  return documentUrl?{version,documentUrl}:null;
+}
+async function findNdaAcceptance(env,userId,version) {
+  const rows=await rest(env,`platform_nda_acceptances?user_id=eq.${encodeURIComponent(userId)}&document_version=eq.${encodeURIComponent(version)}&select=user_id,document_version,accepted_at&limit=1`);
+  return rows?.[0]||null;
 }
 
 export async function requireAdminAccess(request, env) {
@@ -323,6 +346,37 @@ async function authIdentity(request, env) {
   });
 }
 
+async function authNdaStatus(request, env) {
+  const user=await authUserFromToken(env,bearer(request));
+  if(!user)return json({error:"unauthorized"},401);
+  const config=ndaConfig(env);
+  if(!config)return json({ok:true,user:{id:user.id,email:user.email||null},nda:{required:ndaEnforcementEnabled(env),configured:false,accepted:false,current_version:null,document_url:null}});
+  const required=ndaEnforcementEnabled(env);
+  let acceptance=null;
+  try { acceptance=await findNdaAcceptance(env,user.id,config.version); }
+  catch { if(required)return json({error:"nda_status_unavailable"},503); }
+  return json({ok:true,user:{id:user.id,email:user.email||null},nda:{required,configured:true,accepted:Boolean(acceptance),current_version:config.version,document_url:config.documentUrl,accepted_at:acceptance?.accepted_at||null}});
+}
+async function authNdaAccept(request,env) {
+  const user=await authUserFromToken(env,bearer(request));
+  if(!user)return json({error:"unauthorized"},401);
+  const config=ndaConfig(env);
+  if(!config)return json({error:"nda_document_unavailable"},503);
+  const b=await bodyJson(request);
+  if(String(b.version||"")!==config.version)return json({error:"nda_version_changed",current_version:config.version},409);
+  try {
+    const prior=await findNdaAcceptance(env,user.id,config.version);
+    if(prior)return json({ok:true,acceptance:{user_id:user.id,document_version:config.version,accepted_at:prior.accepted_at}});
+    const rows=await rest(env,"platform_nda_acceptances?on_conflict=user_id,document_version&select=user_id,document_version,accepted_at",{
+      method:"POST",headers:{Prefer:"resolution=ignore-duplicates,return=representation"},
+      body:JSON.stringify({user_id:user.id,email_snapshot:String(user.email||"").toLowerCase(),document_version:config.version})
+    });
+    let acceptance=rows?.[0]||null;
+    if(!acceptance)acceptance=await findNdaAcceptance(env,user.id,config.version);
+    if(!acceptance)throw new Error("Acceptance write not confirmed");
+    return json({ok:true,acceptance});
+  } catch { return json({error:"nda_acceptance_write_failed"},503); }
+}
 async function authMe(request, env) {
   const auth = await requireUserAccess(request, env);
   if (!auth) return json({ error: "unauthorized" }, 401);
@@ -337,6 +391,11 @@ async function authPassword(request, env) {
   const token = bearer(request);
   const user = await authUserFromToken(env, token);
   if (!user) return json({ error: "unauthorized" }, 401);
+  if (ndaEnforcementEnabled(env)) {
+    const config = ndaConfig(env);
+    if (!config || !(await findNdaAcceptance(env, user.id, config.version)))
+      return json({ error: "unauthorized" }, 401);
+  }
   const b = await bodyJson(request);
   const password = String(b.password || "");
   if (password.length < 10) return json({ error: "Password must be at least 10 characters" }, 400);
@@ -399,6 +458,10 @@ export async function handleAuthRoute(request, env, url) {
     return authRefresh(request, env);
   if (url.pathname === "/api/auth/identity" && request.method === "GET")
     return authIdentity(request, env);
+  if (url.pathname === "/api/auth/nda/status" && request.method === "GET")
+    return authNdaStatus(request, env);
+  if (url.pathname === "/api/auth/nda/accept" && request.method === "POST")
+    return authNdaAccept(request, env);
   if (url.pathname === "/api/auth/me" && request.method === "GET")
     return authMe(request, env);
   if (url.pathname === "/api/auth/password" && request.method === "PUT")
