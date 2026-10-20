@@ -45,6 +45,7 @@
     }
   ],
   "vars": {
-    "GOOGLE_AUTH_ENABLED": "true"
+    "GENNY_AUTH_ENABLED": "true",
+    "GOOGLE_AUTH_ENABLED": "false"
   }
 }

@@ -7,7 +7,7 @@ html,body.auth-flow{background:#0b0c0e;color:#f4f4f2}
 .auth-flow .public-eyebrow{color:#f0c36a}
 .auth-flow .public-lede{color:#9ca3af}
 </style></head>
-<body class="auth-flow"><main class="public-section"><div class="public-eyebrow">COASTLOOP</div><h2>Signing you in…</h2><p id="msg" class="public-lede">Connecting your Google account.</p></main>
+<body class="auth-flow"><main class="public-section"><div class="public-eyebrow">COASTLOOP</div><h2>Signing you in…</h2><p id="msg" class="public-lede">Connecting your GENNY account.</p></main>
 <script type="module">
 import {saveSession} from '/session.js';
 const q=new URLSearchParams(location.search),h=new URLSearchParams(location.hash.slice(1));
@@ -22,5 +22,5 @@ if(access){
    if(data.nda?.required&&(!data.nda.configured||!data.nda.accepted)){location.replace('/nda.html?next='+encodeURIComponent(next));return;}
    location.replace(next);
   }).catch(()=>{msg.textContent='NDA status could not be verified. Please try again.';});
-}else msg.textContent=h.get('error_description')||q.get('error_description')||'Google sign-in could not be completed.';
+}else msg.textContent=h.get('error_description')||q.get('error_description')||'GENNY sign-in could not be completed.';
 </script></body></html>

@@ -436,7 +436,7 @@ async function authConfig(env) {
   const status = await bootstrapStatus(env);
   return {
     ...status,
-    google_enabled: String(env.GOOGLE_AUTH_ENABLED || "").toLowerCase() === "true",
+    genny_auth_enabled: String(env.GENNY_AUTH_ENABLED || "").toLowerCase() === "true",
     auth_host: (() => { try { return new URL(authBase(env)).hostname; } catch { return null; } })(),
   };
 }
@@ -470,15 +470,18 @@ export async function handleAuthRoute(request, env, url) {
     return authRecover(request, env);
   if (url.pathname === "/api/auth/logout" && request.method === "POST")
     return authLogout(request, env);
-  if (url.pathname === "/api/auth/google" && request.method === "GET") {
-    if (String(env.GOOGLE_AUTH_ENABLED || "").toLowerCase() !== "true")
-      return json({ error: "Google sign-in is not enabled yet" }, 503);
+  if (
+    (url.pathname === "/api/auth/genny" || url.pathname === "/api/auth/google") &&
+    request.method === "GET"
+  ) {
+    if (String(env.GENNY_AUTH_ENABLED || "").toLowerCase() !== "true")
+      return json({ error: "GENNY Auth sign-in is not enabled yet" }, 503);
     const target = new URL(`${authBase(env)}/auth/v1/authorize`);
     const requestedNext = String(url.searchParams.get("next") || "/advertise");
     const safeNext = requestedNext.startsWith("/") && !requestedNext.startsWith("//")
       ? requestedNext
       : "/advertise";
-    target.searchParams.set("provider", "google");
+    target.searchParams.set("provider", "custom:gennyauth");
     target.searchParams.set(
       "redirect_to",
       `https://coastloop.site/auth-callback?next=${encodeURIComponent(safeNext)}`

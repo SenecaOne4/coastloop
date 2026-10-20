@@ -28,7 +28,7 @@ if(config.bootstrap_required){
   const old=sessionStorage.getItem('adminToken');
   if(old){$('#setupKey').value=old;$('#setupKey').closest('input').hidden=true}
 }
-if(config.google_enabled)$('#googleWrap').hidden=false;
+if(config.genny_auth_enabled)$('#googleWrap').hidden=false;
 
 $('#login').onsubmit=async e=>{
   e.preventDefault();$('#msg').textContent='Signing in…';
@@ -60,7 +60,7 @@ $('#owner').onsubmit=async e=>{
   routeAfterLogin('/admin');
 };
 
-$('#google').onclick=()=>location.href='/api/auth/google'+(validNext(requestedNext)?'?next='+encodeURIComponent(validNext(requestedNext)):'');
+$('#google').onclick=()=>location.href='/api/auth/genny'+(validNext(requestedNext)?'?next='+encodeURIComponent(validNext(requestedNext)):'');
 
 
 const inviteEmail=new URLSearchParams(location.search).get('invite');
