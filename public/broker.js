@@ -156,3 +156,10 @@ $('#newCampaign').onsubmit=async e=>{
 $('#accountButton').onclick=()=>location.href='/account.html';
 $('#logoutButton').onclick=()=>sessionLogout();
 load();
+
+document.querySelectorAll('.broker-nav .cl-side-link').forEach(link=>{
+  link.addEventListener('click',()=>{
+    document.querySelectorAll('.broker-nav .cl-side-link').forEach(x=>x.classList.remove('is-active'));
+    link.classList.add('is-active');
+  });
+});

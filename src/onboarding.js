@@ -799,9 +799,14 @@ export async function executedVenueAgreement(request, env) {
 }
 
 export async function adminOnboarding(env) {
-  const [agreements, tasks] = await Promise.all([
+  const [agreements, tasks, advertiserOrders] = await Promise.all([
     sb(env, `agreement_instances?organization_id=eq.${ORG_ID}&select=id,business_id,location_id,template_family,template_version,status,signer_legal_name,signer_email,sent_at,first_viewed_at,signed_at,created_at&order=created_at.desc&limit=100`),
     sb(env, `onboarding_tasks?organization_id=eq.${ORG_ID}&select=*&order=created_at.desc&limit=100`),
+    sb(env, `advertiser_orders?organization_id=eq.${ORG_ID}&select=id,advertiser_business_id,status,accepted_at,created_at&order=created_at.desc&limit=100`),
   ]);
-  return { agreements: agreements || [], tasks: tasks || [] };
+  return {
+    agreements: agreements || [],
+    tasks: tasks || [],
+    advertiser_orders: advertiserOrders || [],
+  };
 }

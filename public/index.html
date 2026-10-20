@@ -1,152 +1,141 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>CoastLoop — Local advertising people actually see</title>
-<meta name="description" content="Beautiful local advertising on screens inside real businesses. CoastLoop connects local advertisers with local attention.">
+<meta name="theme-color" content="#0a0a0a">
+<title>CoastLoop — Put your business on local screens</title>
+<meta name="description" content="Put your business on CoastLoop screens around town. $1,000 per year. We create the ad for you.">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/styles.css">
+<link rel="stylesheet" href="/coastloop-ui.css">
 </head>
-<body class="public-site">
-<header class="public-nav">
-  <a class="public-logo coastloop-lockup" href="/" aria-label="CoastLoop home">
-    <img class="coastloop-mark" src="/brand/coastloop-mark.svg" alt="">
-    <span>COASTLOOP</span>
-  </a>
-  <nav>
-    <a href="#advertise">Pricing</a>
-    <a href="/login?next=%2Fhost">Host a screen</a>
+<body class="cl-ui">
+
+<header class="cl-wrap cl-nav">
+  <a class="cl-brand" href="/"><img class="cl-brand-mark" src="/brand/coastloop-mark.svg" alt=""><span>CoastLoop</span></a>
+  <nav class="cl-nav-links">
+    <a href="#network">Network</a>
     <a href="/login">Sign in</a>
-    <a class="public-nav-cta" href="#advertise">Choose a plan</a>
+    <a class="cl-btn cl-btn-primary" href="/advertise?plan=coastloop-annual">Start advertising</a>
   </nav>
 </header>
 
 <main>
-<section class="public-hero public-hero-live">
-  <div class="hero-copy">
-    <div class="public-kicker">HYPERLOCAL DIGITAL ADVERTISING</div>
-    <h1>Local advertising<br>you can <span>watch work.</span></h1>
-    <p>Beautiful creative on screens inside real local businesses — backed by verified delivery, live screen health and campaign reporting.</p>
-
-    <div class="public-actions">
-      <a class="public-button" href="/login?next=%2Fadvertise">Advertise with CoastLoop</a>
-      <a class="public-button secondary" href="/login?next=%2Fhost">Host a screen</a>
-    </div>
-
-    <div class="public-proof">
-      <div><strong>CREATIVE</strong><small>Built to look premium on a TV</small></div>
-      <div><strong>LOCAL</strong><small>Placed inside nearby businesses</small></div>
-      <div><strong>VERIFIED</strong><small>Every commercial play is measured</small></div>
-    </div>
-  </div>
-
-  <div class="hero-network-stage" aria-label="CoastLoop live network telemetry">
-    <div class="hero-tv">
-      <div class="hero-tv-top">
-        <span class="hero-live-label"><i></i> COASTLOOP LIVE</span>
-        <span>VERIFIED DELIVERY</span>
-      </div>
-
-      <div class="hero-tv-main">
-        <div class="hero-tv-copy">
-          <small>COMMERCIAL PLAYS · 24H</small>
-          <strong id="heroNetPlays">—</strong>
-          <span id="heroLastVerified">Connecting to network…</span>
-        </div>
-
-        <div class="hero-wave" aria-hidden="true">
-          <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
-          <i></i><i></i><i></i><i></i><i></i><i></i>
-        </div>
-      </div>
-
-      <div class="hero-tv-grid">
-        <div><strong id="heroNetOnline">—</strong><span>screens online</span></div>
-        <div><strong id="heroNetLocations">—</strong><span>locations</span></div>
-        <div><strong id="heroNetCampaigns">—</strong><span>campaigns live</span></div>
-      </div>
-
-      <div class="hero-tv-footer">
-        <span>PROOF OF PLAY</span>
-        <span>SCREEN HEALTH</span>
-        <span>CAMPAIGN PACING</span>
-      </div>
-    </div>
-
-    <div class="hero-float hero-float-a">
-      <span class="network-live-dot"></span>
-      SCREEN ONLINE
-    </div>
-    <div class="hero-float hero-float-b">
-      VERIFIED PLAY
-      <strong id="heroProofAge">LIVE</strong>
-    </div>
-  </div>
-</section>
-
-<section class="network-live" id="network">
-  <div class="network-live-head">
+  <section class="cl-wrap cl-hero">
     <div>
-      <div class="network-live-label"><span class="network-live-dot"></span> LIVE NETWORK</div>
-      <h2>Proof, not promises.</h2>
-      <p>CoastLoop reports verified commercial delivery from the network itself.</p>
+      <div class="cl-eyebrow">Local advertising, made simple</div>
+      <h1>Put your business on local screens.</h1>
+      <p class="cl-lede">Reach customers inside real local businesses. CoastLoop creates the ad for you and puts it into the network.</p>
+      <div class="cl-actions">
+        <a class="cl-btn cl-btn-primary cl-btn-lg" href="/advertise?plan=coastloop-annual">Start advertising</a>
+        <a class="cl-btn cl-btn-lg" href="#network">See the network</a>
+      </div>
+      <div class="cl-price"><strong>$1,000 / year</strong><span>We create the ad.</span></div>
     </div>
-    <div class="network-live-state" id="networkState">CONNECTING TO NETWORK</div>
-  </div>
 
-  <div class="network-metrics">
-    <div class="network-metric"><strong id="netPlays">—</strong><span id="netPlaysLabel">verified plays · 24h</span></div>
-    <div class="network-metric"><strong id="netOnline">—</strong><span id="netOnlineLabel">screens online now</span></div>
-    <div class="network-metric"><strong id="netLocations">—</strong><span id="netLocationsLabel">commercial locations</span></div>
-    <div class="network-metric"><strong id="netCampaigns">—</strong><span id="netCampaignsLabel">active campaigns</span></div>
-  </div>
-
-  <div class="network-delivery">
-    <div class="network-delivery-head">
-      <span>VERIFIED DELIVERY · LAST 7 DAYS</span>
-      <strong id="network7d">—</strong>
+    <div class="cl-screen cl-showcase" id="heroShowcase" aria-label="CoastLoop paired screen preview">
+      <div class="cl-showcase-stage" id="heroShowcaseStage">
+        <div class="cl-screen-inner cl-showcase-fallback">
+          <span>CoastLoop</span>
+          <strong>Your business belongs here.</strong>
+          <p>Premium local advertising, built for the screen.</p>
+        </div>
+      </div>
+      <div class="cl-showcase-meta">
+        <span class="cl-showcase-state" id="heroShowcaseState">SCREEN PREVIEW</span>
+        <span id="heroShowcaseName">CoastLoop network</span>
+      </div>
     </div>
-    <div class="network-chart" id="networkChart"></div>
-  </div>
+  </section>
 
-  <div class="network-signal">
-    <span id="networkActivity">Waiting for network telemetry…</span>
-    <div class="network-signal-line"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
-  </div>
-</section>
+  <section class="cl-section" id="network">
+    <div class="cl-wrap">
+      <div class="cl-section-head">
+        <div>
+          <div class="cl-eyebrow">Live network</div>
+          <h2>Proof, not promises.</h2>
+        </div>
+        <p class="cl-section-copy">CoastLoop verifies playback from the network so advertisers can see that their campaigns are actually being delivered.</p>
+      </div>
 
-<section class="public-section public-shop" id="advertise">
-  <div class="public-eyebrow">BUY AD SPACE</div>
-  <h2>Put your business on CoastLoop.</h2>
-  <p class="public-lede">One advertising product. Annual or monthly. Creative and verified-delivery reporting included.</p>
-  <div class="public-actions">
-    <a class="public-button" href="/login?next=%2Fadvertise">Get started</a>
-  </div>
-</section>
+      <div class="cl-proof-grid">
+        <div class="cl-proof">
+          <strong id="netPlays">—</strong>
+          <span id="netPlaysLabel">verified plays · 24h</span>
+        </div>
+        <div class="cl-proof">
+          <strong id="netOnline">—</strong>
+          <span id="netOnlineLabel">screens online now</span>
+        </div>
+        <div class="cl-proof">
+          <strong id="netLocations">—</strong>
+          <span id="netLocationsLabel">commercial locations</span>
+        </div>
+        <div class="cl-proof">
+          <strong id="netCampaigns">—</strong>
+          <span id="netCampaignsLabel">active campaigns</span>
+        </div>
+      </div>
 
-<section class="public-section public-dark" id="host">
-  <div class="public-eyebrow">FOR HOST LOCATIONS</div>
-  <h2>Your TV can do more.</h2>
-  <p class="public-lede">Approve the exact screen, operating mode and commercial terms from your phone. CoastLoop handles the local ad layer and keeps room for your own house content.</p>
-  <div class="public-actions">
-    <a class="public-button light" href="/login?next=%2Fhost">Get started hosting</a>
-    <a class="public-button secondary" href="/login?next=%2Fhost">Host sign in</a>
-  </div>
-  <p class="host-fine">Any cash compensation is deal-specific and shown in your placement agreement before you sign.</p>
-</section>
+      <div class="cl-proof-state">
+        <span class="cl-dot"></span>
+        <span id="networkState">CONNECTING TO NETWORK</span>
+        <span>·</span>
+        <span id="networkActivity">Waiting for network telemetry…</span>
+      </div>
 
-<section class="public-section public-buy-close">
-  <div class="public-eyebrow">READY WHEN YOU ARE</div>
-  <h2>Don’t fill out a lead form.<br>Pick something.</h2>
-  <p class="public-lede">Start with one screen. Expand when you see the delivery. CoastLoop will collect the business details only when they are actually needed to fulfill the order.</p>
-  <a class="public-button" href="#advertise">Choose a CoastLoop plan</a>
-</section>
+      <div hidden>
+        <strong id="heroNetPlays">—</strong>
+        <span id="heroLastVerified">Connecting to network…</span>
+        <strong id="heroNetOnline">—</strong>
+        <strong id="heroNetLocations">—</strong>
+        <strong id="heroNetCampaigns">—</strong>
+        <strong id="heroProofAge">LIVE</strong>
+        <strong id="network7d">—</strong>
+        <div id="networkChart"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="cl-section">
+    <div class="cl-wrap">
+      <div class="cl-section-head">
+        <div>
+          <div class="cl-eyebrow">How it works</div>
+          <h2>Pay. Send us your brand. Go live.</h2>
+        </div>
+      </div>
+
+      <div class="cl-steps">
+        <div class="cl-step">
+          <b>01</b>
+          <strong>Choose advertising.</strong>
+          <p>One clear product. No quote request and no sales maze.</p>
+        </div>
+        <div class="cl-step">
+          <b>02</b>
+          <strong>Give us the basics.</strong>
+          <p>Your logo, photos, offer, website and anything else we should know.</p>
+        </div>
+        <div class="cl-step">
+          <b>03</b>
+          <strong>We create and deliver it.</strong>
+          <p>Review your ad, approve it, and CoastLoop handles the screen delivery.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="cl-wrap cl-cta">
+    <h2>Get in the loop.</h2>
+    <a class="cl-btn cl-btn-primary cl-btn-lg" href="/advertise?plan=coastloop-annual">Start advertising</a>
+  </section>
 </main>
 
-<footer class="public-footer">
-  <strong>COASTLOOP</strong>
-  <span>Local attention, connected.</span>
+<footer class="cl-wrap cl-footer">
+  <span>CoastLoop</span>
+  <span>Local attention. Verified delivery.</span>
 </footer>
 
 <script>
@@ -162,6 +151,70 @@ const networkAge = ts => {
   return `${Math.floor(sec/3600)}h ago`;
 };
 
+async function loadShowcase(){
+  const stage=document.querySelector('#heroShowcaseStage');
+  const state=document.querySelector('#heroShowcaseState');
+  const name=document.querySelector('#heroShowcaseName');
+  if(!stage) return;
+
+  const render=item=>{
+    if(!item?.url) return;
+    let media;
+    const video=item.media_type==='video' ||
+      String(item.mime_type||'').startsWith('video/');
+
+    if(video){
+      media=document.createElement('video');
+      media.autoplay=true;
+      media.muted=true;
+      media.loop=true;
+      media.playsInline=true;
+      media.setAttribute('playsinline','');
+    }else{
+      media=document.createElement('img');
+      media.alt=item.title || 'CoastLoop screen creative';
+    }
+
+    media.className='cl-showcase-media';
+    media.src=item.url;
+    stage.replaceChildren(media);
+    if(video) media.play().catch(()=>{});
+  };
+
+  try{
+    const res=await fetch('/api/public/showcase-screen',{cache:'no-store'});
+    if(!res.ok) return;
+    const data=await res.json();
+    if(!data?.available || !Array.isArray(data.items) || !data.items.length) return;
+
+    let index=0;
+    render(data.items[index]);
+
+    if(state){
+      state.textContent=data.commercial
+        ? (data.online ? 'LIVE NETWORK' : 'LIVE ASSIGNMENT')
+        : 'PAIRED SCREEN PREVIEW';
+      state.classList.toggle('is-live',Boolean(data.commercial && data.online));
+    }
+    if(name) name.textContent=data.screen?.name || 'CoastLoop screen';
+
+    if(data.items.length>1){
+      const advance=()=>{
+        const current=data.items[index];
+        const seconds=Math.max(5,Math.min(60,Number(current?.duration_seconds)||15));
+        setTimeout(()=>{
+          index=(index+1)%data.items.length;
+          render(data.items[index]);
+          advance();
+        },seconds*1000);
+      };
+      advance();
+    }
+  }catch{}
+}
+
+loadShowcase();
+
 async function loadNetworkPulse(){
   try{
     const res = await fetch('/api/public/network', {cache:'no-store'});
@@ -171,20 +224,20 @@ async function loadNetworkPulse(){
     const commissioning = n.network_state === 'commissioning';
 
     if(commissioning){
-      document.querySelector('#netPlays').textContent = 'READY';
-      document.querySelector('#netOnline').textContent = 'READY';
-      document.querySelector('#netLocations').textContent = 'PILOT';
-      document.querySelector('#netCampaigns').textContent = 'READY';
+      document.querySelector('#netPlays').textContent = '0';
+      document.querySelector('#netOnline').textContent = '0 / 0';
+      document.querySelector('#netLocations').textContent = '0';
+      document.querySelector('#netCampaigns').textContent = '0';
 
-      document.querySelector('#netPlaysLabel').textContent = 'verified delivery engine';
-      document.querySelector('#netOnlineLabel').textContent = 'screen health telemetry';
-      document.querySelector('#netLocationsLabel').textContent = 'commercial network status';
-      document.querySelector('#netCampaignsLabel').textContent = 'campaign pacing engine';
+      document.querySelector('#netPlaysLabel').textContent = 'verified commercial plays · 24h';
+      document.querySelector('#netOnlineLabel').textContent = 'commercial screens online';
+      document.querySelector('#netLocationsLabel').textContent = 'commercial locations';
+      document.querySelector('#netCampaignsLabel').textContent = 'active commercial campaigns';
 
-      document.querySelector('#heroNetPlays').textContent = 'READY';
-      document.querySelector('#heroNetOnline').textContent = 'READY';
-      document.querySelector('#heroNetLocations').textContent = 'PILOT';
-      document.querySelector('#heroNetCampaigns').textContent = 'READY';
+      document.querySelector('#heroNetPlays').textContent = '0';
+      document.querySelector('#heroNetOnline').textContent = '0 / 0';
+      document.querySelector('#heroNetLocations').textContent = '0';
+      document.querySelector('#heroNetCampaigns').textContent = '0';
     }else{
       document.querySelector('#netPlays').textContent = networkNumber(n.plays_24h);
       document.querySelector('#netOnline').textContent =
@@ -215,7 +268,7 @@ async function loadNetworkPulse(){
     const total7d = series.reduce((sum,x) => sum + Number(x.plays || 0), 0);
 
     document.querySelector('#network7d').textContent = commissioning
-      ? 'LIVE DATA STARTS WITH FIRST COMMERCIAL SCREEN'
+      ? 'FIRST COMMERCIAL DELIVERY PENDING'
       : `${networkNumber(total7d)} PLAYS`;
 
     document.querySelector('#networkChart').innerHTML = series.map(x => {
@@ -234,15 +287,15 @@ async function loadNetworkPulse(){
     const age = networkAge(n.last_verified_at);
     document.querySelector('#networkActivity').textContent = age
       ? `LATEST VERIFIED COMMERCIAL PLAY · ${age.toUpperCase()}`
-      : 'MEASUREMENT PIPELINE READY · COMMERCIAL NETWORK COMMISSIONING';
+      : 'COMMERCIAL NETWORK · FIRST LOCATIONS COMMISSIONING';
 
     document.querySelector('#heroLastVerified').textContent = age
       ? `Latest verified play · ${age}`
-      : 'Proof-of-play pipeline ready';
+      : 'Commercial delivery begins with the first live location';
 
     document.querySelector('#heroProofAge').textContent = age
       ? age.toUpperCase()
-      : 'READY';
+      : 'PRE-LAUNCH';
 
     document.querySelector('.network-live')?.classList.toggle(
       'has-activity', Number(n.plays_24h) > 0
@@ -253,7 +306,14 @@ async function loadNetworkPulse(){
 }
 
 loadNetworkPulse();
-setInterval(loadNetworkPulse, 15000);
+
+let networkPulseTimer=setInterval(()=>{
+  if(!document.hidden) loadNetworkPulse();
+},300000);
+
+document.addEventListener("visibilitychange",()=>{
+  if(!document.hidden) loadNetworkPulse();
+});
 
 fetch('/api/auth/config')
   .then(r => r.ok ? r.json() : null)

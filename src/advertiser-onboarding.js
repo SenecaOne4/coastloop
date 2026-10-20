@@ -81,6 +81,7 @@ function packageSnapshot(p) {
     name: p.name,
     market: p.market,
     placement_scope: p.placement_scope || {},
+    coverage_mode: p.coverage_mode || "legacy",
     price_cents: Number(p.price_cents),
     currency: p.currency,
     term_days: p.term_days,
@@ -157,6 +158,10 @@ export async function createAdvertisingPackage(request, env, auth = null) {
     const name = clean(b.name, 180);
     const version = Number(b.version);
     const price = Number(b.price_cents);
+    const coverageMode = clean(b.coverage_mode, 20) || "legacy";
+
+    if (!["legacy", "network", "zones"].includes(coverageMode))
+      throw new HttpError(400, "invalid coverage_mode");
 
     if (!key || !name || !Number.isInteger(version) || version < 1)
       throw new HttpError(400, "package key, name, and version required");
@@ -175,6 +180,7 @@ export async function createAdvertisingPackage(request, env, auth = null) {
         market: clean(b.market, 180) || null,
         placement_scope: b.placement_scope && typeof b.placement_scope === "object"
           ? b.placement_scope : {},
+        coverage_mode: coverageMode,
         price_cents: price,
         currency: "usd",
         term_days: Number.isInteger(Number(b.term_days)) ? Number(b.term_days) : null,
@@ -192,6 +198,50 @@ export async function createAdvertisingPackage(request, env, auth = null) {
       }),
     });
     return json({ ok: true, package: rows?.[0] || null });
+  } catch (error) {
+    return json({ error: error.message || "server error" }, error.status || 500);
+  }
+}
+
+export async function adminAdvertisingPackageZones(env, packageId) {
+  return sb(
+    env,
+    `advertising_package_zones?package_id=eq.${enc(packageId)}&select=zone_id,delivery_weight,metadata,created_at&order=created_at.asc`
+  );
+}
+
+export async function replaceAdvertisingPackageZones(request, env, packageId) {
+  try {
+    const b = await bodyJson(request);
+    if (!Array.isArray(b.zones))
+      throw new HttpError(400, "zones must be an array");
+
+    const result = await sb(env, "rpc/replace_advertising_package_zones_atomic", {
+      method: "POST",
+      body: JSON.stringify({
+        p_organization_id: ORG_ID,
+        p_package_id: packageId,
+        p_zones: b.zones,
+      }),
+    });
+
+    return json({ ok: true, result });
+  } catch (error) {
+    return json({ error: error.message || "server error" }, error.status || 500);
+  }
+}
+
+export async function activateAdvertisingPackage(env, packageId) {
+  try {
+    const result = await sb(env, "rpc/activate_advertising_package_atomic", {
+      method: "POST",
+      body: JSON.stringify({
+        p_organization_id: ORG_ID,
+        p_package_id: packageId,
+      }),
+    });
+
+    return json({ ok: true, result });
   } catch (error) {
     return json({ error: error.message || "server error" }, error.status || 500);
   }
@@ -308,7 +358,7 @@ export async function startAdvertiserCheckout(request, env) {
 
     let businesses = await sb(
       env,
-      `businesses?organization_id=eq.${ORG_ID}&email=eq.${enc(email)}&is_advertiser=eq.true&select=*&limit=1`
+      `businesses?organization_id=eq.${ORG_ID}&email=eq.${enc(email)}&select=*&limit=1`
     );
     let business = businesses?.[0];
 
@@ -324,7 +374,7 @@ export async function startAdvertiserCheckout(request, env) {
           email,
           website: clean(b.website, 240) || null,
           is_host: false,
-          is_advertiser: true,
+          is_advertiser: false,
           notes: "Created by advertiser self-checkout.",
         }),
       });
@@ -342,25 +392,6 @@ export async function startAdvertiserCheckout(request, env) {
         updated_at: new Date().toISOString(),
       }),
     });
-
-    if (!business.is_advertiser) {
-      const updated = await sb(
-        env,
-        `businesses?id=eq.${enc(business.id)}&organization_id=eq.${ORG_ID}`,
-        {
-          method: "PATCH",
-          headers: { Prefer: "return=representation" },
-          body: JSON.stringify({
-            is_advertiser: true,
-            email,
-            contact_name: contactName,
-            phone: mobile,
-            updated_at: new Date().toISOString(),
-          }),
-        }
-      );
-      business = updated?.[0] || business;
-    }
 
     const snapshot = packageSnapshot(pkg);
     const orders = await sb(env, "advertiser_orders", {
@@ -511,13 +542,42 @@ export async function acceptAdvertiserCheckout(request, env) {
     const b = await bodyJson(request);
     const c = await readContext(env, b.token);
 
-    if (c.agreement.signed_at)
+    if (c.agreement.signed_at && c.order.campaign_id && c.order.invoice_id) {
+      const acceptedAt = c.order.accepted_at || c.agreement.signed_at;
+      await Promise.all([
+        sb(env, `businesses?id=eq.${c.business.id}&organization_id=eq.${ORG_ID}`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            is_advertiser: true,
+            updated_at: new Date().toISOString(),
+          }),
+        }),
+        sb(env, `advertiser_orders?id=eq.${c.order.id}&organization_id=eq.${ORG_ID}`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            status: "payment_pending",
+            campaign_id: c.order.campaign_id,
+            invoice_id: c.order.invoice_id,
+            accepted_at: acceptedAt,
+            updated_at: new Date().toISOString(),
+          }),
+        }),
+        sb(env, `onboarding_tokens?id=eq.${c.token.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            status: "used",
+            used_at: c.token.used_at || acceptedAt,
+          }),
+        }),
+      ]);
+
       return json({
         ok: true,
         completed: true,
         payment_status: c.invoice?.status || "pending",
         executed_url: `/api/onboarding/advertiser/executed?token=${encodeURIComponent(c.rawToken)}`,
       });
+    }
 
     if (c.template?.status !== "locked")
       throw new HttpError(409, "advertising terms are not approved for acceptance");
@@ -577,6 +637,82 @@ export async function acceptAdvertiserCheckout(request, env) {
       });
     }
 
+    let campaignId = c.order.campaign_id;
+    if (!campaignId) {
+      const pkg = c.order.order_snapshot?.package || {};
+      const advertiser = c.order.order_snapshot?.advertiser || {};
+      const campaigns = await sb(env, "campaigns", {
+        method: "POST",
+        headers: { Prefer: "return=representation" },
+        body: JSON.stringify({
+          organization_id: ORG_ID,
+          advertiser_business_id: c.order.advertiser_business_id,
+          name: `${advertiser.display_name || advertiser.legal_name || "Advertiser"} — ${pkg.name || c.order.package_key}`,
+          status: "draft",
+          price_cents: Number(c.order.amount_cents),
+          billing_notes: `CoastLoop order ${c.order.id}; ${c.order.package_key} v${c.order.package_version}`,
+          delivery_target_plays: Number.isInteger(Number(pkg.projected_plays))
+            ? Number(pkg.projected_plays) : null,
+        }),
+      });
+      campaignId = campaigns?.[0]?.id;
+      if (!campaignId) throw new Error("campaign creation failed");
+
+      await sb(env, `advertiser_orders?id=eq.${c.order.id}&organization_id=eq.${ORG_ID}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          campaign_id: campaignId,
+          updated_at: new Date().toISOString(),
+        }),
+      });
+    }
+
+    let invoiceId = c.order.invoice_id;
+    let invoice = c.invoice;
+    if (!invoiceId) {
+      const invoiceRequest = new Request(request.url, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          campaign_id: campaignId,
+          provider: env.STRIPE_SECRET_KEY ? "stripe" : "manual",
+          total_cents: Number(c.order.amount_cents),
+          days_until_due: 7,
+          request_key: `advertiser-order:${c.order.id}`,
+        }),
+      });
+      const invoiceResponse = await createBillingInvoice(invoiceRequest, env, null);
+      const invoiceData = await invoiceResponse.json();
+      if (!invoiceResponse.ok || !invoiceData?.invoice?.id)
+        throw new HttpError(invoiceResponse.status, invoiceData?.error || "invoice creation failed");
+      invoice = invoiceData.invoice;
+      invoiceId = invoice.id;
+
+      await sb(env, `advertiser_orders?id=eq.${c.order.id}&organization_id=eq.${ORG_ID}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          campaign_id: campaignId,
+          invoice_id: invoiceId,
+          updated_at: new Date().toISOString(),
+        }),
+      });
+
+      if (invoice.provider === "stripe") {
+        const sendResponse = await sendBillingInvoice(
+          new Request(request.url, { method: "POST" }),
+          env,
+          invoiceId
+        );
+        const sendData = await sendResponse.json();
+        if (!sendResponse.ok)
+          throw new HttpError(
+            sendResponse.status,
+            sendData?.error || "invoice send failed"
+          );
+        invoice = sendData.invoice || invoice;
+      }
+    }
+
     await sb(env, `agreement_instances?id=eq.${c.agreement.id}&organization_id=eq.${ORG_ID}`, {
       method: "PATCH",
       body: JSON.stringify({
@@ -602,65 +738,14 @@ export async function acceptAdvertiserCheckout(request, env) {
       }),
     });
 
-    let campaignId = c.order.campaign_id;
-    if (!campaignId) {
-      const pkg = c.order.order_snapshot?.package || {};
-      const advertiser = c.order.order_snapshot?.advertiser || {};
-      const campaigns = await sb(env, "campaigns", {
-        method: "POST",
-        headers: { Prefer: "return=representation" },
-        body: JSON.stringify({
-          organization_id: ORG_ID,
-          advertiser_business_id: c.order.advertiser_business_id,
-          name: `${advertiser.display_name || advertiser.legal_name || "Advertiser"} — ${pkg.name || c.order.package_key}`,
-          status: "draft",
-          price_cents: Number(c.order.amount_cents),
-          billing_notes: `CoastLoop order ${c.order.id}; ${c.order.package_key} v${c.order.package_version}`,
-          delivery_target_plays: Number.isInteger(Number(pkg.projected_plays))
-            ? Number(pkg.projected_plays) : null,
-        }),
-      });
-      campaignId = campaigns?.[0]?.id;
-      if (!campaignId) throw new Error("campaign creation failed");
-    }
-
-    let invoiceId = c.order.invoice_id;
-    let invoice = c.invoice;
-    if (!invoiceId) {
-      const invoiceRequest = new Request(request.url, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          campaign_id: campaignId,
-          provider: env.STRIPE_SECRET_KEY ? "stripe" : "manual",
-          total_cents: Number(c.order.amount_cents),
-          days_until_due: 7,
-        }),
-      });
-      const invoiceResponse = await createBillingInvoice(invoiceRequest, env, null);
-      const invoiceData = await invoiceResponse.json();
-      if (!invoiceResponse.ok || !invoiceData?.invoice?.id)
-        throw new HttpError(invoiceResponse.status, invoiceData?.error || "invoice creation failed");
-      invoice = invoiceData.invoice;
-      invoiceId = invoice.id;
-
-      if (invoice.provider === "stripe") {
-        const sendResponse = await sendBillingInvoice(
-          new Request(request.url, { method: "POST" }),
-          env,
-          invoiceId
-        );
-        const sendData = await sendResponse.json();
-        if (!sendResponse.ok)
-          throw new HttpError(
-            sendResponse.status,
-            sendData?.error || "invoice send failed"
-          );
-        invoice = sendData.invoice || invoice;
-      }
-    }
-
     await Promise.all([
+      sb(env, `businesses?id=eq.${c.business.id}&organization_id=eq.${ORG_ID}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          is_advertiser: true,
+          updated_at: now,
+        }),
+      }),
       sb(env, `advertiser_orders?id=eq.${c.order.id}&organization_id=eq.${ORG_ID}`, {
         method: "PATCH",
         body: JSON.stringify({

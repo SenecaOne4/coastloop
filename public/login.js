@@ -20,7 +20,7 @@ if(config.bootstrap_required){
   const old=sessionStorage.getItem('adminToken');
   if(old){$('#setupKey').value=old;$('#setupKey').closest('input').hidden=true}
 }
-if(config.google_enabled)$('#googleWrap').hidden=false;
+if(config.genny_auth_enabled)$('#googleWrap').hidden=false;
 
 let signupMode=false;
 
@@ -67,7 +67,7 @@ $('#owner').onsubmit=async e=>{
   location.replace('/admin');
 };
 
-$('#google').onclick=()=>location.href='/api/auth/google?next='+encodeURIComponent(requestedNext);
+$('#google').onclick=()=>location.href='/api/auth/genny?next='+encodeURIComponent(requestedNext);
 
 $('#signup').onsubmit=async e=>{
   e.preventDefault();

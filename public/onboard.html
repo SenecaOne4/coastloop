@@ -14,8 +14,7 @@ body{margin:0;background:var(--ob-paper);color:var(--ob-ink);font-family:Inter,u
 .ob-shell{width:min(760px,100%);margin:0 auto;padding:20px 18px 70px}
 .ob-top{display:flex;align-items:center;justify-content:space-between;padding:8px 0 22px}
 .ob-brand{display:flex;align-items:center;gap:10px;font-weight:800;letter-spacing:-.03em;font-size:21px}
-.ob-mark{width:31px;height:31px;border:2px solid var(--ob-gold);border-radius:50%;position:relative}
-.ob-mark:after{content:"";position:absolute;width:19px;height:19px;border:2px solid var(--ob-gold);border-radius:50%;right:-12px;top:4px;background:var(--ob-paper)}
+.ob-mark-img{width:36px;height:24px;display:block;flex:0 0 auto}
 .ob-safe{font-size:12px;color:var(--ob-soft)}
 .ob-progress{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:18px}
 .ob-progress span{height:4px;border-radius:99px;background:#ded8ce}
@@ -61,7 +60,7 @@ p{line-height:1.5}
 <body>
 <main class="ob-shell">
   <header class="ob-top">
-    <a class="ob-brand" href="/" aria-label="CoastLoop home"><span class="ob-mark" aria-hidden="true"></span><span>CoastLoop</span></a>
+    <a class="ob-brand" href="/" aria-label="CoastLoop home"><img class="ob-mark-img" src="/brand/coastloop-mark-light.svg" alt=""><span>CoastLoop</span></a>
     <span class="ob-safe">Private placement approval</span>
   </header>
 

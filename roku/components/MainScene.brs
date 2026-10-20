@@ -46,7 +46,7 @@ end function
 
 sub init()
     m.baseUrl = "https://coastloop.site"
-    m.playerVersion = "roku-0.1.10"
+    m.playerVersion = "roku-0.1.16"
     m.tasks = {}
     m.nextTaskId = 0
     m.retryDelay = 5
@@ -120,6 +120,7 @@ sub init()
     end if
 
     m.top.setFocus(true)
+    m.top.signalBeacon("AppLaunchComplete")
     boot()
 end sub
 

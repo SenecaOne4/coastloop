@@ -19,7 +19,8 @@ export async function validateJsonMutation(request, url) {
     return null;
 
   if (url.pathname === "/api/billing/webhook/stripe" ||
-      url.pathname === "/api/admin/media")
+      url.pathname === "/api/admin/media" ||
+      url.pathname === "/api/portal/source-assets")
     return null;
 
   if (!url.pathname.startsWith("/api/"))

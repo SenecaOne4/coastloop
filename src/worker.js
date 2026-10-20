@@ -1,3 +1,4 @@
+import { creativeWorkerApi } from "./creative-worker.js";
 import { auditMutation, adminAuditEvents } from "./audit.js";
 import { jsonBody, validateJsonMutation } from "./request.js";
 import {
@@ -12,6 +13,9 @@ import {
   publicAdvertisingPackages,
   adminAdvertisingPackages,
   createAdvertisingPackage,
+  adminAdvertisingPackageZones,
+  replaceAdvertisingPackageZones,
+  activateAdvertisingPackage,
   startAdvertiserCheckout,
   advertiserCheckoutSession,
   acceptAdvertiserCheckout,
@@ -442,6 +446,14 @@ function weeklyScheduleAllows(schedule, timezone, nowMs) {
 function locationCampaignAllows(location, campaign, nowMs) {
   if (!location) return false;
 
+  const coverageMode = String(campaign?.coverage_mode || "legacy").trim();
+
+  if (coverageMode === "zones") {
+    if (!location.zone_id) return false;
+    if (!(campaign?._zoneIds instanceof Set)) return false;
+    if (!campaign._zoneIds.has(location.zone_id)) return false;
+  }
+
   const timezone = String(
     location.timezone || "America/New_York"
   ).trim();
@@ -535,7 +547,7 @@ async function applyInventoryPacing(
     ),
     sb(
       env,
-      `locations?organization_id=eq.${ORG_ID}&select=id,timezone,operating_hours`
+      `locations?organization_id=eq.${ORG_ID}&select=id,zone_id,timezone,operating_hours`
     ),
   ]);
 
@@ -794,18 +806,47 @@ async function playlistPayload(env, playlistId, now, screen = null) {
     ),
     sb(
       env,
-      `campaigns?organization_id=eq.${ORG_ID}&select=id,status,starts_at,ends_at,advertiser_business_id,delivery_target_plays,makegood_plays,dayparts`
+      `campaigns?organization_id=eq.${ORG_ID}&select=id,status,starts_at,ends_at,advertiser_business_id,delivery_target_plays,makegood_plays,dayparts,coverage_mode`
     )
   ]);
 
   const mediaMap = new Map((media || []).map(m => [m.id, m]));
   const campaignMap = new Map((campaigns || []).map(c => [c.id, c]));
 
+  const zoneCampaignIds = (campaigns || [])
+    .filter(c => String(c.coverage_mode || "legacy") === "zones")
+    .map(c => c.id);
+
+  if (zoneCampaignIds.length) {
+    const zoneFilter = zoneCampaignIds
+      .map(id => encodeURIComponent(id))
+      .join(",");
+
+    const entitlements = await sb(
+      env,
+      `campaign_zone_entitlements?campaign_id=in.(${zoneFilter})&status=eq.active&select=campaign_id,zone_id`
+    );
+
+    const zoneMap = new Map(
+      zoneCampaignIds.map(id => [id, new Set()])
+    );
+
+    for (const row of entitlements || []) {
+      if (row?.campaign_id && row?.zone_id && zoneMap.has(row.campaign_id))
+        zoneMap.get(row.campaign_id).add(row.zone_id);
+    }
+
+    for (const campaignId of zoneCampaignIds) {
+      const campaign = campaignMap.get(campaignId);
+      if (campaign) campaign._zoneIds = zoneMap.get(campaignId) || new Set();
+    }
+  }
+
   let deliveryLocation = null;
   if (screen?.location_id) {
     const rows = await sb(
       env,
-      `locations?id=eq.${encodeURIComponent(screen.location_id)}&organization_id=eq.${ORG_ID}&select=id,timezone,operating_hours`
+      `locations?id=eq.${encodeURIComponent(screen.location_id)}&organization_id=eq.${ORG_ID}&select=id,zone_id,timezone,operating_hours`
     );
     deliveryLocation = rows?.[0] || null;
   }
@@ -847,8 +888,19 @@ async function playlistPayload(env, playlistId, now, screen = null) {
       campaignDeliverable(i.campaign_id)
     )
     .map(i => {
-      const m = mediaMap.get(i.media_asset_id);
+      let m = mediaMap.get(i.media_asset_id);
       if (!m) return null;
+
+      const screen4k = String(screen?.video_mode || "").startsWith("2160p")
+        && screen?.can_play_4k === true;
+      if (!screen4k && m.kind === "video" && m.delivery_tier === "4k") {
+        const d = (media || []).find(v =>
+          v.parent_asset_id === m.id &&
+          v.delivery_tier === "1080p" &&
+          v.status === "ready"
+        );
+        if (d) m = d;
+      }
 
       if (i.campaign_id) {
         const campaign = campaignMap.get(i.campaign_id);
@@ -871,6 +923,7 @@ async function playlistPayload(env, playlistId, now, screen = null) {
         name: m.title,
         media_type: m.kind,
         mime_type: m.mime_type,
+        delivery_tier: m.delivery_tier || null,
         campaign_id: i.campaign_id,
         url: `/media/${m.id}`,
       };
@@ -1185,6 +1238,367 @@ async function serveMedia(request, env, mediaId) {
   );
 }
 
+async function adminGeography(env) {
+  const now = Date.now();
+  const onlineCutoff = now - 120000;
+  const sinceDate = new Date(now - 86400000).toISOString().slice(0, 10);
+
+  const [areas, zones, boundaries, locations, screens, plays] = await Promise.all([
+    sb(env, `geography_areas?organization_id=eq.${ORG_ID}&select=id,parent_id,area_type,name,slug,status,metadata&order=name.asc`),
+    sb(env, `zones?organization_id=eq.${ORG_ID}&select=id,parent_area_id,name,slug,status,metadata,created_at,updated_at&order=name.asc`),
+    sb(env, `zone_boundary_versions?organization_id=eq.${ORG_ID}&status=eq.active&select=id,zone_id,version,boundary_geojson,status,effective_from,effective_to`),
+    sb(env, `locations?organization_id=eq.${ORG_ID}&select=id,business_id,zone_id,name,address_line1,city,state,postal_code,latitude,longitude,host_status`),
+    sb(env, `screens?organization_id=eq.${ORG_ID}&select=id,name,location_id,status,last_seen_at,is_test,deployment_class,paired_at`),
+    sb(env, `playback_daily?organization_id=eq.${ORG_ID}&play_date=gte.${sinceDate}&select=zone_id,screen_id,play_count,last_played_at`),
+  ]);
+
+  const boundaryByZone = new Map(
+    (boundaries || []).map(row => [row.zone_id, row])
+  );
+  const locationMap = new Map(
+    (locations || []).map(row => [row.id, row])
+  );
+
+  const commercialScreens = (screens || []).filter(screen =>
+    !screen.is_test &&
+    screen.status === "active" &&
+    ["pilot", "production"].includes(screen.deployment_class)
+  );
+
+  const screenStatsByLocation = new Map();
+  for (const screen of screens || []) {
+    if (!screen.location_id) continue;
+    const stats = screenStatsByLocation.get(screen.location_id) || {
+      screen_count: 0,
+      eligible_screen_count: 0,
+      online_screen_count: 0,
+    };
+    stats.screen_count += 1;
+
+    const eligible =
+      !screen.is_test &&
+      screen.status === "active" &&
+      ["pilot", "production"].includes(screen.deployment_class);
+
+    if (eligible) {
+      stats.eligible_screen_count += 1;
+      if (
+        screen.last_seen_at &&
+        new Date(screen.last_seen_at).getTime() > onlineCutoff
+      ) stats.online_screen_count += 1;
+    }
+
+    screenStatsByLocation.set(screen.location_id, stats);
+  }
+
+  const commercialScreenIds = new Set(
+    commercialScreens.map(screen => screen.id)
+  );
+
+  const playsByZone = new Map();
+  for (const row of plays || []) {
+    if (!row.zone_id || !commercialScreenIds.has(row.screen_id)) continue;
+    const stats = playsByZone.get(row.zone_id) || {
+      verified_plays_since_date: 0,
+      last_verified_at: null,
+    };
+    stats.verified_plays_since_date += Number(row.play_count || 0);
+    if (
+      row.last_played_at &&
+      (!stats.last_verified_at ||
+       new Date(row.last_played_at).getTime() >
+       new Date(stats.last_verified_at).getTime())
+    ) stats.last_verified_at = row.last_played_at;
+    playsByZone.set(row.zone_id, stats);
+  }
+
+  const zoneRows = (zones || []).map(zone => {
+    const zoneLocations = (locations || []).filter(
+      location => location.zone_id === zone.id
+    );
+    const zoneLocationIds = new Set(zoneLocations.map(location => location.id));
+    const eligible = commercialScreens.filter(
+      screen => screen.location_id && zoneLocationIds.has(screen.location_id)
+    );
+    const eligibleLocationIds = new Set(
+      eligible.map(screen => screen.location_id).filter(Boolean)
+    );
+    const online = eligible.filter(
+      screen =>
+        screen.last_seen_at &&
+        new Date(screen.last_seen_at).getTime() > onlineCutoff
+    );
+    const proof = playsByZone.get(zone.id) || {
+      verified_plays_since_date: 0,
+      last_verified_at: null,
+    };
+    const boundary = boundaryByZone.get(zone.id) || null;
+
+    return {
+      ...zone,
+      boundary: boundary ? {
+        id: boundary.id,
+        version: boundary.version,
+        status: boundary.status,
+        effective_from: boundary.effective_from,
+        effective_to: boundary.effective_to,
+        geojson: boundary.boundary_geojson,
+      } : null,
+      metrics: {
+        location_count: zoneLocations.length,
+        eligible_location_count: eligibleLocationIds.size,
+        eligible_screen_count: eligible.length,
+        online_screen_count: online.length,
+        verified_plays_since_date: proof.verified_plays_since_date,
+        measurement_since_date: sinceDate,
+        last_verified_at: proof.last_verified_at,
+        available_inventory: null,
+      },
+    };
+  });
+
+  const locationRows = (locations || []).map(location => ({
+    ...location,
+    ...(screenStatsByLocation.get(location.id) || {
+      screen_count: 0,
+      eligible_screen_count: 0,
+      online_screen_count: 0,
+    }),
+  }));
+
+  const assignedLocationIds = new Set(
+    (locations || []).filter(location => location.zone_id).map(location => location.id)
+  );
+  const assignedScreenIds = new Set(
+    commercialScreens
+      .filter(screen => screen.location_id && assignedLocationIds.has(screen.location_id))
+      .map(screen => screen.id)
+  );
+
+  return {
+    generated_at: new Date(now).toISOString(),
+    online_window_seconds: 120,
+    inventory_model: "capacity_pending",
+    areas: areas || [],
+    zones: zoneRows,
+    locations: locationRows,
+    screens: screens || [],
+    totals: {
+      zone_count: zoneRows.length,
+      location_count: (locations || []).length,
+      eligible_screen_count: commercialScreens.length,
+      online_screen_count: commercialScreens.filter(
+        screen =>
+          screen.last_seen_at &&
+          new Date(screen.last_seen_at).getTime() > onlineCutoff
+      ).length,
+      unassigned_location_count: (locations || []).filter(
+        location => !location.zone_id
+      ).length,
+      unassigned_eligible_screen_count: commercialScreens.filter(
+        screen => !assignedScreenIds.has(screen.id)
+      ).length,
+      verified_plays_since_date: [...playsByZone.values()].reduce(
+        (sum, row) => sum + Number(row.verified_plays_since_date || 0),
+        0
+      ),
+      measurement_since_date: sinceDate,
+    },
+  };
+}
+
+
+function geographySlug(value, fallback = "") {
+  return String(value || fallback || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 120);
+}
+
+function validZoneBoundaryGeojson(value) {
+  if (!value || typeof value !== "object" || !["Polygon", "MultiPolygon"].includes(value.type))
+    return false;
+
+  const point = p =>
+    Array.isArray(p) &&
+    p.length >= 2 &&
+    Number.isFinite(Number(p[0])) &&
+    Number.isFinite(Number(p[1])) &&
+    Number(p[0]) >= -180 &&
+    Number(p[0]) <= 180 &&
+    Number(p[1]) >= -90 &&
+    Number(p[1]) <= 90;
+
+  const ring = r =>
+    Array.isArray(r) &&
+    r.length >= 4 &&
+    r.every(point) &&
+    Number(r[0][0]) === Number(r[r.length - 1][0]) &&
+    Number(r[0][1]) === Number(r[r.length - 1][1]);
+
+  const polygon = p =>
+    Array.isArray(p) &&
+    p.length >= 1 &&
+    p.every(ring);
+
+  return value.type === "Polygon"
+    ? polygon(value.coordinates)
+    : Array.isArray(value.coordinates) &&
+      value.coordinates.length >= 1 &&
+      value.coordinates.every(polygon);
+}
+
+async function createGeographyArea(request, env) {
+  const b = await bodyJson(request);
+  const name = String(b.name || "").trim().slice(0, 180);
+  const slug = geographySlug(b.slug, name);
+  const areaType = String(b.area_type || "").trim();
+  const status = String(b.status || "active").trim();
+
+  if (!name || !slug)
+    return json({ error: "area name required" }, 400);
+  if (!new Set(["network", "local_area", "market", "region", "multi_region"]).has(areaType))
+    return json({ error: "invalid area_type" }, 400);
+  if (!new Set(["draft", "active", "retired"]).has(status))
+    return json({ error: "invalid status" }, 400);
+
+  const parentId = b.parent_id ? String(b.parent_id).trim() : null;
+  if (parentId) {
+    const parent = await sb(
+      env,
+      `geography_areas?id=eq.${encodeURIComponent(parentId)}&organization_id=eq.${ORG_ID}&select=id`
+    );
+    if (!parent?.[0])
+      return json({ error: "parent area not found" }, 404);
+  }
+
+  const rows = await sb(env, "geography_areas", {
+    method: "POST",
+    headers: { Prefer: "return=representation" },
+    body: JSON.stringify({
+      organization_id: ORG_ID,
+      parent_id: parentId,
+      area_type: areaType,
+      name,
+      slug,
+      status,
+      metadata: b.metadata && typeof b.metadata === "object" && !Array.isArray(b.metadata)
+        ? b.metadata
+        : {},
+    }),
+  });
+
+  return json({ ok: true, area: rows?.[0] || null }, 201);
+}
+
+async function createGeographyZone(request, env) {
+  const b = await bodyJson(request);
+  const name = String(b.name || "").trim().slice(0, 180);
+  const slug = geographySlug(b.slug, name);
+  const status = String(b.status || "active").trim();
+
+  if (!name || !slug)
+    return json({ error: "zone name required" }, 400);
+  if (!new Set(["draft", "active", "retired"]).has(status))
+    return json({ error: "invalid status" }, 400);
+
+  const parentAreaId = b.parent_area_id ? String(b.parent_area_id).trim() : null;
+  if (parentAreaId) {
+    const parent = await sb(
+      env,
+      `geography_areas?id=eq.${encodeURIComponent(parentAreaId)}&organization_id=eq.${ORG_ID}&select=id`
+    );
+    if (!parent?.[0])
+      return json({ error: "parent area not found" }, 404);
+  }
+
+  const rows = await sb(env, "zones", {
+    method: "POST",
+    headers: { Prefer: "return=representation" },
+    body: JSON.stringify({
+      organization_id: ORG_ID,
+      parent_area_id: parentAreaId,
+      name,
+      slug,
+      status,
+      metadata: b.metadata && typeof b.metadata === "object" && !Array.isArray(b.metadata)
+        ? b.metadata
+        : {},
+    }),
+  });
+
+  return json({ ok: true, zone: rows?.[0] || null }, 201);
+}
+
+async function createZoneBoundaryDraft(request, env, zoneId) {
+  const b = await bodyJson(request);
+  const boundary = b.boundary_geojson || b.geojson;
+
+  if (!validZoneBoundaryGeojson(boundary))
+    return json({ error: "valid Polygon or MultiPolygon boundary_geojson required" }, 400);
+
+  const row = await sb(env, "rpc/create_zone_boundary_draft_atomic", {
+    method: "POST",
+    body: JSON.stringify({
+      p_organization_id: ORG_ID,
+      p_zone_id: zoneId,
+      p_boundary_geojson: boundary,
+    }),
+  });
+
+  return json({ ok: true, boundary: row || null }, 201);
+}
+
+async function activateZoneBoundary(request, env, zoneId, boundaryId) {
+  const row = await sb(env, "rpc/activate_zone_boundary_version_atomic", {
+    method: "POST",
+    body: JSON.stringify({
+      p_organization_id: ORG_ID,
+      p_zone_id: zoneId,
+      p_boundary_id: boundaryId,
+    }),
+  });
+
+  return json({ ok: true, boundary: row || null });
+}
+
+async function updateLocationZone(request, env, locationId) {
+  const b = await bodyJson(request);
+  if (!Object.prototype.hasOwnProperty.call(b, "zone_id"))
+    return json({ error: "zone_id required" }, 400);
+
+  const locations = await sb(
+    env,
+    `locations?id=eq.${encodeURIComponent(locationId)}&organization_id=eq.${ORG_ID}&select=id,zone_id`
+  );
+  if (!locations?.[0])
+    return json({ error: "location not found" }, 404);
+
+  const zoneId = b.zone_id ? String(b.zone_id).trim() : null;
+  if (zoneId) {
+    const zones = await sb(
+      env,
+      `zones?id=eq.${encodeURIComponent(zoneId)}&organization_id=eq.${ORG_ID}&status=neq.retired&select=id`
+    );
+    if (!zones?.[0])
+      return json({ error: "zone not found" }, 404);
+  }
+
+  const rows = await sb(
+    env,
+    `locations?id=eq.${encodeURIComponent(locationId)}&organization_id=eq.${ORG_ID}`,
+    {
+      method: "PATCH",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify({ zone_id: zoneId, updated_at: new Date().toISOString() }),
+    }
+  );
+
+  return json({ ok: true, location: rows?.[0] || null });
+}
+
 async function adminScreens(env) {
   const [screens, assignments, playlists, plays, locations, businesses] = await Promise.all([
     sb(env, `screens?organization_id=eq.${ORG_ID}&select=*&order=last_seen_at.desc.nullslast`),
@@ -1241,7 +1655,7 @@ async function adminScreens(env) {
 async function adminMedia(env) {
   const rows = await sb(
     env,
-    `media_assets?organization_id=eq.${ORG_ID}&select=*&order=created_at.desc`
+    `media_assets?organization_id=eq.${ORG_ID}&parent_asset_id=is.null&select=*&order=created_at.desc`
   );
   return (rows || []).map(m => ({
     ...m,
@@ -1249,6 +1663,319 @@ async function adminMedia(env) {
     media_type: m.kind,
     bytes: m.byte_size || 0,
   }));
+}
+
+async function adminCreativeJobs(env) {
+  return await sb(env, `creative_jobs?organization_id=eq.${ORG_ID}&select=*&order=created_at.desc&limit=100`) || [];
+}
+
+async function createCreativeJob(request, env, auth=null) {
+  const b=await bodyJson(request);
+  const prompt=String(b.prompt||"").trim().slice(0,8000);
+  const advertiser=String(b.advertiser_business_id||"").trim()||null;
+  if(!prompt) return json({error:"creative prompt required"},400);
+  const rows=await sb(env,"creative_jobs",{
+    method:"POST",headers:{Prefer:"return=representation"},
+    body:JSON.stringify({organization_id:ORG_ID,advertiser_business_id:advertiser,prompt,job_type:"image",requested_by:auth?.user?.id||null,metadata:{title:String(b.title||"").slice(0,180)}})
+  });
+  return json({ok:true,job:rows?.[0]||null},201);
+}
+
+
+async function portalAdvertiserBusiness(env, auth, businessId) {
+  const owned=(auth.access?.businesses||[]).some(x=>String(x.business_id)===businessId);
+  if(!owned) return null;
+  const rows=await sb(env,`businesses?id=eq.${encodeURIComponent(businessId)}&organization_id=eq.${ORG_ID}&is_advertiser=eq.true&select=id,name,category,website&limit=1`);
+  return rows?.[0]||null;
+}
+
+async function portalCreativeProfile(request,env,auth,url) {
+  const businessId=String(url.searchParams.get("business_id")||"").trim();
+  const business=await portalAdvertiserBusiness(env,auth,businessId);
+  if(!business) return json({error:"advertiser access required"},403);
+
+  if(request.method==="GET"){
+    const rows=await sb(env,`advertiser_creative_profiles?organization_id=eq.${ORG_ID}&business_id=eq.${encodeURIComponent(businessId)}&select=*&limit=1`);
+    return json({business,profile:rows?.[0]||null});
+  }
+
+  const b=await bodyJson(request);
+  const payload={
+    organization_id:ORG_ID,business_id:businessId,
+    business_category:String(b.business_category||business.category||"").slice(0,120),
+    business_description:String(b.business_description||"").slice(0,3000),
+    website_url:String(b.website_url||business.website||"").slice(0,500),
+    default_cta:String(b.default_cta||"").slice(0,160),
+    brand_notes:String(b.brand_notes||"").slice(0,2000),
+    created_by:auth.user?.id||null,updated_at:new Date().toISOString()
+  };
+  const rows=await sb(env,"advertiser_creative_profiles?on_conflict=organization_id,business_id",{
+    method:"POST",headers:{Prefer:"resolution=merge-duplicates,return=representation"},
+    body:JSON.stringify(payload)
+  });
+  return json({ok:true,profile:rows?.[0]||null});
+}
+
+
+async function portalSourceAssets(request,env,auth,url){
+  if(request.method==="GET"){
+    const businessId=String(url.searchParams.get("business_id")||"").trim();
+    if(!await portalAdvertiserBusiness(env,auth,businessId)) return json({error:"advertiser access required"},403);
+    const rows=await sb(env,`advertiser_source_assets?organization_id=eq.${ORG_ID}&business_id=eq.${encodeURIComponent(businessId)}&usage_status=neq.archived&select=*&order=created_at.desc`);
+    return json(rows||[]);
+  }
+
+  if(requestTooLarge(request,MEDIA_REQUEST_MAX_BYTES)) return json({error:"upload too large"},413);
+  const form=await request.formData();
+  const businessId=String(form.get("business_id")||"").trim();
+  if(!await portalAdvertiserBusiness(env,auth,businessId)) return json({error:"advertiser access required"},403);
+  const file=form.get("file");
+  if(!(file instanceof File) || !file.size) return json({error:"file required"},400);
+
+  const type=String(form.get("asset_type")||"other").trim();
+  const allowed=new Set(["logo","photo","video","brand_guide","menu","document","archive","reference","other"]);
+  if(!allowed.has(type)) return json({error:"invalid asset type"},400);
+
+  const id=crypto.randomUUID();
+  const safe=String(file.name||"source").replace(/[^a-zA-Z0-9._-]+/g,"-").slice(0,120);
+  const key=`source-assets/${ORG_ID}/${businessId}/${id}/${safe}`;
+  const raw=await file.arrayBuffer();
+  const digest=await crypto.subtle.digest("SHA-256",raw);
+  const checksum=[...new Uint8Array(digest)].map(b=>b.toString(16).padStart(2,"0")).join("");
+
+  await env.MEDIA.put(key,raw,{httpMetadata:{contentType:file.type||"application/octet-stream"}});
+  try{
+    const rows=await sb(env,"advertiser_source_assets",{
+      method:"POST",headers:{Prefer:"return=representation"},
+      body:JSON.stringify({
+        id,organization_id:ORG_ID,business_id:businessId,
+        title:String(form.get("title")||file.name).slice(0,180),
+        asset_type:type,storage_key:key,original_filename:file.name,
+        mime_type:file.type||null,byte_size:file.size,checksum,
+        usage_status:"approved",ingest_status:"ready",uploaded_by:auth.user?.id||null
+      })
+    });
+    return json({ok:true,asset:rows?.[0]||null},201);
+  }catch(e){
+    await env.MEDIA.delete(key).catch(()=>{});
+    throw e;
+  }
+}
+
+
+function coastloopCreativePrompt(business,profile,brief,jobType){
+  const category=profile?.business_category||business.category||"local business";
+  const desc=profile?.business_description||"";
+  const categoryStyle={
+    restaurant:"editorial food photography, atmospheric premium dining",
+    spa:"quiet luxury, refined wellness and hospitality",
+    construction:"architectural photography, craftsmanship and scale",
+    retail:"premium editorial product photography, clean merchandising",
+    automotive:"cinematic premium automotive advertising",
+  };
+  const style=categoryStyle[String(category).toLowerCase()]||
+    "premium editorial commercial photography";
+  return [
+    `Create a ${jobType==="video"?"cinematic advertising keyframe":"premium advertising hero image"} for ${business.name}.`,
+    `Business category: ${category}. ${desc}`,
+    `Promotion: ${brief.promotion||"general brand awareness"}.`,
+    `Visual direction: ${style}; sophisticated, restrained, luxury-leaning, television-ready 16:9 composition.`,
+    `Leave clean negative space for exact logo, headline and CTA overlays added later by CoastLoop.`,
+    `No baked-in text, logos, prices, claims, badges, flyer styling, visual clutter, or AI-looking artifacts.`,
+    `Public-display appropriate. Local ads do not need to look local.`,
+    brief.notes ? `Client context: ${brief.notes}` : ""
+  ].filter(Boolean).join(" ");
+}
+
+async function portalCreativeJobs(request,env,auth,url){
+  if(request.method==="GET"){
+    const businessId=String(url.searchParams.get("business_id")||"").trim();
+    if(!await portalAdvertiserBusiness(env,auth,businessId))
+      return json({error:"advertiser access required"},403);
+    const rows=await sb(env,
+      `creative_jobs?organization_id=eq.${ORG_ID}&advertiser_business_id=eq.${encodeURIComponent(businessId)}`+
+      `&select=id,job_type,status,output_asset_id,metadata,review_status,review_notes,revision_number,created_at,completed_at&order=created_at.desc&limit=50`);
+    return json(rows||[]);
+  }
+
+  const b=await bodyJson(request);
+  const businessId=String(b.business_id||"").trim();
+  const business=await portalAdvertiserBusiness(env,auth,businessId);
+  if(!business) return json({error:"advertiser access required"},403);
+
+  const profiles=await sb(env,`advertiser_creative_profiles?organization_id=eq.${ORG_ID}&business_id=eq.${encodeURIComponent(businessId)}&select=*&limit=1`);
+  const profile=profiles?.[0]||null;
+  const jobType=String(b.job_type||"image").toLowerCase()==="video"?"video":"image";
+  const brief={
+    promotion:String(b.promotion||"").trim().slice(0,1500),
+    cta:String(b.cta||profile?.default_cta||"").trim().slice(0,160),
+    notes:String(b.notes||"").trim().slice(0,1500)
+  };
+  const prompt=coastloopCreativePrompt(business,profile,brief,jobType);
+  const metadata={
+    brief_version:1,title:String(b.title||"New CoastLoop ad").slice(0,180),
+    business_name:business.name,business_category:profile?.business_category||business.category||null,
+    business_description:profile?.business_description||null,promotion:brief.promotion||null,
+    cta:brief.cta||null,website_url:profile?.website_url||business.website||null,
+    creative_notes:brief.notes||null,network_template:"luxury-editorial-01",
+    requested_variants:jobType==="video"?3:1,master_resolution:"3840x2160"
+  };
+
+  const rows=await sb(env,"creative_jobs",{
+    method:"POST",headers:{Prefer:"return=representation"},
+    body:JSON.stringify({organization_id:ORG_ID,advertiser_business_id:businessId,prompt,
+      job_type:jobType,requested_by:auth.user?.id||null,metadata})
+  });
+  const job=rows?.[0];
+  if(!job) throw new Error("creative job insert failed");
+
+  let ids=Array.isArray(b.source_asset_ids)?b.source_asset_ids.slice(0,20):[];
+  if(!ids.length){
+    const library=await sb(env,`advertiser_source_assets?organization_id=eq.${ORG_ID}&business_id=eq.${encodeURIComponent(businessId)}&usage_status=eq.approved&select=id&order=created_at.desc&limit=20`);
+    ids=(library||[]).map(x=>x.id);
+  }
+  if(ids.length){
+    const valid=await sb(env,`advertiser_source_assets?organization_id=eq.${ORG_ID}&business_id=eq.${encodeURIComponent(businessId)}&usage_status=eq.approved&id=in.(${ids.map(encodeURIComponent).join(",")})&select=id,asset_type`);
+    if(valid?.length){
+      await sb(env,"creative_job_sources",{method:"POST",body:JSON.stringify(valid.map(a=>({
+        creative_job_id:job.id,source_asset_id:a.id,
+        role:a.asset_type==="logo"?"logo":a.asset_type==="photo"?"hero_reference":"other"
+      })))});
+    }
+  }
+  return json({ok:true,job},201);
+}
+
+
+async function portalCreativeReview(request,env,auth,jobId){
+  const rows=await sb(env,
+    `creative_jobs?id=eq.${encodeURIComponent(jobId)}&organization_id=eq.${ORG_ID}&select=*`);
+  const job=rows?.[0];
+  if(!job) return json({error:"creative job not found"},404);
+
+  const business=await portalAdvertiserBusiness(env,auth,job.advertiser_business_id);
+  if(!business) return json({error:"advertiser access required"},403);
+  if(job.status!=="completed" || !job.output_asset_id)
+    return json({error:"creative is not ready for review"},409);
+
+  const b=await bodyJson(request);
+  const action=String(b.action||"").trim();
+  if(!new Set(["approve","request_changes"]).has(action))
+    return json({error:"invalid review action"},400);
+
+  const mediaRows=await sb(env,
+    `media_assets?id=eq.${encodeURIComponent(job.output_asset_id)}&organization_id=eq.${ORG_ID}&select=*`);
+  const media=mediaRows?.[0];
+  if(!media || media.status!=="ready")
+    return json({error:"creative media is not ready"},409);
+
+  if(action==="approve"){
+    const now=new Date().toISOString();
+    await sb(env,
+      `media_assets?id=eq.${encodeURIComponent(media.id)}&organization_id=eq.${ORG_ID}`,{
+        method:"PATCH",
+        headers:{Prefer:"return=minimal"},
+        body:JSON.stringify({
+          approval_status:"approved",
+          approved_at:now,
+          approved_by:auth.user?.id||null,
+          rejection_reason:null
+        })
+      });
+    await sb(env,
+      `media_assets?parent_asset_id=eq.${encodeURIComponent(media.id)}&organization_id=eq.${ORG_ID}`,{
+        method:"PATCH",
+        headers:{Prefer:"return=minimal"},
+        body:JSON.stringify({
+          approval_status:"approved",
+          approved_at:now,
+          approved_by:auth.user?.id||null,
+          rejection_reason:null
+        })
+      });
+    await sb(env,
+      `creative_jobs?id=eq.${encodeURIComponent(job.id)}&organization_id=eq.${ORG_ID}`,{
+        method:"PATCH",
+        headers:{Prefer:"return=minimal"},
+        body:JSON.stringify({review_status:"approved",review_notes:null})
+      });
+    return json({ok:true,action:"approved"});
+  }
+
+  const notes=String(b.notes||"").trim().slice(0,1000);
+  if(!notes) return json({error:"revision notes required"},400);
+
+  const rootId=job.parent_job_id||job.id;
+
+  /* Idempotency: once this exact job requested changes, reuse its child revision. */
+  if(job.review_status==="changes_requested"){
+    const existing=await sb(env,
+      `creative_jobs?organization_id=eq.${ORG_ID}&parent_job_id=eq.${encodeURIComponent(rootId)}&select=*&order=revision_number.desc&limit=50`)||[];
+    const child=existing.find(x=>x.metadata?.revision_of===job.id);
+    if(child) return json({ok:true,action:"revision_requested",job:child,reused:true});
+  }
+
+  const revisions=await sb(env,
+    `creative_jobs?organization_id=eq.${ORG_ID}&or=(id.eq.${encodeURIComponent(rootId)},parent_job_id.eq.${encodeURIComponent(rootId)})&select=id,revision_number&order=revision_number.desc&limit=1`)||[];
+  const nextRevision=Math.max(Number(job.revision_number||1),Number(revisions[0]?.revision_number||1))+1;
+
+  /* Create the replacement before mutating the reviewed creative. */
+  const created=await sb(env,"creative_jobs",{
+    method:"POST",
+    headers:{Prefer:"return=representation"},
+    body:JSON.stringify({
+      organization_id:ORG_ID,
+      advertiser_business_id:job.advertiser_business_id,
+      job_type:job.job_type,
+      prompt:`${String(job.prompt||"").trim()}\n\nREVISION REQUEST: ${notes}`.slice(0,8000),
+      metadata:{
+        ...(job.metadata||{}),
+        revision_of:job.id,
+        revision_notes:notes
+      },
+      parent_job_id:rootId,
+      revision_number:nextRevision,
+      review_status:"pending"
+    })
+  });
+  const revision=Array.isArray(created)?created[0]:created;
+  if(!revision) throw new Error("creative revision insert failed");
+
+  const sources=await sb(env,
+    `creative_job_sources?creative_job_id=eq.${encodeURIComponent(job.id)}&select=source_asset_id,role`);
+  if(sources?.length)
+    await sb(env,"creative_job_sources",{
+      method:"POST",
+      body:JSON.stringify(sources.map(x=>({
+        creative_job_id:revision.id,
+        source_asset_id:x.source_asset_id,
+        role:x.role
+      })))
+    });
+
+  const now=new Date().toISOString();
+  const rejected={
+    approval_status:"rejected",
+    approved_at:null,
+    approved_by:null,
+    rejection_reason:notes
+  };
+  await sb(env,
+    `media_assets?id=eq.${encodeURIComponent(media.id)}&organization_id=eq.${ORG_ID}`,{
+      method:"PATCH",headers:{Prefer:"return=minimal"},body:JSON.stringify(rejected)
+    });
+  await sb(env,
+    `media_assets?parent_asset_id=eq.${encodeURIComponent(media.id)}&organization_id=eq.${ORG_ID}`,{
+      method:"PATCH",headers:{Prefer:"return=minimal"},body:JSON.stringify(rejected)
+    });
+  await sb(env,
+    `creative_jobs?id=eq.${encodeURIComponent(job.id)}&organization_id=eq.${ORG_ID}`,{
+      method:"PATCH",
+      headers:{Prefer:"return=minimal"},
+      body:JSON.stringify({review_status:"changes_requested",review_notes:notes})
+    });
+
+  return json({ok:true,action:"revision_requested",job:revision},201);
 }
 
 const MEDIA_MAX_BYTES = 75 * 1024 * 1024;
@@ -1284,7 +2011,7 @@ function validMediaSignature(mime, bytes) {
   return false;
 }
 
-async function uploadMedia(request, env, auth = null) {
+export async function uploadMedia(request, env, auth = null) {
   if (requestTooLarge(request, MEDIA_REQUEST_MAX_BYTES))
     return json({ error: "upload too large; maximum media file is 75 MB" }, 413);
 
@@ -1292,6 +2019,21 @@ async function uploadMedia(request, env, auth = null) {
   const file = form.get("file");
   const advertiserBusinessId =
     String(form.get("advertiser_business_id") || "").trim() || null;
+  const parentAssetId = String(form.get("parent_asset_id") || "").trim() || null;
+  let parentMedia = null;
+  const deliveryTier = String(form.get("delivery_tier") || "").trim() || null;
+  if (deliveryTier && !["4k","1080p","8k"].includes(deliveryTier))
+    return json({ error: "invalid delivery tier" }, 400);
+  if (parentAssetId) {
+    const parents = await sb(env,
+      `media_assets?id=eq.${encodeURIComponent(parentAssetId)}&organization_id=eq.${ORG_ID}&select=id,advertiser_business_id,kind,status,delivery_tier&limit=1`);
+    const parent = parents?.[0];
+    parentMedia = parent || null;
+    if (!parent || parent.status !== "ready")
+      return json({ error: "invalid parent media" }, 400);
+    if ((parent.advertiser_business_id || null) !== advertiserBusinessId)
+      return json({ error: "parent media attribution mismatch" }, 400);
+  }
   if (!(file instanceof File))
     return json({ error: "file required" }, 400);
 
@@ -1314,6 +2056,10 @@ async function uploadMedia(request, env, auth = null) {
   const spec = MEDIA_TYPES.get(mime);
   if (!spec)
     return json({ error: "supported media: JPEG, PNG, GIF, and MP4" }, 415);
+  if (parentMedia && parentMedia.kind !== spec.kind)
+    return json({ error: "parent media kind mismatch" }, 400);
+  if (parentMedia && deliveryTier === "1080p" && parentMedia.delivery_tier !== "4k")
+    return json({ error: "1080p delivery variant requires a 4k parent" }, 400);
 
   const headBytes = new Uint8Array(
     await file.slice(0, 64).arrayBuffer()
@@ -1336,6 +2082,8 @@ async function uploadMedia(request, env, auth = null) {
   const duration = Number.isFinite(rawDuration)
     ? Math.max(1, Math.min(300, rawDuration))
     : (spec.kind === "image" ? 15 : 30);
+  const width = Math.max(0, Math.min(16384, Math.round(Number(form.get("width")) || 0))) || null;
+  const height = Math.max(0, Math.min(16384, Math.round(Number(form.get("height")) || 0))) || null;
 
   await env.MEDIA.put(key, file.stream(), {
     httpMetadata: {
@@ -1358,6 +2106,10 @@ async function uploadMedia(request, env, auth = null) {
         mime_type: mime,
         byte_size: file.size,
         duration_seconds: duration,
+        width,
+        height,
+        parent_asset_id: parentAssetId,
+        delivery_tier: deliveryTier,
         status: "ready",
         approval_status: "pending",
         created_by: auth?.user?.id || null,
@@ -1431,6 +2183,26 @@ async function updateMediaApproval(request, env, auth, mediaId) {
     }
   );
 
+  if (!media.parent_asset_id) {
+    const children = await sb(env,
+      `media_assets?organization_id=eq.${ORG_ID}&parent_asset_id=eq.${encodeURIComponent(mediaId)}&select=id`
+    );
+    for (const child of (children || [])) {
+      await sb(env,
+        `media_assets?id=eq.${encodeURIComponent(child.id)}&organization_id=eq.${ORG_ID}`,
+        {method:"PATCH",headers:{Prefer:"return=representation"},body:JSON.stringify(patch)}
+      );
+    }
+  }
+
+  await sb(env,
+    `creative_jobs?organization_id=eq.${ORG_ID}&output_asset_id=eq.${encodeURIComponent(mediaId)}`,
+    {method:"PATCH",body:JSON.stringify({
+      review_status:next==="approved"?"approved":next==="rejected"?"changes_requested":"pending",
+      review_notes:next==="rejected"?patch.rejection_reason:null,
+      updated_at:stamp
+    })}
+  );
   return json({ ok: true, media: changed?.[0] || null });
 }
 
@@ -1968,7 +2740,6 @@ async function startHostRequest(request, env) {
         method: "PATCH",
         headers: { Prefer: "return=representation" },
         body: JSON.stringify({
-          is_host: true,
           contact_name: contactName || business.contact_name || null,
           phone: phone || business.phone || null,
           email: email || business.email || null,
@@ -1987,7 +2758,7 @@ async function startHostRequest(request, env) {
         contact_name: contactName,
         phone,
         email,
-        is_host: true,
+        is_host: false,
         is_advertiser: false,
         notes: "Created by authenticated host self-service.",
       }),
@@ -2896,6 +3667,260 @@ async function financeSnapshot(env, auth = null) {
   };
 }
 
+async function adminNetworkMap(env) {
+  const now = Date.now();
+  const [zones, boundaries, locations, screens, businesses] = await Promise.all([
+    sb(env,
+      `zones?organization_id=eq.${ORG_ID}&select=id,name,slug,status,parent_area_id,metadata&order=name.asc`
+    ),
+    sb(env,
+      `zone_boundary_versions?organization_id=eq.${ORG_ID}&select=zone_id,version,status,boundary_geojson,effective_from,effective_to,created_at&order=version.desc`
+    ),
+    sb(env,
+      `locations?organization_id=eq.${ORG_ID}&select=id,business_id,zone_id,name,address_line1,city,state,postal_code,latitude,longitude,host_status&order=created_at.desc`
+    ),
+    sb(env,
+      `screens?organization_id=eq.${ORG_ID}&select=id,location_id,name,status,is_test,deployment_class,last_seen_at`
+    ),
+    sb(env,
+      `businesses?organization_id=eq.${ORG_ID}&select=id,name,category,is_host,is_advertiser&order=name.asc`
+    ),
+  ]);
+
+  const boundariesByZone = new Map();
+  for (const row of boundaries || []) {
+    const entry = boundariesByZone.get(row.zone_id) || { active: null, draft: null };
+    if (row.status === "active" && !entry.active) entry.active = row;
+    if (row.status === "draft" && !entry.draft) entry.draft = row;
+    boundariesByZone.set(row.zone_id, entry);
+  }
+
+  const businessesById = new Map(
+    (businesses || []).map(business => [business.id, business])
+  );
+
+  const locationsByZone = new Map();
+  for (const location of locations || []) {
+    if (!location.zone_id) continue;
+    const rows = locationsByZone.get(location.zone_id) || [];
+    rows.push(location);
+    locationsByZone.set(location.zone_id, rows);
+  }
+
+  const screensByLocation = new Map();
+  for (const screen of screens || []) {
+    if (!screen.location_id) continue;
+    const rows = screensByLocation.get(screen.location_id) || [];
+    rows.push(screen);
+    screensByLocation.set(screen.location_id, rows);
+  }
+
+  const screenMetrics = rows => {
+    const all = rows || [];
+    const commercial = all.filter(screen =>
+      !screen.is_test &&
+      ["pilot", "production"].includes(screen.deployment_class)
+    );
+    const online = commercial.filter(screen =>
+      screen.last_seen_at &&
+      new Date(screen.last_seen_at).getTime() >= now - 120000
+    );
+    return {
+      screen_count: all.length,
+      commercial_screen_count: commercial.length,
+      online_screen_count: online.length,
+    };
+  };
+
+  const zoneRows = (zones || []).map(zone => {
+    const versions = boundariesByZone.get(zone.id) || {};
+    const boundary = versions.active || versions.draft || null;
+    const zoneLocations = locationsByZone.get(zone.id) || [];
+    const zoneScreens = zoneLocations.flatMap(location =>
+      screensByLocation.get(location.id) || []
+    );
+    const metrics = screenMetrics(zoneScreens);
+
+    return {
+      id: zone.id,
+      name: zone.name,
+      slug: zone.slug,
+      status: zone.status,
+      parent_area_id: zone.parent_area_id || null,
+      metadata: zone.metadata || {},
+      boundary_geojson: boundary?.boundary_geojson || null,
+      boundary_status: boundary?.status || null,
+      boundary_version: boundary?.version || null,
+      draft_version: versions.draft?.version || null,
+      location_count: zoneLocations.length,
+      ...metrics,
+    };
+  });
+
+  return {
+    zones: zoneRows,
+    locations: (locations || []).map(location => {
+      const business = businessesById.get(location.business_id) || null;
+      const metrics = screenMetrics(screensByLocation.get(location.id) || []);
+
+      return {
+        id: location.id,
+        business_id: location.business_id,
+        business_name: business?.name || null,
+        business_category: business?.category || null,
+        business_is_host: Boolean(business?.is_host),
+        business_is_advertiser: Boolean(business?.is_advertiser),
+        zone_id: location.zone_id,
+        name: location.name,
+        host_status: location.host_status || null,
+        address_line1: location.address_line1,
+        city: location.city,
+        state: location.state,
+        postal_code: location.postal_code,
+        latitude: location.latitude,
+        longitude: location.longitude,
+        ...metrics,
+      };
+    }),
+  };
+}
+
+async function publicPackageCoverage(env, packageId) {
+  if (!packageId) return {
+    zone_count: 0,
+    location_count: 0,
+    screen_count: 0,
+    commercial_screen_count: 0,
+    zones: [],
+  };
+
+  const links = await sb(
+    env,
+    `advertising_package_zones?package_id=eq.${encodeURIComponent(packageId)}&select=zone_id,delivery_weight`
+  );
+
+  const zoneIds = [...new Set((links || []).map(row => row.zone_id).filter(Boolean))];
+  if (!zoneIds.length) return {
+    zone_count: 0,
+    location_count: 0,
+    screen_count: 0,
+    commercial_screen_count: 0,
+    zones: [],
+  };
+
+  const joined = zoneIds.join(",");
+  const [zones, locations] = await Promise.all([
+    sb(
+      env,
+      `zones?id=in.(${joined})&organization_id=eq.${ORG_ID}&status=eq.active&select=id,name,slug,status`
+    ),
+    sb(
+      env,
+      `locations?organization_id=eq.${ORG_ID}&zone_id=in.(${joined})&select=id,zone_id`
+    ),
+  ]);
+
+  const locationIds = (locations || []).map(row => row.id).filter(Boolean);
+  let screens = [];
+  if (locationIds.length) {
+    screens = await sb(
+      env,
+      `screens?organization_id=eq.${ORG_ID}&location_id=in.(${locationIds.join(",")})&select=id,location_id,status,is_test,deployment_class`
+    );
+  }
+
+  const commercial = (screens || []).filter(screen =>
+    !screen.is_test &&
+    screen.status === "active" &&
+    ["pilot", "production"].includes(screen.deployment_class)
+  );
+
+  return {
+    zone_count: (zones || []).length,
+    location_count: (locations || []).length,
+    screen_count: (screens || []).length,
+    commercial_screen_count: commercial.length,
+    zones: (zones || []).map(zone => ({
+      id: zone.id,
+      name: zone.name,
+      slug: zone.slug,
+    })),
+  };
+}
+
+async function publicShowcaseScreen(env) {
+  const now = Date.now();
+  const screens = await sb(
+    env,
+    `screens?organization_id=eq.${ORG_ID}&status=eq.active&paired_at=not.is.null&select=id,name,location_id,last_seen_at,is_test,status,deployment_class,paired_at&order=last_seen_at.desc`
+  );
+
+  const candidates = (screens || []).filter(screen => screen.paired_at);
+  const commercial = candidates.filter(screen =>
+    !screen.is_test &&
+    ["pilot", "production"].includes(screen.deployment_class)
+  );
+  const screen = commercial[0] || candidates[0] || null;
+
+  if (!screen) {
+    return {
+      available: false,
+      mode: "fallback",
+      commercial: false,
+      items: [],
+    };
+  }
+
+  const assignments = await sb(
+    env,
+    `screen_playlist_assignments?screen_id=eq.${screen.id}&select=*&order=priority.desc,created_at.desc`
+  );
+  const assignment = (assignments || []).find(a =>
+    (!a.starts_at || new Date(a.starts_at).getTime() <= now) &&
+    (!a.ends_at || new Date(a.ends_at).getTime() > now)
+  );
+
+  let payload = assignment
+    ? await playlistPayload(env, assignment.playlist_id, now, screen)
+    : null;
+
+  if (!payload?.items?.length)
+    payload = await fallbackPayload(env, now, screen);
+
+  const items = (payload?.items || []).slice(0, 12).map(item => ({
+    media_id: item.media_id,
+    media_type: item.media_type,
+    mime_type: item.mime_type,
+    duration_seconds: item.duration_seconds || 15,
+    title: item.name || null,
+    url: item.url || `/media/${item.media_id}`,
+  }));
+
+  const isCommercial =
+    !screen.is_test &&
+    ["pilot", "production"].includes(screen.deployment_class);
+
+  return {
+    available: items.length > 0,
+    mode: isCommercial ? "live" : "preview",
+    commercial: isCommercial,
+    online: Boolean(
+      screen.last_seen_at &&
+      new Date(screen.last_seen_at).getTime() >= now - 120000
+    ),
+    last_seen_at: screen.last_seen_at || null,
+    screen: {
+      id: screen.id,
+      name: isCommercial ? (screen.name || "CoastLoop screen") : "Paired preview screen",
+    },
+    playlist: payload?.playlist ? {
+      id: payload.playlist.id,
+      name: payload.playlist.name,
+    } : null,
+    items,
+  };
+}
+
 async function publicNetworkStats(env) {
   const [screens, locations, campaigns, plays] = await Promise.all([
     sb(env, `screens?organization_id=eq.${ORG_ID}&select=id,location_id,last_seen_at,is_test,status,deployment_class`),
@@ -3188,8 +4213,39 @@ export default {
     const url = new URL(request.url);
 
     try {
+      if ((request.method === "GET" || request.method === "HEAD") && env.ASSETS) {
+        const cleanPages = new Map([
+          ["/", "/index.html"],
+          ["/login", "/login.html"],
+          ["/portal", "/portal.html"],
+          ["/advertise", "/advertise.html"],
+          ["/checkout", "/checkout.html"],
+          ["/account", "/account.html"],
+          ["/host", "/host.html"],
+          ["/privacy", "/privacy.html"],
+          ["/terms", "/terms.html"],
+          ["/support", "/support.html"],
+          ["/admin", "/admin.html"],
+          ["/broker", "/broker.html"],
+          ["/onboard", "/onboard.html"],
+          ["/auth-callback", "/auth-callback.html"],
+          ["/report", "/report.html"],
+          ["/player", "/player.html"],
+        ]);
+
+        const assetPath = cleanPages.get(url.pathname);
+        if (assetPath) {
+          const assetUrl = new URL(request.url);
+          assetUrl.pathname = assetPath;
+          return env.ASSETS.fetch(new Request(assetUrl, request));
+        }
+      }
+
       if (url.pathname === "/api/billing/webhook/stripe" && request.method === "POST")
         return stripeWebhook(request, env);
+
+      const creativeRoute = await creativeWorkerApi(request, env, url, { uploadMedia, orgId: ORG_ID });
+      if (creativeRoute) return creativeRoute;
 
       const isLegalTermsMultipart =
         url.pathname === "/api/admin/legal/terms" &&
@@ -3208,6 +4264,36 @@ export default {
 
       if (url.pathname === "/api/portal/overview" && request.method === "GET")
         return portalOverview(request, env);
+
+      if (url.pathname === "/api/portal/creative-profile" &&
+          (request.method === "GET" || request.method === "PUT")) {
+        const userAuth = await requireUserAccess(request, env);
+        if (!userAuth) return json({ error: "unauthorized" }, 401);
+        return portalCreativeProfile(request, env, userAuth, url);
+      }
+
+      if (url.pathname === "/api/portal/creative-jobs" &&
+          (request.method === "GET" || request.method === "POST")) {
+        const userAuth = await requireUserAccess(request, env);
+        if (!userAuth) return json({ error: "unauthorized" }, 401);
+        return portalCreativeJobs(request, env, userAuth, url);
+      }
+
+      {
+        const creativeReviewMatch=url.pathname.match(/^\/api\/portal\/creative-jobs\/([^/]+)\/review$/);
+        if(creativeReviewMatch && request.method==="POST"){
+          const userAuth=await requireUserAccess(request,env);
+          if(!userAuth) return json({error:"unauthorized"},401);
+          return portalCreativeReview(request,env,userAuth,decodeURIComponent(creativeReviewMatch[1]));
+        }
+      }
+
+      if (url.pathname === "/api/portal/source-assets" &&
+          (request.method === "GET" || request.method === "POST")) {
+        const userAuth = await requireUserAccess(request, env);
+        if (!userAuth) return json({ error: "unauthorized" }, 401);
+        return portalSourceAssets(request, env, userAuth, url);
+      }
 
       if (url.pathname === "/api/portal/media" && request.method === "POST") {
         const userAuth = await requireUserAccess(request, env);
@@ -3287,6 +4373,12 @@ export default {
       if (url.pathname === "/api/onboarding/advertiser/executed" && request.method === "GET")
         return executedAdvertiserAgreement(request, env);
 
+      const publicPackageCoverageMatch = url.pathname.match(/^\/api\/public\/package-coverage\/([^/]+)$/);
+      if (publicPackageCoverageMatch && request.method === "GET")
+        return json(await publicPackageCoverage(env, publicPackageCoverageMatch[1]));
+
+      if (url.pathname === "/api/public/showcase-screen" && request.method === "GET")
+        return json(await publicShowcaseScreen(env));
       if (url.pathname === "/api/public/network" && request.method === "GET")
         return json(await publicNetworkStats(env));
 
@@ -3399,6 +4491,9 @@ export default {
         if (url.pathname === "/api/admin/finance" && request.method === "GET")
           return json(await financeSnapshot(env, adminAuth));
 
+        if (url.pathname === "/api/admin/network-map" && request.method === "GET")
+          return json(await adminNetworkMap(env));
+
         if (url.pathname === "/api/admin/billing/config" && request.method === "GET")
           return json(await billingConfig(env));
 
@@ -3459,6 +4554,37 @@ export default {
         if (url.pathname === "/api/admin/screens" && request.method === "GET")
           return json(await adminScreens(env));
 
+        if (url.pathname === "/api/admin/geography" && request.method === "GET")
+          return json(await adminGeography(env));
+
+        if (url.pathname === "/api/admin/geography/areas" && request.method === "POST")
+          return auditMutation(request, env, adminAuth,
+            { action: "geography.area.create", entity_type: "geography_area" },
+            () => createGeographyArea(request, env));
+
+        if (url.pathname === "/api/admin/geography/zones" && request.method === "POST")
+          return auditMutation(request, env, adminAuth,
+            { action: "geography.zone.create", entity_type: "zone" },
+            () => createGeographyZone(request, env));
+
+        const zoneBoundaryCreate = url.pathname.match(/^\/api\/admin\/geography\/zones\/([^/]+)\/boundaries$/);
+        if (zoneBoundaryCreate && request.method === "POST")
+          return auditMutation(request, env, adminAuth,
+            { action: "geography.zone_boundary.create", entity_type: "zone", entity_id: zoneBoundaryCreate[1] },
+            () => createZoneBoundaryDraft(request, env, zoneBoundaryCreate[1]));
+
+        const zoneBoundaryActivate = url.pathname.match(/^\/api\/admin\/geography\/zones\/([^/]+)\/boundaries\/([^/]+)\/activate$/);
+        if (zoneBoundaryActivate && request.method === "POST")
+          return auditMutation(request, env, adminAuth,
+            { action: "geography.zone_boundary.activate", entity_type: "zone", entity_id: zoneBoundaryActivate[1] },
+            () => activateZoneBoundary(request, env, zoneBoundaryActivate[1], zoneBoundaryActivate[2]));
+
+        const locationZoneUpdate = url.pathname.match(/^\/api\/admin\/geography\/locations\/([^/]+)\/zone$/);
+        if (locationZoneUpdate && request.method === "PATCH")
+          return auditMutation(request, env, adminAuth,
+            { action: "geography.location.zone_update", entity_type: "location", entity_id: locationZoneUpdate[1] },
+            () => updateLocationZone(request, env, locationZoneUpdate[1]));
+
         if (url.pathname === "/api/admin/screens/pair" && request.method === "POST")
           return auditMutation(request, env, adminAuth,
             { action: "screen.pair", entity_type: "screen" },
@@ -3471,6 +4597,21 @@ export default {
           return auditMutation(request, env, adminAuth,
             { action: "onboarding.package.create", entity_type: "advertising_package" },
             () => createAdvertisingPackage(request, env, adminAuth));
+
+        const packageZonesMatch = url.pathname.match(/^\/api\/admin\/onboarding\/packages\/([^/]+)\/zones$/);
+        if (packageZonesMatch && request.method === "GET")
+          return json(await adminAdvertisingPackageZones(env, packageZonesMatch[1]));
+
+        if (packageZonesMatch && request.method === "PUT")
+          return auditMutation(request, env, adminAuth,
+            { action: "onboarding.package.zones.replace", entity_type: "advertising_package", entity_id: packageZonesMatch[1] },
+            () => replaceAdvertisingPackageZones(request, env, packageZonesMatch[1]));
+
+        const packageActivateMatch = url.pathname.match(/^\/api\/admin\/onboarding\/packages\/([^/]+)\/activate$/);
+        if (packageActivateMatch && request.method === "POST")
+          return auditMutation(request, env, adminAuth,
+            { action: "onboarding.package.activate", entity_type: "advertising_package", entity_id: packageActivateMatch[1] },
+            () => activateAdvertisingPackage(env, packageActivateMatch[1]));
 
         if (url.pathname === "/api/admin/onboarding" && request.method === "GET")
           return json(await adminOnboarding(env));
@@ -3547,6 +4688,12 @@ export default {
           return auditMutation(request, env, adminAuth,
             { action: "campaign.status", entity_type: "campaign", entity_id: campaignStatus[1] },
             () => updateCampaignStatus(request, env, campaignStatus[1]));
+
+        if (url.pathname === "/api/admin/creative-jobs" && request.method === "GET")
+          return json(await adminCreativeJobs(env));
+
+        if (url.pathname === "/api/admin/creative-jobs" && request.method === "POST")
+          return createCreativeJob(request, env, adminAuth);
 
         if (url.pathname === "/api/admin/media" && request.method === "GET")
           return json(await adminMedia(env));

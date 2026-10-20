@@ -3,55 +3,56 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0a0a0a">
 <title>Account · CoastLoop</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/styles.css">
+<link rel="stylesheet" href="/coastloop-ui.css">
 </head>
-<body>
-<main class="shell" style="max-width:720px">
-  <div class="topbar">
-    <div class="brand coastloop-lockup">
-      <img class="coastloop-mark"
-        src="/brand/coastloop-mark.svg" alt="">
-      <span>COASTLOOP</span>
-    </div>
-    <button id="back" class="secondary">Back</button>
-  </div>
+<body class="cl-ui">
 
-  <section class="card">
-    <div class="eyebrow">ACCOUNT</div>
+<main class="cl-account-page">
+  <header class="cl-account-nav">
+    <a class="cl-brand" href="/"><img class="cl-brand-mark" src="/brand/coastloop-mark.svg" alt=""><span>CoastLoop</span></a>
+    <button id="back" class="cl-btn" type="button">Back</button>
+  </header>
+
+  <section class="cl-account-panel">
+    <div class="cl-eyebrow">ACCOUNT</div>
     <h1>My account</h1>
-    <p id="who" class="muted">Loading account…</p>
+    <p id="who" class="cl-account-who">Loading account…</p>
 
-    <h2 style="margin-top:28px">Security</h2>
-    <p class="muted">
-      Update the password used for email sign-in.
-      Google sign-in continues to use your Google account.
-    </p>
+    <div class="cl-account-section">
+      <h2>Security</h2>
+      <p>Update the password used for email sign-in. Google sign-in continues to use your Google account.</p>
 
-    <form id="password" class="account-password-form">
-      <label>
-        <span>New password</span>
-        <input name="password" type="password"
-          minlength="10" autocomplete="new-password"
-          placeholder="At least 10 characters" required>
-      </label>
-      <label>
-        <span>Confirm password</span>
-        <input name="confirm" type="password"
-          minlength="10" autocomplete="new-password"
-          placeholder="Repeat new password" required>
-      </label>
-      <button>Update password</button>
-    </form>
+      <form id="password" class="cl-account-form">
+        <label>
+          <span>New password</span>
+          <input name="password" type="password"
+            minlength="10" autocomplete="new-password"
+            placeholder="At least 10 characters" required>
+        </label>
 
-    <div id="msg" class="muted account-message"></div>
+        <label>
+          <span>Confirm password</span>
+          <input name="confirm" type="password"
+            minlength="10" autocomplete="new-password"
+            placeholder="Repeat new password" required>
+        </label>
 
-    <div class="account-actions">
-      <button id="logout" class="secondary">Sign out</button>
+        <button class="cl-btn cl-btn-primary" type="submit">Update password</button>
+      </form>
+
+      <div id="msg" class="cl-form-status"></div>
+    </div>
+
+    <div class="cl-account-actions">
+      <button id="logout" class="cl-btn" type="button">Sign out</button>
     </div>
   </section>
 </main>
+
 <script type="module" src="/account.js"></script>
 <script src="/legal-gate.js"></script>
 </body>

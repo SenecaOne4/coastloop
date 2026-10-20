@@ -3,58 +3,94 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0a0a0a">
 <title>Host CoastLoop</title>
-<style>
-*{box-sizing:border-box}body{margin:0;background:#11100f;color:#f7f3ee;font-family:Inter,Arial,sans-serif}
-a{color:inherit}.wrap{max-width:1040px;margin:auto;padding:24px}.nav{display:flex;justify-content:space-between;align-items:center}
-.nav a{text-decoration:none}.hero{padding:76px 0 38px}.eyebrow{font-size:12px;letter-spacing:.18em;color:#b9ada4;font-weight:800}
-h1{font-size:clamp(48px,8vw,86px);line-height:.92;letter-spacing:-.06em;margin:14px 0 22px;max-width:850px}
-.lede{font-size:20px;line-height:1.55;color:#cfc5bd;max-width:720px}
-.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:34px 0}
-.card,.formbox{border:1px solid #302c29;background:#191715;border-radius:18px;padding:22px}
-.card h2{font-size:22px;margin:0 0 9px}.card p{color:#bdb3ab;line-height:1.5;margin:0}
-.formbox{max-width:760px;margin:30px 0 70px;padding:28px}.formbox h2{font-size:32px;margin:0 0 8px}
-.formbox p{color:#bdb3ab;line-height:1.5}.fields{display:grid;grid-template-columns:1fr 1fr;gap:13px}
-label{display:block;font-size:12px;font-weight:800;color:#c8bdb5;margin-bottom:6px}
-input{width:100%;border:1px solid #3b3531;background:#100f0e;color:#fff;border-radius:11px;padding:13px;font:inherit}
-.full{grid-column:1/-1}button{border:0;border-radius:12px;background:#fff;color:#171412;padding:14px 20px;font-weight:900;font-size:15px;cursor:pointer}
-button:disabled{opacity:.55}.status{min-height:22px;margin-top:14px;color:#d7cdc5}.note{font-size:12px;color:#8f8680}
-@media(max-width:700px){.grid,.fields{grid-template-columns:1fr}.full{grid-column:auto}.hero{padding-top:52px}}
-</style>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/styles.css">
+<link rel="stylesheet" href="/coastloop-ui.css">
 </head>
-<body>
-<main class="wrap">
-<nav class="nav"><a href="/"><strong>COASTLOOP</strong></a><a href="/account.html">Account</a></nav>
-<section class="hero">
-<div class="eyebrow">HOST THE LOOP</div>
-<h1>Your screen.<br>More useful.</h1>
-<p class="lede">Add CoastLoop to an approved TV at your venue. You keep control of the placement, operating mode and commercial terms before anything goes live.</p>
-</section>
-<section class="grid">
-<article class="card"><h2>Your venue, your terms</h2><p>The exact screen, schedule, house content and category exclusions are approved before installation.</p></article>
-<article class="card"><h2>One CoastLoop account</h2><p>Host screens and advertise your own business from the same dashboard.</p></article>
-<article class="card"><h2>Agreement before install</h2><p>We prepare the placement terms for review and e-signature before equipment is provisioned.</p></article>
-</section>
-<section class="formbox">
-<div class="eyebrow">VENUE REQUEST</div>
-<h2>Tell us where the screen is.</h2>
-<p>This starts the placement review. It does not sign an agreement or authorize installation.</p>
-<form id="hostForm">
-<div class="fields">
-<div class="full"><label>Business / venue name</label><input name="name" required autocomplete="organization"></div>
-<div><label>Your name</label><input name="contact_name" autocomplete="name"></div>
-<div><label>Mobile</label><input name="phone" autocomplete="tel"></div>
-<div class="full"><label>Street address</label><input name="address_line1" required autocomplete="street-address"></div>
-<div><label>City</label><input name="city" required autocomplete="address-level2"></div>
-<div><label>State</label><input name="state" required autocomplete="address-level1"></div>
-<div><label>ZIP</label><input name="postal_code" required autocomplete="postal-code"></div>
-</div>
-<p><button id="submit" type="submit">Start host request</button></p>
-<div id="status" class="status"></div>
-</form>
-<p class="note">Host compensation is deal-specific. Any cash compensation offered will appear in the placement terms before signature.</p>
-</section>
+<body class="cl-ui">
+
+<main class="cl-host-page">
+  <nav class="cl-host-nav">
+    <a class="cl-brand" href="/"><img class="cl-brand-mark" src="/brand/coastloop-mark.svg" alt=""><span>CoastLoop</span></a>
+    <a class="cl-btn" href="/account.html">Account</a>
+  </nav>
+
+  <section class="cl-host-hero">
+    <div class="cl-eyebrow">HOST THE LOOP</div>
+    <h1>Your screen.<br>More useful.</h1>
+    <p>Add CoastLoop to an approved TV at your venue. You keep control of placement, operating mode and commercial terms before anything goes live.</p>
+  </section>
+
+  <section class="cl-host-points">
+    <div>
+      <strong>Your venue, your terms</strong>
+      <p>The exact screen, schedule, house content and category exclusions are approved before installation.</p>
+    </div>
+    <div>
+      <strong>One CoastLoop account</strong>
+      <p>Host screens and advertise your own business from the same dashboard.</p>
+    </div>
+    <div>
+      <strong>Agreement before install</strong>
+      <p>Placement terms are reviewed and signed before equipment is provisioned.</p>
+    </div>
+  </section>
+
+  <section class="cl-host-request">
+    <div class="cl-host-request-copy">
+      <div class="cl-eyebrow">VENUE REQUEST</div>
+      <h2>Tell us where the screen is.</h2>
+      <p>This starts the placement review. It does not sign an agreement or authorize installation.</p>
+    </div>
+
+    <form id="hostForm" class="cl-host-form">
+      <label class="cl-host-full">
+        <span>Business / venue name</span>
+        <input name="name" required autocomplete="organization">
+      </label>
+
+      <label>
+        <span>Your name</span>
+        <input name="contact_name" autocomplete="name">
+      </label>
+
+      <label>
+        <span>Mobile</span>
+        <input name="phone" autocomplete="tel">
+      </label>
+
+      <label class="cl-host-full">
+        <span>Street address</span>
+        <input name="address_line1" required autocomplete="street-address">
+      </label>
+
+      <label>
+        <span>City</span>
+        <input name="city" required autocomplete="address-level2">
+      </label>
+
+      <label>
+        <span>State</span>
+        <input name="state" required autocomplete="address-level1">
+      </label>
+
+      <label>
+        <span>ZIP</span>
+        <input name="postal_code" required autocomplete="postal-code">
+      </label>
+
+      <div class="cl-host-full">
+        <button id="submit" class="cl-btn cl-btn-primary" type="submit">Start host request</button>
+        <div id="status" class="cl-form-status"></div>
+      </div>
+    </form>
+
+    <p class="cl-host-note">Host compensation is deal-specific. Any cash compensation offered will appear in the placement terms before signature.</p>
+  </section>
 </main>
+
 <script type="module">
 import {api,readSession} from "/session.js";
 const session=readSession();

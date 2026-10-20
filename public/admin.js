@@ -3,7 +3,7 @@ import { api as sessionApi, readSession, logout as sessionLogout } from '/sessio
 const $ = s => document.querySelector(s);
 const state = {
   token: sessionStorage.getItem('adminToken') || '',
-  screens:[], media:[], playlists:[], prospects:[], businesses:[],
+  screens:[], media:[], creativeJobs:[], playlists:[], prospects:[], businesses:[],
   campaigns:[], campaignReports:[],
   userDirectory:{users:[],invitations:[]},
   finance:{},
@@ -144,6 +144,90 @@ function renderOpsCommandCenter(stats){
 }
 
 
+
+async function hydratePackageZoneEditors(){
+  const editors=[...document.querySelectorAll('[data-package-zone-editor]')];
+  if(!editors.length) return;
+
+  let zones=[];
+  try{
+    const geography=await api('/api/admin/geography');
+    zones=Array.isArray(geography?.zones)?geography.zones:[];
+  }catch(error){
+    editors.forEach(editor=>{
+      editor.innerHTML=`<div class="muted tiny">Zone geography unavailable · ${esc(error.message||'request failed')}</div>`;
+    });
+    return;
+  }
+
+  for(const editor of editors){
+    const packageId=editor.dataset.packageZoneEditor;
+    if(!packageId) continue;
+
+    try{
+      const current=await api(`/api/admin/onboarding/packages/${encodeURIComponent(packageId)}/zones`);
+      const memberships=Array.isArray(current)?current:(Array.isArray(current?.zones)?current.zones:[]);
+      const selected=new Set(memberships.map(x=>String(x.zone_id)));
+      const editable=editor.dataset.packageZoneEditable==='1';
+
+      const zoneNames=new Map(zones.map(z=>{
+        const props=z?.properties||z||{};
+        const id=String(props.id||z.id||'');
+        return [id,props.name||z.name||'Unnamed Zone'];
+      }));
+
+      if(!zones.length){
+        editor.innerHTML=`
+          <div class="row">
+            <div>
+              <strong>Zone coverage</strong>
+              <div class="muted tiny">No CoastLoop Zones exist yet. Geography must exist before this package can be assigned to Zones.</div>
+            </div>
+          </div>`;
+        continue;
+      }
+
+      if(!editable){
+        const names=memberships
+          .map(m=>zoneNames.get(String(m.zone_id)))
+          .filter(Boolean);
+
+        editor.innerHTML=`
+          <div class="row">
+            <div>
+              <strong>Zone coverage</strong>
+              <div class="muted tiny">Active package geography is read-only.</div>
+              <div style="margin-top:8px">${names.length ? names.map(name=>esc(name)).join(' · ') : '<span class="muted">No Zone membership recorded.</span>'}</div>
+            </div>
+          </div>`;
+        continue;
+      }
+
+      editor.innerHTML=`
+        <div class="row">
+          <div>
+            <strong>Zone coverage</strong>
+            <div class="muted tiny">Choose the Zones included in this draft package.</div>
+          </div>
+          <button type="button" class="button secondary" data-save-package-zones="${esc(packageId)}">Save Zones</button>
+        </div>
+        <div class="package-zone-options" style="margin-top:10px">
+          ${zones.map(z=>{
+            const props=z?.properties||z||{};
+            const id=String(props.id||z.id||'');
+            const name=props.name||z.name||'Unnamed Zone';
+            return `<label class="check-row">
+              <input type="checkbox" value="${esc(id)}" data-package-zone-choice="${esc(packageId)}" ${selected.has(id)?'checked':''}>
+              <span>${esc(name)}</span>
+            </label>`;
+          }).join('')}
+        </div>`;
+    }catch(error){
+      editor.innerHTML=`<div class="muted tiny">Zone membership unavailable · ${esc(error.message||'request failed')}</div>`;
+    }
+  }
+}
+
 function renderDigitalOnboarding(){
   const box=$('#digitalOnboarding');
   if(!box) return;
@@ -160,16 +244,43 @@ function renderDigitalOnboarding(){
       `<option value="${l.id}" data-business="${b.id}">${esc(b.name)} — ${esc(l.name||l.address_line1||'Location')}</option>`
     )).join('');
 
-  const packageRows=packages.length ? packages.map(p=>`
+  const packageRows=packages.length ? packages.map(p=>{
+    const coverageMode=String(p.coverage_mode||'legacy');
+    const packageId=p.id||p.package_id||'';
+    const isZonePackage=coverageMode==='zones';
+    const canEditZones=String(p.status||'').toLowerCase()==='draft' && isZonePackage;
+    const coverageLabel=
+      coverageMode==='network' ? 'Network' :
+      coverageMode==='zones' ? 'Selected Zones' :
+      'Legacy';
+    return `
     <tr>
       <td>${esc(p.name)}</td>
       <td>${esc(p.package_key)} v${esc(p.version)}</td>
       <td>${money(p.price_cents||0)}</td>
       <td>${esc(p.market||'—')}</td>
+      <td>${esc(coverageLabel)}</td>
       <td>${esc(p.status)}</td>
       <td>${esc(p.availability_status||'—')}</td>
-    </tr>`).join('') :
-    `<tr><td colspan="6" class="muted">No advertising packages yet. Public advertiser flow will remain in an honest zero-state.</td></tr>`;
+    </tr>
+    ${isZonePackage ? `
+    <tr class="package-zone-editor-row">
+      <td colspan="7">
+        <div
+          class="package-zone-editor"
+          data-package-zone-editor="${esc(packageId)}"
+          data-package-zone-editable="${canEditZones?'1':'0'}">
+          <div class="row">
+            <div>
+              <strong>Zone coverage</strong>
+              <div class="muted tiny">Loading current Zone membership…</div>
+            </div>
+          </div>
+        </div>
+      </td>
+    </tr>` : ''}`;
+  }).join('') :
+    `<tr><td colspan="7" class="muted">No advertising packages yet. Public advertiser flow will remain in an honest zero-state.</td></tr>`;
 
   const agreementRows=agreements.length ? agreements.slice(0,20).map(a=>{
     const b=(state.businesses||[]).find(x=>x.id===a.business_id);
@@ -204,6 +315,14 @@ function renderDigitalOnboarding(){
           <label>Price cents<input name="price_cents" type="number" min="0" required></label>
         </div>
         <label>Market<input name="market" placeholder="North Myrtle Beach"></label>
+        <label>Coverage
+          <select name="coverage_mode" required>
+            <option value="" selected disabled>Choose coverage…</option>
+            <option value="network">Network</option>
+            <option value="zones">Selected Zones</option>
+            <option value="legacy">Legacy</option>
+          </select>
+        </label>
         <div class="row">
           <label>Term days<input name="term_days" type="number" min="1"></label>
           <label>Ad seconds<input name="ad_length_seconds" type="number" min="1" value="15"></label>
@@ -264,7 +383,8 @@ function renderDigitalOnboarding(){
     </div>
 
     <h3 style="margin-top:22px">Package versions</h3>
-    <div style="overflow:auto"><table><thead><tr><th>Package</th><th>Version</th><th>Price</th><th>Market</th><th>Status</th><th>Availability</th></tr></thead><tbody>${packageRows}</tbody></table></div>
+    <div style="overflow:auto"><table><thead><tr><th>Package</th><th>Version</th><th>Price</th><th>Market</th><th>Coverage</th>
+              <th>Status</th><th>Availability</th></tr></thead><tbody>${packageRows}</tbody></table></div>
 
     <h3 style="margin-top:22px">Recent agreements</h3>
     <div style="overflow:auto"><table><thead><tr><th>Business</th><th>Family</th><th>Status</th><th>Signer</th><th>Progress</th></tr></thead><tbody>${agreementRows}</tbody></table></div>
@@ -443,28 +563,1143 @@ function renderScheduling(){
 
 let prospectMap=null;
 let prospectLayer=null;
+let zoneLayer=null;
+let networkLocationLayer=null;
+let planningGridLayer=null;
+let networkMapData={areas:[],zones:[],locations:[],screens:[],totals:{}};
+let networkMapLoaded=false;
+let networkMapLoading=false;
+let selectedZoneId=null;
+let selectedMarketId=null;
+let mapInitialFitDone=false;
+let geographyPackageMemberships=new Map();
+const mapVisibility={zones:false,network:true,leads:false,grid:true};
 
 function prospectAddress(p){
   return [p.address_line1,p.city,p.state,p.postal_code].filter(Boolean).join(', ');
 }
 
+function networkLocationAddress(location){
+  return [
+    location.address_line1,
+    location.city,
+    location.state,
+    location.postal_code
+  ].filter(Boolean).join(', ');
+}
+
+function zoneMapSummary(){
+  const el=$('#zoneMapSummary');
+  if(!el) return;
+
+  if(networkMapLoading && !networkMapLoaded){
+    el.textContent='Loading CoastLoop geography…';
+    return;
+  }
+
+  const zones=networkMapData.zones||[];
+  const locations=networkMapData.locations||[];
+
+  if(!zones.length){
+    el.innerHTML='<strong>No CoastLoop Zones defined yet.</strong> Activate the first Zone boundary in Supabase and it will appear here automatically. The planning grid is a visual drafting aid only.';
+    return;
+  }
+
+  const selected=zones.find(zone=>zone.id===selectedZoneId);
+  if(selected){
+    el.innerHTML=
+      `<strong>${esc(selected.name)}</strong>`+
+      ` · ${selected.location_count||0} locations`+
+      ` · ${selected.commercial_screen_count||0} commercial screens`+
+      ` · ${selected.online_screen_count||0} online`+
+      ` · boundary v${selected.boundary_version||'—'} ${esc(selected.boundary_status||'unmapped')}`;
+    return;
+  }
+
+  const mapped=zones.filter(zone=>zone.boundary_geojson).length;
+  const assigned=locations.filter(location=>location.zone_id).length;
+  el.innerHTML=
+    `<strong>${zones.length} Zones</strong>`+
+    ` · ${mapped} mapped`+
+    ` · ${assigned} assigned locations`+
+    ` · select a Zone for inventory detail`;
+}
+
+function zoneStyle(feature){
+  const props=feature?.properties||{};
+  const selected=String(props.id||'')===String(selectedZoneId||'');
+  const active=String(props.status||'')==='active';
+
+  if(!mapVisibility.zones){
+    return {
+      color:'transparent',
+      weight:0,
+      opacity:0,
+      fillColor:'transparent',
+      fillOpacity:0
+    };
+  }
+
+  return selected
+    ?{
+        color:'#d8b66f',
+        weight:2,
+        opacity:.92,
+        dashArray:'7 5',
+        fillColor:'#d8b66f',
+        fillOpacity:.055
+      }
+    :active
+    ?{
+        color:'#a88d5b',
+        weight:1.25,
+        opacity:.70,
+        dashArray:'6 5',
+        fillColor:'#a88d5b',
+        fillOpacity:.03
+      }
+    :{
+        color:'#77777d',
+        weight:1,
+        opacity:.55,
+        dashArray:'5 5',
+        fillColor:'#77777d',
+        fillOpacity:.02
+      };
+}
+
+function pointInRing(lat,lon,ring){
+  if(!Array.isArray(ring) || ring.length<3) return false;
+  let inside=false;
+
+  for(let i=0,j=ring.length-1;i<ring.length;j=i++){
+    const xi=Number(ring[i]?.[0]);
+    const yi=Number(ring[i]?.[1]);
+    const xj=Number(ring[j]?.[0]);
+    const yj=Number(ring[j]?.[1]);
+
+    if(![xi,yi,xj,yj].every(Number.isFinite)) continue;
+
+    const crosses=((yi>lat)!==(yj>lat)) &&
+      (lon < (xj-xi)*(lat-yi)/((yj-yi)||Number.EPSILON)+xi);
+
+    if(crosses) inside=!inside;
+  }
+
+  return inside;
+}
+
+function pointInGeometry(lat,lon,geometry){
+  if(!geometry) return false;
+
+  if(geometry.type==='Polygon'){
+    const rings=geometry.coordinates||[];
+    if(!rings.length || !pointInRing(lat,lon,rings[0])) return false;
+
+    for(let i=1;i<rings.length;i++){
+      if(pointInRing(lat,lon,rings[i])) return false;
+    }
+
+    return true;
+  }
+
+  if(geometry.type==='MultiPolygon'){
+    return (geometry.coordinates||[]).some(poly=>
+      pointInGeometry(lat,lon,{type:'Polygon',coordinates:poly})
+    );
+  }
+
+  return false;
+}
+
+function zonesForGridPoint(lat,lon){
+  return (networkMapData.zones||[]).filter(zone=>
+    String(zone.status||'')==='active' &&
+    zone.boundary_geojson &&
+    pointInGeometry(lat,lon,zone.boundary_geojson)
+  );
+}
+
+function gridCellStyle(memberships,hover=false){
+  const zoom=prospectMap?.getZoom?.()||0;
+  const local=zoom>=10;
+  const selected=Boolean(
+    selectedZoneId &&
+    memberships.some(zone=>String(zone.id)===String(selectedZoneId))
+  );
+
+  if(!local){
+    return {
+      color:'#6f6044',
+      weight:0,
+      opacity:0,
+      fillColor:selected?'#b99a61':'#766547',
+      fillOpacity:selected?.68:.52
+    };
+  }
+
+  if(hover){
+    return {
+      color:'#d8b66f',
+      weight:1.15,
+      opacity:.90,
+      fillColor:selected?'#b99a61':'#88734e',
+      fillOpacity:selected?.76:.66
+    };
+  }
+
+  return selected
+    ?{
+        color:'#b59a68',
+        weight:.46,
+        opacity:.34,
+        fillColor:'#9b7f4d',
+        fillOpacity:.66
+      }
+    :{
+        color:'#88775a',
+        weight:.38,
+        opacity:.22,
+        fillColor:'#625640',
+        fillOpacity:.52
+      };
+}
+
+function renderPlanningGrid(){
+  if(!planningGridLayer || !prospectMap || !window.L) return;
+
+  planningGridLayer.clearLayers();
+  if(!mapVisibility.grid) return;
+
+  const GRID_RADIUS_M=750;
+  const zones=(networkMapData.zones||[]).filter(zone=>
+    String(zone.status||'')==='active' &&
+    zone.boundary_geojson
+  );
+
+  if(!zones.length) return;
+
+  const crs=L.CRS.EPSG3857;
+  const r=GRID_RADIUS_M;
+  const xStep=1.5*r;
+  const yStep=Math.sqrt(3)*r;
+
+  const geometryMeterBounds=geometry=>{
+    let minX=Infinity;
+    let minY=Infinity;
+    let maxX=-Infinity;
+    let maxY=-Infinity;
+
+    const walk=value=>{
+      if(!Array.isArray(value)) return;
+
+      if(
+        value.length>=2 &&
+        Number.isFinite(Number(value[0])) &&
+        Number.isFinite(Number(value[1]))
+      ){
+        const p=crs.project(
+          L.latLng(Number(value[1]),Number(value[0]))
+        );
+        minX=Math.min(minX,p.x);
+        minY=Math.min(minY,p.y);
+        maxX=Math.max(maxX,p.x);
+        maxY=Math.max(maxY,p.y);
+        return;
+      }
+
+      value.forEach(walk);
+    };
+
+    walk(geometry?.coordinates);
+
+    return Number.isFinite(minX)
+      ?{minX,minY,maxX,maxY}
+      :null;
+  };
+
+  const candidateIds=new Set();
+
+  zones.forEach(zone=>{
+    const b=geometryMeterBounds(zone.boundary_geojson);
+    if(!b) return;
+
+    const colMin=Math.floor((b.minX-r)/xStep)-1;
+    const colMax=Math.ceil((b.maxX+r)/xStep)+1;
+
+    for(let col=colMin;col<=colMax;col++){
+      const rowOffset=(Math.abs(col)%2)*0.5;
+      const rowMin=Math.floor((b.minY-r)/yStep-rowOffset)-1;
+      const rowMax=Math.ceil((b.maxY+r)/yStep-rowOffset)+1;
+
+      for(let row=rowMin;row<=rowMax;row++){
+        candidateIds.add(`${col}:${row}`);
+      }
+    }
+  });
+
+  const cells=[];
+
+  candidateIds.forEach(key=>{
+    const [col,row]=key.split(':').map(Number);
+    const rowOffset=(Math.abs(col)%2)*0.5;
+    const x=col*xStep;
+    const y=(row+rowOffset)*yStep;
+    const center=crs.unproject(L.point(x,y));
+
+    // Deterministic membership rule:
+    // A permanent wm750 cell belongs to every active Zone whose
+    // active canonical boundary contains that cell's fixed center point.
+    const memberships=zonesForGridPoint(center.lat,center.lng);
+    if(!memberships.length) return;
+
+    const points=[];
+    for(let i=0;i<6;i++){
+      const angle=Math.PI/180*(60*i);
+      const p=crs.unproject(L.point(
+        x+r*Math.cos(angle),
+        y+r*Math.sin(angle)
+      ));
+      points.push([p.lat,p.lng]);
+    }
+
+    cells.push({
+      id:`wm750:${col}:${row}`,
+      col,
+      row,
+      center,
+      points,
+      memberships
+    });
+  });
+
+  cells.sort((a,b)=>
+    a.col-b.col ||
+    a.row-b.row
+  );
+
+  const perimeterEdges=new Map();
+
+  const vertexKey=point=>
+    `${Number(point[0]).toFixed(8)},${Number(point[1]).toFixed(8)}`;
+
+  cells.forEach(cell=>{
+    const membershipMetadata=cell.memberships.map(zone=>({
+      zoneId:zone.id,
+      boundaryVersion:zone.boundary_version??null
+    }));
+
+    const layer=L.polygon(
+      cell.points,
+      {
+        ...gridCellStyle(cell.memberships,false),
+        coastloopCellId:cell.id,
+        coastloopMemberships:membershipMetadata
+      }
+    ).addTo(planningGridLayer);
+
+    layer.bindTooltip(
+      cell.memberships.map(zone=>esc(zone.name)).join(' · '),
+      {sticky:true,direction:'top'}
+    );
+
+    layer.on('mouseover',()=>{
+      layer.setStyle(gridCellStyle(cell.memberships,true));
+    });
+
+    layer.on('mouseout',()=>{
+      layer.setStyle(gridCellStyle(cell.memberships,false));
+    });
+
+    layer.on('click',()=>{
+      if(cell.memberships.length!==1) return;
+      const zone=cell.memberships[0];
+      selectedZoneId=zone.id;
+      selectedMarketId=zone.parent_area_id||null;
+      renderGeographyControlCenter();
+      renderProspectMap();
+      requestAnimationFrame(()=>{
+        if(!prospectMap) return;
+        prospectMap.invalidateSize();
+        constrainMapToGeography();
+        fitSelectedZone();
+      });
+    });
+
+    cell.memberships.forEach(zone=>{
+      for(let i=0;i<6;i++){
+        const a=cell.points[i];
+        const b=cell.points[(i+1)%6];
+        const ka=vertexKey(a);
+        const kb=vertexKey(b);
+        const pair=ka<kb?`${ka}|${kb}`:`${kb}|${ka}`;
+        const edgeKey=`${zone.id}|${pair}`;
+        const prior=perimeterEdges.get(edgeKey);
+
+        if(prior){
+          prior.count++;
+        }else{
+          perimeterEdges.set(edgeKey,{
+            count:1,
+            zone,
+            points:[a,b]
+          });
+        }
+      }
+    });
+  });
+
+  const zoom=prospectMap.getZoom();
+  perimeterEdges.forEach(edge=>{
+    if(edge.count!==1) return;
+
+    const selected=
+      String(edge.zone.id||'')===String(selectedZoneId||'');
+
+    L.polyline(edge.points,{
+      interactive:false,
+      color:selected?'#d8b66f':'#9b845d',
+      weight:selected?(zoom>=10?1.8:1.45):(zoom>=10?1.2:1.0),
+      opacity:selected?.90:.62,
+      coastloopMosaicPerimeter:true,
+      coastloopZoneId:edge.zone.id
+    }).addTo(planningGridLayer);
+  });
+}
+
+function applyMapLayerVisibility(){
+  if(!prospectMap) return;
+
+  if(zoneLayer?.setStyle){
+    zoneLayer.setStyle(zoneStyle);
+  }
+
+  const layers={
+    zones:zoneLayer,
+    network:networkLocationLayer,
+    leads:prospectLayer,
+    grid:planningGridLayer
+  };
+
+  Object.entries(layers).forEach(([key,layer])=>{
+    if(!layer) return;
+    const has=prospectMap.hasLayer(layer);
+    if(mapVisibility[key] && !has) layer.addTo(prospectMap);
+    if(!mapVisibility[key] && has) prospectMap.removeLayer(layer);
+  });
+
+  document.querySelectorAll('.zone-map-toggle').forEach(button=>{
+    const key=button.dataset.mapLayer;
+    const active=Boolean(mapVisibility[key]);
+    button.classList.toggle('is-active',active);
+    button.setAttribute('aria-pressed',String(active));
+  });
+
+  renderPlanningGrid();
+}
+
+function fitZoneMap(){
+  if(!prospectMap) return false;
+
+  selectedZoneId=null;
+  selectedMarketId=null;
+  renderGeographyControlCenter();
+
+  prospectMap.setMaxBounds(null);
+
+  const b=geographyLayerBounds(
+    props=>String(props.status||'')==='active'
+  );
+
+  if(b){
+    prospectMap.fitBounds(b,{
+      padding:[42,42],
+      maxZoom:10,
+      animate:false
+    });
+    return true;
+  }
+
+  if(fitLatLngs(geographyLatLngs(),10)) return true;
+
+  prospectMap.setView([31.9,-79.7],6,{animate:false});
+  return false;
+}
+
+function bindZoneMapControls(){
+  document.querySelectorAll('.zone-map-toggle').forEach(button=>{
+    if(button.dataset.bound==='1') return;
+    button.dataset.bound='1';
+    button.addEventListener('click',()=>{
+      const key=button.dataset.mapLayer;
+      if(!(key in mapVisibility)) return;
+      mapVisibility[key]=!mapVisibility[key];
+      applyMapLayerVisibility();
+    });
+  });
+
+  const fit=$('#fitZoneMap');
+  if(fit && fit.dataset.bound!=='1'){
+    fit.dataset.bound='1';
+    fit.addEventListener('click',fitZoneMap);
+  }
+}
+
+async function loadGeographyPackageMemberships(){
+  geographyPackageMemberships=new Map();
+  const packages=Array.isArray(state.onboardingPackages)?state.onboardingPackages:[];
+
+  await Promise.all(packages.map(async pkg=>{
+    if(String(pkg.coverage_mode||'')!=='zones') return;
+    try{
+      const current=await api(
+        `/api/admin/onboarding/packages/${encodeURIComponent(pkg.id)}/zones`
+      );
+      const rows=Array.isArray(current)
+        ? current
+        : (Array.isArray(current?.zones)?current.zones:[]);
+
+      rows.forEach(row=>{
+        const zoneId=String(row.zone_id||'');
+        if(!zoneId) return;
+        if(!geographyPackageMemberships.has(zoneId)){
+          geographyPackageMemberships.set(zoneId,[]);
+        }
+        geographyPackageMemberships.get(zoneId).push(pkg);
+      });
+    }catch(error){
+      console.warn('Package geography unavailable',pkg?.id,error);
+    }
+  }));
+}
+
+function geographyMarkets(){
+  return (networkMapData.areas||[]).filter(
+    area=>String(area.area_type||'')==='market'
+  );
+}
+
+function geographyZonesForMarket(marketId){
+  return (networkMapData.zones||[]).filter(
+    zone=>String(zone.parent_area_id||'')===String(marketId||'')
+  );
+}
+
+function geographyLocationsForZone(zoneId){
+  return (networkMapData.locations||[]).filter(
+    location=>String(location.zone_id||'')===String(zoneId||'')
+  );
+}
+
+function geographyPackagesForZone(zoneId){
+  return geographyPackageMemberships.get(String(zoneId||''))||[];
+}
+
+function geographyPackageLabel(pkg){
+  const name=String(pkg.name||pkg.package_key||'Package');
+  const version=pkg.version==null?'':` v${pkg.version}`;
+  return `${name}${version}`;
+}
+
+function geographyMarketMetrics(market){
+  const zones=geographyZonesForMarket(market.id);
+  const zoneIds=new Set(zones.map(zone=>String(zone.id)));
+  const locations=(networkMapData.locations||[]).filter(
+    location=>zoneIds.has(String(location.zone_id||''))
+  );
+
+  return {
+    zones:zones.length,
+    locations:locations.length,
+    eligibleScreens:zones.reduce(
+      (sum,zone)=>sum+Number(zone.metrics?.eligible_screen_count||0),0
+    ),
+    boundaries:zones.filter(zone=>zone.boundary?.geojson).length
+  };
+}
+
+function renderGeographyOverview(){
+  const el=$('#geoOverview');
+  if(!el) return;
+
+  const markets=geographyMarkets();
+  const zones=networkMapData.zones||[];
+  const mapped=zones.filter(zone=>zone.boundary?.geojson).length;
+  const eligible=zones.reduce(
+    (sum,zone)=>sum+Number(zone.metrics?.eligible_screen_count||0),0
+  );
+
+  el.innerHTML=`
+    <div><strong>${markets.length}</strong><span>Markets</span></div>
+    <div><strong>${zones.length}</strong><span>Zones</span></div>
+    <div><strong>${mapped}</strong><span>Boundaries</span></div>
+    <div><strong>${eligible}</strong><span>Eligible screens</span></div>`;
+}
+
+function renderGeographyTree(){
+  const el=$('#geoTree');
+  if(!el) return;
+
+  const markets=geographyMarkets();
+
+  if(!markets.length){
+    el.innerHTML='<div class="muted">No Markets exist yet.</div>';
+    return;
+  }
+
+  el.innerHTML=markets.map(market=>{
+    const zones=geographyZonesForMarket(market.id);
+    const metrics=geographyMarketMetrics(market);
+    const marketSelected=String(selectedMarketId||'')===String(market.id);
+
+    return `
+      <div class="geo-market">
+        <button type="button"
+          class="geo-market-button ${marketSelected?'is-selected':''}"
+          data-geo-market="${esc(market.id)}">
+          <span class="geo-market-title">
+            <strong>${esc(market.name||'Unnamed Market')}</strong>
+            <span class="geo-meta">
+              ${esc(market.status||'unknown')} ·
+              ${metrics.zones} Zone${metrics.zones===1?'':'s'} ·
+              ${metrics.locations} location${metrics.locations===1?'':'s'} ·
+              ${metrics.eligibleScreens} eligible screen${metrics.eligibleScreens===1?'':'s'}
+            </span>
+          </span>
+          <span class="geo-chip">${metrics.boundaries}/${metrics.zones} mapped</span>
+        </button>
+        <div class="geo-zone-list">
+          ${zones.map(zone=>{
+            const selected=String(selectedZoneId||'')===String(zone.id);
+            const hasBoundary=Boolean(zone.boundary?.geojson);
+            const metrics=zone.metrics||{};
+            const packages=geographyPackagesForZone(zone.id);
+
+            return `
+              <button type="button"
+                class="geo-zone-button ${selected?'is-selected':''}"
+                data-geo-zone="${esc(zone.id)}">
+                <span class="geo-zone-title">
+                  <strong>${esc(zone.name||'Unnamed Zone')}</strong>
+                  <span class="geo-meta">
+                    ${esc(zone.status||'unknown')} ·
+                    ${Number(metrics.location_count||0)} location${Number(metrics.location_count||0)===1?'':'s'} ·
+                    ${Number(metrics.eligible_screen_count||0)} eligible screen${Number(metrics.eligible_screen_count||0)===1?'':'s'}
+                  </span>
+                </span>
+                <span class="geo-zone-flags">
+                  <span class="geo-chip ${hasBoundary?'good':'muted'}">
+                    ${hasBoundary?'Boundary defined':'Boundary not defined'}
+                  </span>
+                  ${packages.length
+                    ? `<span class="geo-chip">${packages.length} package${packages.length===1?'':'s'}</span>`
+                    : ''}
+                </span>
+              </button>`;
+          }).join('') || '<div class="muted tiny" style="padding:12px">No Zones in this Market.</div>'}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function renderGeographySelection(){
+  const el=$('#geoSelection');
+  if(!el) return;
+
+  const zone=(networkMapData.zones||[]).find(
+    item=>String(item.id)===String(selectedZoneId||'')
+  );
+
+  if(zone){
+    const market=(networkMapData.areas||[]).find(
+      area=>String(area.id)===String(zone.parent_area_id||'')
+    );
+    const metrics=zone.metrics||{};
+    const packages=geographyPackagesForZone(zone.id);
+    const locations=geographyLocationsForZone(zone.id);
+    const hasBoundary=Boolean(zone.boundary?.geojson);
+
+    el.innerHTML=`
+      <div class="geo-selection-grid">
+        <div>
+          <div class="ops-kicker">ZONE</div>
+          <h3>${esc(zone.name||'Unnamed Zone')}</h3>
+          <div class="muted">
+            ${esc(market?.name||'No parent Market')} ·
+            ${esc(zone.status||'unknown')}
+          </div>
+          <div class="geo-detail-metrics">
+            <div><strong>${Number(metrics.location_count||0)}</strong><span>Locations</span></div>
+            <div><strong>${Number(metrics.eligible_screen_count||0)}</strong><span>Eligible screens</span></div>
+            <div><strong>${Number(metrics.online_screen_count||0)}</strong><span>Online screens</span></div>
+          </div>
+        </div>
+        <div>
+          <strong>Boundary</strong>
+          <div class="muted" style="margin-top:5px">
+            ${hasBoundary
+              ? `Defined · active version ${esc(zone.boundary?.version??'—')}`
+              : 'Boundary not defined'}
+          </div>
+          <strong style="display:block;margin-top:14px">Included in packages</strong>
+          <div class="geo-package-list">
+            ${packages.length
+              ? packages.map(pkg=>`<span class="geo-chip">${esc(geographyPackageLabel(pkg))}</span>`).join('')
+              : '<span class="muted tiny">No Zone-based package memberships.</span>'}
+          </div>
+          <strong style="display:block;margin-top:14px">Inventory</strong>
+          <div class="muted tiny" style="margin-top:5px">
+            ${locations.length
+              ? locations.map(location=>esc(location.name||'Unnamed location')).join(' · ')
+              : 'No locations assigned to this Zone.'}
+          </div>
+        </div>
+      </div>`;
+    return;
+  }
+
+  const market=(networkMapData.areas||[]).find(
+    area=>String(area.id)===String(selectedMarketId||'')
+  );
+
+  if(market){
+    const metrics=geographyMarketMetrics(market);
+    el.innerHTML=`
+      <div class="ops-kicker">MARKET</div>
+      <h3>${esc(market.name||'Unnamed Market')}</h3>
+      <div class="muted">${esc(market.status||'unknown')}</div>
+      <div class="geo-detail-metrics">
+        <div><strong>${metrics.zones}</strong><span>Zones</span></div>
+        <div><strong>${metrics.locations}</strong><span>Locations</span></div>
+        <div><strong>${metrics.eligibleScreens}</strong><span>Eligible screens</span></div>
+      </div>`;
+    return;
+  }
+
+  el.innerHTML='<div class="muted">Select a Market or Zone to inspect its inventory and package relationships.</div>';
+}
+
+function hydrateGeographyCreateForms(){
+  const marketForm=$('#newGeographyMarket');
+  const zoneForm=$('#newGeographyZone');
+  if(!marketForm||!zoneForm) return;
+
+  const areas=(networkMapData.areas||[]).filter(
+    area=>String(area.status||'')!=='retired'
+  );
+  const markets=geographyMarkets().filter(
+    market=>String(market.status||'')!=='retired'
+  );
+
+  const parentSelect=marketForm.elements.parent_id;
+  const zoneMarketSelect=zoneForm.elements.parent_area_id;
+
+  if(parentSelect){
+    parentSelect.innerHTML=
+      '<option value="">No parent area</option>'+
+      areas.map(area=>
+        `<option value="${esc(area.id)}">${esc(area.name)} · ${esc(area.area_type)}</option>`
+      ).join('');
+  }
+
+  if(zoneMarketSelect){
+    zoneMarketSelect.innerHTML=
+      '<option value="">Choose Market…</option>'+
+      markets.map(market=>
+        `<option value="${esc(market.id)}">${esc(market.name)}</option>`
+      ).join('');
+  }
+}
+
+function renderGeographyControlCenter(){
+  renderGeographyOverview();
+  renderGeographyTree();
+  renderGeographySelection();
+  hydrateGeographyCreateForms();
+  bindGeographyControls();
+}
+
+function geographyLatLngs(zoneId=null,marketId=null){
+  const zoneIds=marketId
+    ?new Set((networkMapData.zones||[])
+      .filter(z=>String(z.parent_area_id||'')===String(marketId))
+      .map(z=>String(z.id)))
+    :null;
+  return (networkMapData.locations||[]).flatMap(location=>{
+    if(zoneId && String(location.zone_id||'')!==String(zoneId)) return [];
+    if(zoneIds && !zoneIds.has(String(location.zone_id||''))) return [];
+    const lat=Number(location.latitude);
+    const lon=Number(location.longitude);
+    return Number.isFinite(lat)&&Number.isFinite(lon)?[[lat,lon]]:[];
+  });
+}
+
+function geographyLayerBounds(filterFn=null){
+  if(!zoneLayer || !window.L) return null;
+  let bounds=null;
+  zoneLayer.eachLayer(layer=>{
+    const props=layer.feature?.properties||{};
+    if(filterFn && !filterFn(props)) return;
+    const b=layer.getBounds?.();
+    if(!b?.isValid?.()) return;
+    if(!bounds) bounds=L.latLngBounds(b);
+    else bounds.extend(b);
+  });
+  return bounds?.isValid?.()?bounds:null;
+}
+
+function fitLatLngs(points,maxZoom=14){
+  if(!prospectMap || !window.L || !points.length) return false;
+  if(points.length===1){
+    prospectMap.setView(points[0],Math.min(maxZoom,13),{animate:false});
+    return true;
+  }
+  const bounds=L.latLngBounds(points);
+  if(!bounds.isValid()) return false;
+  prospectMap.fitBounds(bounds,{padding:[52,52],maxZoom,animate:false});
+  return true;
+}
+
+function fitSelectedMarket(){
+  if(!selectedMarketId) return false;
+  const b=geographyLayerBounds(
+    props=>String(props.parent_area_id||'')===String(selectedMarketId)
+  );
+  if(b){
+    prospectMap.fitBounds(b,{padding:[52,52],maxZoom:13,animate:false});
+    return true;
+  }
+  return fitLatLngs(geographyLatLngs(null,selectedMarketId),13);
+}
+
+function fitGeographyContext(){
+  if(!prospectMap) return false;
+  if(fitSelectedZone()) return true;
+  if(fitSelectedMarket()) return true;
+  const b=geographyLayerBounds();
+  if(b){
+    prospectMap.fitBounds(b,{padding:[56,56],maxZoom:12,animate:false});
+    return true;
+  }
+  if(fitLatLngs(geographyLatLngs(),12)) return true;
+  prospectMap.setView([33.816,-78.680],11,{animate:false});
+  return false;
+}
+
+function constrainMapToGeography(){
+  if(!prospectMap || !window.L) return;
+  let bounds=selectedMarketId
+    ?geographyLayerBounds(props=>String(props.parent_area_id||'')===String(selectedMarketId))
+    :geographyLayerBounds();
+  const points=geographyLatLngs(null,selectedMarketId||null);
+  if(!bounds && points.length) bounds=L.latLngBounds(points);
+  else if(bounds && points.length) points.forEach(point=>bounds.extend(point));
+  prospectMap.setMaxBounds(bounds?.isValid?.()?bounds.pad(.40):null);
+}
+
+function bindGeographyControls(){
+  const tree=$('#geoTree');
+  const marketForm=$('#newGeographyMarket');
+  const zoneForm=$('#newGeographyZone');
+
+  if(tree && !tree.dataset.geoBound){
+    tree.dataset.geoBound='1';
+    tree.addEventListener('click',event=>{
+      const zoneButton=event.target.closest('[data-geo-zone]');
+      const marketButton=event.target.closest('[data-geo-market]');
+      if(zoneButton){
+        const zone=(networkMapData.zones||[]).find(
+          row=>String(row.id)===String(zoneButton.dataset.geoZone||'')
+        );
+        if(!zone) return;
+        selectedZoneId=zone.id;
+        selectedMarketId=zone.parent_area_id||null;
+      }else if(marketButton){
+        selectedMarketId=marketButton.dataset.geoMarket||null;
+        selectedZoneId=null;
+      }else return;
+
+      renderGeographyControlCenter();
+      renderProspectMap();
+      requestAnimationFrame(()=>{
+        if(!prospectMap) return;
+        prospectMap.invalidateSize();
+        constrainMapToGeography();
+        fitGeographyContext();
+      });
+    });
+  }
+
+  if(marketForm && !marketForm.dataset.geoBound){
+    marketForm.dataset.geoBound='1';
+    marketForm.addEventListener('submit',async event=>{
+      event.preventDefault();
+      const message=marketForm.querySelector('[data-geo-message="market"]');
+      const form=new FormData(marketForm);
+      const parent=String(form.get('parent_id')||'').trim()||null;
+      const payload={
+        name:String(form.get('name')||'').trim(),
+        area_type:'market',
+        status:String(form.get('status')||'draft'),
+        parent_id:parent,
+        parent_area_id:parent
+      };
+      if(!payload.name){
+        if(message) message.textContent='Market name is required.';
+        return;
+      }
+      try{
+        if(message) message.textContent='Creating Market…';
+        await api('/api/admin/geography/areas',{
+          method:'POST',body:JSON.stringify(payload)
+        });
+        marketForm.reset();
+        if(message) message.textContent='Market created.';
+        await loadNetworkMap(true);
+      }catch(error){
+        if(message) message.textContent=error.message||'Unable to create Market.';
+      }
+    });
+  }
+
+  if(zoneForm && !zoneForm.dataset.geoBound){
+    zoneForm.dataset.geoBound='1';
+    zoneForm.addEventListener('submit',async event=>{
+      event.preventDefault();
+      const message=zoneForm.querySelector('[data-geo-message="zone"]');
+      const form=new FormData(zoneForm);
+      const payload={
+        parent_area_id:String(form.get('parent_area_id')||'').trim(),
+        name:String(form.get('name')||'').trim(),
+        status:String(form.get('status')||'draft')
+      };
+      if(!payload.parent_area_id || !payload.name){
+        if(message) message.textContent='Market and Zone name are required.';
+        return;
+      }
+      try{
+        if(message) message.textContent='Creating Zone…';
+        await api('/api/admin/geography/zones',{
+          method:'POST',body:JSON.stringify(payload)
+        });
+        zoneForm.reset();
+        if(message) message.textContent='Zone created. Boundary not defined.';
+        await loadNetworkMap(true);
+      }catch(error){
+        if(message) message.textContent=error.message||'Unable to create Zone.';
+      }
+    });
+  }
+}
+
+function fitSelectedZone(){
+  if(!prospectMap||!selectedZoneId) return false;
+  const b=geographyLayerBounds(
+    props=>String(props.id||'')===String(selectedZoneId)
+  );
+  if(b){
+    prospectMap.fitBounds(b,{padding:[52,52],maxZoom:15,animate:false});
+    return true;
+  }
+  return fitLatLngs(geographyLatLngs(selectedZoneId,null),14);
+}
+
+async function loadNetworkMap(force=false){
+  if(force){
+    networkMapLoaded=false;
+    mapInitialFitDone=false;
+  }
+  if(networkMapLoaded || networkMapLoading) return;
+
+  networkMapLoading=true;
+  zoneMapSummary();
+
+  try{
+    const [geography,mapProjection]=await Promise.all([
+      api('/api/admin/geography'),
+      api('/api/admin/network-map')
+    ]);
+
+    const projectedZones=new Map(
+      (Array.isArray(mapProjection?.zones)?mapProjection.zones:[])
+        .map(zone=>[String(zone.id),zone])
+    );
+
+    networkMapData={
+      areas:Array.isArray(geography?.areas)?geography.areas:[],
+      zones:(Array.isArray(geography?.zones)?geography.zones:[]).map(zone=>{
+        const projected=projectedZones.get(String(zone.id))||{};
+        return {
+          ...zone,
+          boundary_geojson:projected.boundary_geojson||zone.boundary?.geojson||null,
+          boundary_version:projected.boundary_version??zone.boundary?.version??null,
+          boundary_status:projected.boundary_status??zone.boundary?.status??null,
+          draft_version:projected.draft_version??null,
+          location_count:projected.location_count??zone.metrics?.location_count??0,
+          screen_count:projected.screen_count??0,
+          commercial_screen_count:projected.commercial_screen_count??zone.metrics?.eligible_screen_count??0,
+          online_screen_count:projected.online_screen_count??zone.metrics?.online_screen_count??0
+        };
+      }),
+      locations:Array.isArray(mapProjection?.locations)
+        ?mapProjection.locations
+        :(Array.isArray(geography?.locations)?geography.locations:[]),
+      screens:Array.isArray(geography?.screens)?geography.screens:[],
+      totals:geography?.totals||{}
+    };
+
+    const markets=geographyMarkets();
+    if(selectedMarketId && !markets.some(m=>String(m.id)===String(selectedMarketId))){
+      selectedMarketId=null;
+      selectedZoneId=null;
+    }
+
+    await loadGeographyPackageMemberships();
+    networkMapLoaded=true;
+    renderGeographyControlCenter();
+  }catch(error){
+    const el=$('#zoneMapSummary');
+    if(el) el.textContent=`Zone geography unavailable · ${error.message}`;
+    const tree=$('#geoTree');
+    if(tree) tree.innerHTML=`<div class="muted">Geography unavailable · ${esc(error.message||'request failed')}</div>`;
+  }finally{
+    networkMapLoading=false;
+    renderProspectMap();
+  }
+}
+
 function renderProspectMap(){
-  if(!window.L || !document.querySelector('#prospectMap')) return;
+  const mapEl=document.querySelector('#prospectMap');
+  if(!window.L || !mapEl) return;
+  if(!prospectMap && (!mapEl.offsetWidth || !mapEl.offsetHeight)) return;
 
   if(!prospectMap){
-    prospectMap=L.map('prospectMap').setView([33.816,-78.680],11);
+    prospectMap=L.map('prospectMap',{
+      zoomControl:true,
+      inertia:false,
+      worldCopyJump:false,
+      maxBoundsViscosity:1,
+      zoomAnimation:false,
+      fadeAnimation:false,
+      markerZoomAnimation:false
+    }).setView([33.816,-78.680],11);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
       maxZoom:19,
       attribution:'&copy; OpenStreetMap'
     }).addTo(prospectMap);
+
+    zoneLayer=L.geoJSON([],{
+      style:zoneStyle,
+      onEachFeature:(feature,layer)=>{
+        const props=feature.properties||{};
+        layer.bindTooltip(props.name||'CoastLoop Zone',{
+          permanent:true,
+          direction:'center',
+          className:'zone-map-label'
+        });
+        layer.on('click',()=>{
+          selectedZoneId=props.id;
+          selectedMarketId=props.parent_area_id||null;
+          renderGeographyControlCenter();
+          renderProspectMap();
+          requestAnimationFrame(()=>{
+            if(!prospectMap) return;
+            prospectMap.invalidateSize();
+            constrainMapToGeography();
+            fitSelectedZone();
+          });
+        });
+      }
+    }).addTo(prospectMap);
+
+    networkLocationLayer=L.layerGroup().addTo(prospectMap);
     prospectLayer=L.layerGroup().addTo(prospectMap);
+    planningGridLayer=L.layerGroup();
+
+    prospectMap.on('zoomend',()=>{
+      if(mapVisibility.grid) renderPlanningGrid();
+    });
   }
 
-  prospectLayer.clearLayers();
-  const points=[];
+  bindZoneMapControls();
 
-  state.prospects.forEach(p=>{
-    const lat=Number(p.latitude), lon=Number(p.longitude);
+  zoneLayer.clearLayers();
+  (networkMapData.zones||[]).forEach(zone=>{
+    if(!zone.boundary_geojson) return;
+    zoneLayer.addData({
+      type:'Feature',
+      geometry:zone.boundary_geojson,
+      properties:{
+        id:zone.id,
+        name:zone.name,
+        status:zone.status,
+        parent_area_id:zone.parent_area_id||null,
+        boundary_status:zone.boundary_status
+      }
+    });
+  });
+
+  if(mapVisibility.grid) renderPlanningGrid(); // GRID_SNAP_REPAINT_V79
+
+  networkLocationLayer.clearLayers();
+  (networkMapData.locations||[]).forEach(location=>{
+    const lat=Number(location.latitude);
+    const lon=Number(location.longitude);
+    if(!Number.isFinite(lat)||!Number.isFinite(lon)) return;
+
+    const assignedZone=(networkMapData.zones||[]).find(
+      zone=>String(zone.id||'')===String(location.zone_id||'')
+    )||null;
+
+    const spatialZone=(networkMapData.zones||[]).find(
+      zone=>zone.boundary_geojson &&
+        pointInGeometry(lat,lon,zone.boundary_geojson)
+    )||null;
+
+    const businessName=location.business_name||location.name||'CoastLoop location';
+    const screenCount=Number(location.screen_count||0);
+    const commercialCount=Number(location.commercial_screen_count||0);
+    const onlineCount=Number(location.online_screen_count||0);
+
+    const markerColor=assignedZone
+      ?'#67d391'
+      :(spatialZone?'#d8b66f':'#8ebcf5');
+
+    const marker=L.circleMarker([lat,lon],{
+      radius:Math.min(10,6+Math.sqrt(Math.max(0,screenCount))),
+      weight:2,
+      color:markerColor,
+      fillColor:markerColor,
+      fillOpacity:.78
+    }).addTo(networkLocationLayer);
+
+    const roles=[
+      location.business_is_host?'Host':null,
+      location.business_is_advertiser?'Advertiser':null
+    ].filter(Boolean).join(' + ')||'Business';
+
+    marker.bindTooltip(esc(businessName),{
+      direction:'top',
+      offset:[0,-6]
+    });
+
+    marker.bindPopup(
+      `<strong>${esc(businessName)}</strong><br>`+
+      `${location.business_category?`${esc(location.business_category)} · `:''}${esc(roles)}<br>`+
+      `${esc(networkLocationAddress(location)||'Address not set')}<br>`+
+      `<span class="pill">Spatial: ${esc(spatialZone?.name||'Outside mapped Zones')}</span> `+
+      `<span class="pill">Sellable Zone: ${esc(assignedZone?.name||'Unassigned')}</span><br>`+
+      `${screenCount} screen${screenCount===1?'':'s'} · `+
+      `${commercialCount} commercial · ${onlineCount} online`+
+      `${location.host_status?`<br>Host status: ${esc(location.host_status)}`:''}`
+    );
+  });
+
+  prospectLayer.clearLayers();
+  const prospectPoints=[];
+  (state.prospects||[]).forEach(p=>{
+    const lat=Number(p.latitude);
+    const lon=Number(p.longitude);
     if(!Number.isFinite(lat)||!Number.isFinite(lon)) return;
 
     const marker=L.marker([lat,lon]).addTo(prospectLayer);
@@ -474,11 +1709,18 @@ function renderProspectMap(){
       `<span class="pill">${esc(p.stage)}</span> Score ${p.score??'—'}<br>`+
       `<a target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(lat+','+lon)}">Navigate</a>`
     );
-    points.push([lat,lon]);
+    prospectPoints.push([lat,lon]);
   });
 
-  if(points.length===1) prospectMap.setView(points[0],14);
-  if(points.length>1) prospectMap.fitBounds(points,{padding:[30,30]});
+  zoneMapSummary();
+  applyMapLayerVisibility();
+
+  if(networkMapLoaded && !mapInitialFitDone){
+    fitZoneMap();
+    mapInitialFitDone=true;
+  }
+
+  if(!networkMapLoaded && !networkMapLoading) loadNetworkMap();
 
   setTimeout(()=>prospectMap.invalidateSize(),50);
 }
@@ -520,13 +1762,14 @@ async function load(){
 
   try {
     const [
-      stats,screens,media,playlists,prospects,businesses,onboarding,onboardingPackages,
+      stats,screens,media,creativeJobs,playlists,prospects,businesses,onboarding,onboardingPackages,
       campaigns,campaignReports,userDirectory,finance,
       billingConfig,billingInvoices,billingTransactions,billingPayouts,auditEvents,authConfig
     ] = await Promise.all([
       api('/api/admin/stats'),
       api('/api/admin/screens'),
       api('/api/admin/media'),
+      api('/api/admin/creative-jobs'),
       api('/api/admin/playlists'),
       api('/api/admin/prospects'),
       api('/api/admin/businesses'),
@@ -545,7 +1788,7 @@ async function load(){
     ]);
 
     Object.assign(state,{
-      screens,media,playlists,prospects,businesses,onboarding,onboardingPackages,
+      screens,media,creativeJobs,playlists,prospects,businesses,onboarding,onboardingPackages,
       campaigns,campaignReports,userDirectory,finance,
       billingConfig,billingInvoices,billingTransactions,billingPayouts,auditEvents,authConfig
     });
@@ -559,6 +1802,7 @@ async function load(){
     $('#mProspects').textContent=prospects.length;
     $('#mBusinesses').textContent=businesses.length;
     renderDigitalOnboarding();
+    await hydratePackageZoneEditors();
     $('#mUsers').textContent=(userDirectory.users||[]).length;
     $('#fRevenue').textContent=money(finance.booked_revenue_cents);
     $('#fCommission').textContent=money(finance.broker_commission_cents);
@@ -953,25 +2197,72 @@ function render(){
     <td><input class="p-follow" type="datetime-local" value="${p.next_follow_up_at ? new Date(p.next_follow_up_at).toISOString().slice(0,16) : ''}"></td>
     <td><div class="row"><button class="save-prospect">Save</button>${p.stage==='won'?'':`<button class="secondary promote-prospect">Promote</button>`}</div></td>
   </tr>`).join('') || '<tr><td colspan="7" class="muted">No prospects yet.</td></tr>';
-  $('#businesses').innerHTML = state.businesses.map(b=>`
+  const capabilityAgreements=Array.isArray(state.onboarding?.agreements)
+    ? state.onboarding.agreements : [];
+  const capabilityOrders=Array.isArray(state.onboarding?.advertiser_orders)
+    ? state.onboarding.advertiser_orders : [];
+
+  $('#businesses').innerHTML = state.businesses.map(b=>{
+    const hostAgreement=capabilityAgreements.find(a=>
+      a.business_id===b.id &&
+      a.template_family==="venue_partner"
+    );
+    const advertiserOrder=capabilityOrders.find(o=>
+      o.advertiser_business_id===b.id
+    );
+
+    const hostPending=!b.is_host &&
+      hostAgreement &&
+      !hostAgreement.signed_at &&
+      ["prepared","sent","viewed"].includes(hostAgreement.status);
+
+    const advertiserPending=!b.is_advertiser &&
+      advertiserOrder &&
+      ["prepared","sent","viewed","accepted","payment_pending"].includes(advertiserOrder.status);
+
+    const hostStatus=b.is_host?"ACTIVE":hostPending?"PENDING":"OFF";
+    const advertiserStatus=b.is_advertiser?"ACTIVE":advertiserPending?"PENDING":"OFF";
+
+    const hostSource=hostAgreement
+      ? `Venue agreement · ${esc(hostAgreement.status||"unknown")}`
+      : "No venue agreement";
+
+    const advertiserSource=advertiserOrder
+      ? `Advertising order · ${esc(advertiserOrder.status||"unknown")}`
+      : "No advertising order";
+
+    return `
     <div class="media-item">
       <div class="row">
         <div>
           <strong>${esc(b.name)}</strong>
           <span class="pill">${esc(b.category||'business')}</span>
-          <span class="pill">${b.is_host&&b.is_advertiser?'HOST · ADVERTISER':b.is_host?'HOST':'ADVERTISER'}</span>
+          <span class="pill">HOST ${hostStatus}</span>
+          <span class="pill">ADVERTISER ${advertiserStatus}</span>
           <div class="muted">${esc(b.contact_name||'')}${b.phone?' · '+esc(b.phone):''}${b.email?' · '+esc(b.email):''}</div>
+          <div class="muted">${hostSource} · ${advertiserSource}</div>
         </div>
         <div class="muted">${(b.locations||[]).length} location${(b.locations||[]).length===1?'':'s'}</div>
       </div>
       ${(b.locations||[]).map(l=>`<div class="muted">${esc([l.address_line1,l.city,l.state].filter(Boolean).join(', '))} · ${esc(l.host_status||'')}</div>`).join('')}
-    </div>`).join('') || '<div class="muted">No customers yet. Promote a prospect when they convert.</div>';
+    </div>`;
+  }).join('') || '<div class="muted">No customers yet. Promote a prospect when they convert.</div>';
 
   $('#campaignBusiness').innerHTML = '<option value="">Choose advertiser…</option>' +
     state.businesses.filter(b=>b.is_advertiser).map(b=>`<option value="${b.id}">${esc(b.name)}</option>`).join('');
 
   $('#mediaBusiness').innerHTML = '<option value="">House / internal</option>' +
     state.businesses.filter(b=>b.is_advertiser).map(b=>`<option value="${b.id}">${esc(b.name)}</option>`).join('');
+
+  $('#creativeBusiness').innerHTML = '<option value="">House / internal</option>' +
+    state.businesses.filter(b=>b.is_advertiser).map(b=>`<option value="${b.id}">${esc(b.name)}</option>`).join('');
+
+  $('#creativeJobs').innerHTML = (state.creativeJobs||[]).map(j=>`
+    <div class="media-item">
+      <strong>${esc(j.metadata?.title||'Generated creative')}</strong>
+      <span class="pill">${esc(j.status)}</span>
+      <div class="muted">${esc((j.prompt||'').slice(0,180))}</div>
+    </div>`).join('') || '<div class="muted">No generated creative jobs yet.</div>';
 
   renderScheduling();
 
@@ -1371,6 +2662,18 @@ $('#inviteUser').onsubmit=async e=>{
     $('#inviteMessage').textContent=err.message;
   }
 };
+$('#creativeRequest').onsubmit=async e=>{
+  e.preventDefault();
+  const f=new FormData(e.target);
+  await api('/api/admin/creative-jobs',{
+    method:'POST',
+    headers:{'content-type':'application/json'},
+    body:JSON.stringify(Object.fromEntries(f))
+  });
+  e.target.reset();
+  await load();
+};
+
 $('#upload').onsubmit=async e=>{ e.preventDefault(); try { await api('/api/admin/media',{method:'POST',body:new FormData(e.target)}); e.target.reset(); await load(); } catch(err){ $('#error').textContent=err.message; } };
 
 const mediaPreviewDialog=$('#mediaPreviewDialog');
@@ -1697,7 +3000,15 @@ document.addEventListener('click', async e=>{
   }
 });
 
-load(); setInterval(load,30000);
+load();
+
+let adminRefreshTimer=setInterval(()=>{
+  if(!document.hidden) load();
+},120000);
+
+document.addEventListener("visibilitychange",()=>{
+  if(!document.hidden) load();
+});
 
 
 $('#routeHot').onclick=routeProspects;
@@ -1891,6 +3202,31 @@ $('#downloadCampaignReport').onclick=()=>{
 };
 
 
+document.addEventListener('click',async e=>{
+  const saveZonesButton=e.target?.closest?.('[data-save-package-zones]');
+  if(!saveZonesButton) return;
+
+  e.preventDefault();
+  const packageId=saveZonesButton.dataset.savePackageZones;
+  const selected=[...document.querySelectorAll(
+    `[data-package-zone-choice="${CSS.escape(packageId)}"]:checked`
+  )].map(input=>({zone_id:input.value,delivery_weight:1}));
+
+  saveZonesButton.disabled=true;
+  try{
+    await api(`/api/admin/onboarding/packages/${encodeURIComponent(packageId)}/zones`,{
+      method:'PUT',
+      headers:{'content-type':'application/json'},
+      body:JSON.stringify({zones:selected})
+    });
+    await hydratePackageZoneEditors();
+  }catch(error){
+    alert(error.message||'Could not save package Zones');
+  }finally{
+    saveZonesButton.disabled=false;
+  }
+});
+
 document.addEventListener('submit',async e=>{
   if(e.target?.id==='packageCreateForm'){
     e.preventDefault();
@@ -1901,6 +3237,7 @@ document.addEventListener('submit',async e=>{
       version:Number(f.get('version')),
       price_cents:Number(f.get('price_cents')),
       market:f.get('market'),
+      coverage_mode:String(f.get('coverage_mode')||'legacy'),
       term_days:f.get('term_days')?Number(f.get('term_days')):null,
       ad_length_seconds:f.get('ad_length_seconds')?Number(f.get('ad_length_seconds')):15,
       frequency_label:f.get('frequency_label'),
@@ -2241,8 +3578,10 @@ function applyAdminWorkspaceOwnership(groups){
       sectionOf('screens'),
       sectionOf('scheduling')
     ],
+    geography:[
+      sectionOf('prospectMap')
+    ],
     sales:[
-      sectionOf('prospectMap'),
       sectionOf('newProspect'),
       sectionOf('prospects'),
       sectionOf('businesses'),
@@ -2303,6 +3642,7 @@ function initAdminSidebar(){
   const labels={
     today:['Today','Your CoastLoop command center'],
     network:['Hosts & Screens','Locations, screens, pairing and playback'],
+    geography:['Geography','Markets, Zones, boundaries and inventory'],
     sales:['Advertisers','Prospects, orders, campaigns and delivery'],
     creative:['Creative','Media library, approvals and campaign assets'],
     finance:['Finance','Billing, invoices, compensation and commissions'],
@@ -2369,6 +3709,18 @@ Object.entries(groups).forEach(([name,nodes])=>{
         node.classList.toggle('admin-workspace-hidden',name!==key);
       });
     });
+
+    if(key==='geography'){
+      requestAnimationFrame(()=>{
+        renderProspectMap();
+        requestAnimationFrame(()=>{
+          if(!prospectMap) return;
+          prospectMap.invalidateSize();
+          constrainMapToGeography();
+          fitGeographyContext();
+        });
+      });
+    }
 
     links.forEach(a=>{
       const active=a.getAttribute('href')==='#'+key;
@@ -2524,3 +3876,10 @@ if(document.readyState==="loading"){
 }else{
   initPlatformTermsAdmin();
 }
+
+document.querySelectorAll('.admin-nav .cl-side-link').forEach(link=>{
+  link.addEventListener('click',()=>{
+    document.querySelectorAll('.admin-nav .cl-side-link').forEach(x=>x.classList.remove('is-active'));
+    link.classList.add('is-active');
+  });
+});

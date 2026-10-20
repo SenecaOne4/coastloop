@@ -5,25 +5,45 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>CoastLoop Broker Desk</title>
 <link rel="stylesheet" href="/styles.css">
+<link rel="stylesheet" href="/coastloop-ui.css">
 </head>
-<body class="broker-app">
-<main class="shell">
-<nav class="broker-nav" aria-label="Broker dashboard">
-  <a href="#pipeline">Pipeline</a>
-  <a href="#customers">Customers</a>
-  <a href="#campaign-sales">Campaigns</a>
-  <a href="#commissions">Commissions</a>
-</nav>
-<header class="topbar">
+<body class="broker-app cl-ui cl-app-body">
+<div class="cl-app-shell cl-ops-shell">
+<aside class="cl-sidebar cl-ops-sidebar">
+  <div class="cl-workspace-wrap">
+    <a class="cl-workspace-button cl-workspace-link" href="/broker">
+      <span class="cl-workspace-avatar"><img src="/brand/coastloop-mark.svg" alt=""></span>
+      <span class="cl-workspace-copy"><strong>CoastLoop</strong><small>Broker workspace</small></span>
+      <span class="cl-menu-chevrons">••</span>
+    </a>
+  </div>
+  <nav class="cl-side-nav broker-nav" aria-label="Broker dashboard">
+    <a class="cl-side-link is-active" href="#pipeline"><span class="cl-side-icon"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 5.5h4v4h-4ZM12.5 10.5h4v4h-4ZM7.5 7.5h2.5a2 2 0 0 1 2 2v3"/></svg></span><span>Pipeline</span></a>
+    <a class="cl-side-link" href="#customers"><span class="cl-side-icon"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="7" r="3"/><path d="M4.5 16c.6-3.1 2.4-4.7 5.5-4.7s4.9 1.6 5.5 4.7"/></svg></span><span>Customers</span></a>
+    <a class="cl-side-link" href="#campaign-sales"><span class="cl-side-icon"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 7h3l7-3v12l-7-3H4Z"/><path d="M7 13v3.5"/></svg></span><span>Campaigns</span></a>
+    <a class="cl-side-link" href="#commissions"><span class="cl-side-icon"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M13.5 6.5c-.8-1-2-1.5-3.5-1.5-2 0-3.5 1-3.5 2.5S8 10 10 10s3.5 1 3.5 2.5S12 15 10 15c-1.6 0-2.9-.6-3.7-1.7M10 3.5v13"/></svg></span><span>Commissions</span></a>
+  </nav>
+  <div class="cl-sidebar-bottom">
+    <a class="cl-side-link cl-side-muted" href="/portal"><span class="cl-side-icon"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M15.5 10h-11M9 5.5 4.5 10 9 14.5"/></svg></span><span>Customer portal</span></a>
+    <div class="cl-user-wrap cl-ops-user">
+      <div class="cl-user-button cl-user-static">
+        <span class="cl-user-avatar">B</span>
+        <span class="cl-user-copy"><strong>Broker</strong><small id="brokerWho"></small></span>
+        <span class="cl-user-more">•••</span>
+      </div>
+      <div class="cl-ops-user-actions">
+        <button id="accountButton" type="button" aria-label="Account settings" title="Account settings">Account</button>
+        <button id="logoutButton" type="button" aria-label="Sign out" title="Sign out">Sign out</button>
+      </div>
+    </div>
+  </div>
+</aside>
+<main class="shell cl-ops-main">
+<header class="topbar cl-ops-topbar">
   <div>
-    <div class="eyebrow">COASTLOOP · BROKER DESK</div>
+    <div class="eyebrow">BROKER DESK</div>
     <h1>Sell screens. Sell airtime.</h1>
     <p class="muted">Your leads, customers, campaigns, and commissions — nothing technical.</p>
-  </div>
-  <div class="row top-actions">
-    <span id="brokerWho" class="muted"></span>
-    <button id="accountButton" class="secondary">My account</button>
-    <button id="logoutButton" class="secondary">Sign out</button>
   </div>
 </header>
 
@@ -125,6 +145,7 @@
   <div id="campaigns" class="campaign-list"></div>
 </section>
 </main>
+</div>
 
 <script type="module" src="/broker.js"></script>
 <script src="/legal-gate.js"></script>

@@ -3,130 +3,102 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Advertise with CoastLoop</title>
-<meta name="description" content="Put your business on the CoastLoop network.">
+<meta name="theme-color" content="#0a0a0a">
+<title>Advertise on CoastLoop</title>
+<meta name="description" content="Put your business on CoastLoop screens. Choose your plan and get started.">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/styles.css">
-<style>
-body{margin:0;background:#08090b;color:#f5f3ef}
-.ad-shell{width:min(760px,calc(100% - 32px));margin:auto;padding:32px 0 80px}
-.ad-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:60px}
-.ad-top a{color:inherit;text-decoration:none}
-.ad-lockup{display:flex;align-items:center;gap:10px;font-weight:800;letter-spacing:.14em}
-.ad-lockup img{width:30px;height:30px}
-.ad-card{padding:38px;border-radius:24px;background:#202126;border:1px solid rgba(255,255,255,.07);box-shadow:0 28px 80px rgba(0,0,0,.4)}
-.ad-eyebrow{font-size:11px;letter-spacing:.14em;color:#a5a6ad;text-transform:uppercase}
-.ad-card h1{font-size:42px;line-height:1.05;letter-spacing:-.04em;margin:12px 0}
-.ad-lede{color:#a8a9af;font-size:16px;line-height:1.55}
-.ad-options{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:30px 0}
-.ad-option{padding:22px;border-radius:18px;border:1px solid #3a3b41;background:#17181c;cursor:pointer}
-.ad-option.active{border-color:#caa65a;box-shadow:0 0 0 2px rgba(202,166,90,.12)}
-.ad-option strong{display:block;font-size:18px}
-.ad-option b{display:block;font-size:28px;margin-top:10px}
-.ad-option span{display:block;color:#92939a;margin-top:5px;font-size:13px}
-.ad-continue{width:100%;min-height:54px;border:0;border-radius:999px;background:#caa65a;color:#17120a;font-weight:750;cursor:pointer}
-.ad-note{margin-top:18px;color:#85868d;font-size:12px;line-height:1.5}
-@media(max-width:600px){.ad-card{padding:26px}.ad-card h1{font-size:34px}.ad-options{grid-template-columns:1fr}}
-
-.ad-details{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:24px 0}
-.ad-field{display:grid;gap:7px}
-.ad-field.wide{grid-column:1/-1}
-.ad-field label{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#a5a6ad}
-.ad-field input{width:100%;box-sizing:border-box;padding:14px 15px;border-radius:12px;border:1px solid #3a3b41;background:#111216;color:#f5f3ef;font:inherit}
-.ad-field input:focus{outline:none;border-color:#caa65a;box-shadow:0 0 0 2px rgba(202,166,90,.12)}
-.ad-account{margin:18px 0;color:#a8a9af;font-size:13px}
-
-  .packs{
-    display:grid;
-    grid-template-columns:repeat(auto-fit,minmax(290px,1fr));
-    gap:18px;
-    margin:24px 0;
-  }
-  .pack{
-    background:#fff !important;
-    color:#102a43 !important;
-    border:2px solid #d7e1ea !important;
-    border-radius:18px;
-    padding:24px !important;
-    box-shadow:0 10px 30px rgba(15,42,67,.10);
-    cursor:pointer;
-    transition:.18s ease;
-  }
-  .pack:hover{
-    transform:translateY(-2px);
-    border-color:#0f6f78 !important;
-    box-shadow:0 14px 34px rgba(15,42,67,.16);
-  }
-  .pack.selected{
-    border:3px solid #0f6f78 !important;
-    box-shadow:0 0 0 4px rgba(15,111,120,.12),
-      0 14px 34px rgba(15,42,67,.16);
-  }
-  .pack h2,.pack h3,.pack strong{
-    color:#102a43 !important;
-  }
-  .pack .price{
-    color:#0b5961 !important;
-    font-weight:800;
-  }
-  .pack .spec,.pack p,.pack small{
-    color:#486581 !important;
-    opacity:1 !important;
-  }
-  .pack button{
-    background:#0f6f78 !important;
-    color:#fff !important;
-    border:0;
-  }
-
-</style>
+<link rel="stylesheet" href="/coastloop-ui.css">
 </head>
-<body>
-<main class="ad-shell">
-  <nav class="ad-top">
-    <a href="/" class="ad-lockup"><img src="/brand/coastloop-mark.svg"><span>COASTLOOP</span></a>
-    <a href="/login" class="muted">Sign in</a>
+<body class="cl-ui">
+
+<header class="cl-wrap cl-nav">
+  <a class="cl-brand" href="/"><img class="cl-brand-mark" src="/brand/coastloop-mark.svg" alt=""><span>CoastLoop</span></a>
+  <nav class="cl-nav-links">
+    <a href="/">Home</a>
+    <a href="/login">Sign in</a>
   </nav>
+</header>
 
-  <section class="ad-card">
-    <div class="ad-eyebrow">BUY AD SPACE</div>
-    <h1>Put your business on CoastLoop.</h1>
-    <p class="ad-lede">One advertising product. Choose how you want to pay, then sign in or create your CoastLoop account. We’ll collect the business details when they’re actually needed.</p>
+<main class="cl-wrap cl-buy">
+  <section class="cl-buy-copy">
+    <div class="cl-eyebrow">Start advertising</div>
+    <h1>Your business.<br>On local screens.</h1>
+    <p>Choose your plan, confirm the business we are advertising, and continue. CoastLoop handles the creative production and screen delivery.</p>
 
-    <div class="ad-options" id="billingChoices">
-      <button type="button" class="ad-option active" data-plan="coastloop-annual">
-        <strong>Annual</strong>
-        <b>$1,000</b>
-        <span>per year</span>
-      </button>
-      <button type="button" class="ad-option" data-plan="coastloop-monthly">
-        <strong>Monthly</strong>
-        <b>$95</b>
-        <span>per month</span>
-      </button>
-    </div>
-
-    <div class="ad-details">
-  <div class="ad-field wide">
-    <label for="businessName">Business name</label>
-    <input id="businessName" autocomplete="organization" required>
-  </div>
-  <div class="ad-field">
-    <label for="contactName">Contact name</label>
-    <input id="contactName" autocomplete="name" required>
-  </div>
-  <div class="ad-field">
-    <label for="contactMobile">Mobile</label>
-    <input id="contactMobile" type="tel" autocomplete="tel" required>
-  </div>
-</div>
-<div id="accountEmail" class="ad-account"></div>
-<button id="continue" class="ad-continue">Continue</button>
-
-    <div class="ad-note">
-      Includes creative production and verified-delivery reporting. CoastLoop only delivers advertising to commissioned network inventory.
+    <div class="cl-included cl-purchase-spec">
+      <div class="cl-included-row">
+        <strong>Campaign term</strong>
+        <span id="specTerm">12 months</span>
+      </div>
+      <div class="cl-included-row">
+        <strong>Ad length</strong>
+        <span id="specAdLength">15 seconds per play</span>
+      </div>
+      <div class="cl-included-row">
+        <strong>Creative production</strong>
+        <span>1 screen-ready campaign</span>
+      </div>
+      <div class="cl-included-row">
+        <strong>Creative review</strong>
+        <span>Approve or request changes before launch</span>
+      </div>
+      <div class="cl-included-row">
+        <strong>Hyperlocal coverage</strong>
+        <span id="specCoverage">Eligible CoastLoop screens in your purchased coverage</span>
+      </div>
+      <div class="cl-included-row">
+        <strong>Playback reporting</strong>
+        <span>Verified plays recorded by screen</span>
+      </div>
+      <div class="cl-included-row">
+        <strong>Brand Library</strong>
+        <span>Your approved source assets retained for future creative</span>
+      </div>
     </div>
   </section>
+
+  <aside class="cl-order">
+    <div class="cl-order-head">
+      <span>Advertising plan</span>
+      <div class="cl-order-price">
+        <strong id="displayPrice">$1,000</strong>
+        <small id="displayPeriod">/ year</small>
+      </div>
+    </div>
+
+    <div id="billingChoices">
+      <button type="button" class="cl-plan-row active" data-plan="coastloop-annual" data-price="$1,000" data-period="/ year">
+        <strong>Annual</strong>
+        <span>$1,000 / year</span>
+      </button>
+      <button type="button" class="cl-plan-row" data-plan="coastloop-monthly" data-price="$100" data-period="/ month">
+        <strong>Monthly</strong>
+        <span>$100 / month</span>
+      </button>
+    </div>
+
+    <div class="cl-order-body">
+      <label class="cl-field">
+        <span>Business name</span>
+        <input id="businessName" autocomplete="organization" required>
+      </label>
+
+      <label class="cl-field">
+        <span>Contact name</span>
+        <input id="contactName" autocomplete="name" required>
+      </label>
+
+      <label class="cl-field">
+        <span>Mobile</span>
+        <input id="contactMobile" type="tel" autocomplete="tel" required>
+      </label>
+
+      <button id="continue" class="cl-btn cl-btn-primary cl-btn-lg">Continue</button>
+      <div id="accountEmail" class="cl-account"></div>
+      <div class="cl-note">Creative production and verified-delivery reporting are included. You will review the order terms before payment.</div>
+    </div>
+  </aside>
 </main>
 
 <script type="module">
@@ -139,6 +111,11 @@ let plan=qs.get('plan')||'coastloop-annual';
 
 function selectPlan(){
   choices.forEach(x=>x.classList.toggle('active',x.dataset.plan===plan));
+  const selected=choices.find(x=>x.dataset.plan===plan)||choices[0];
+  const price=document.querySelector('#displayPrice');
+  const period=document.querySelector('#displayPeriod');
+  if(price)price.textContent=selected?.dataset.price||'';
+  if(period)period.textContent=selected?.dataset.period||'';
 }
 choices.forEach(x=>x.onclick=()=>{
   plan=x.dataset.plan;
@@ -154,12 +131,12 @@ if(!readSession()){
 }
 
 const button=$('#continue');
-button.textContent='Continue';
+button.textContent='Continue to order';
 
 button.onclick=async()=>{
   try{
     button.disabled=true;
-    button.textContent='Loading…';
+    button.textContent='Preparing…';
 
     const packages=await fetch('/api/public/packages')
       .then(r=>r.json());
@@ -167,6 +144,54 @@ button.onclick=async()=>{
       .find(x=>x.package_key===plan);
 
     if(!pkg)throw new Error('Advertising option unavailable.');
+    const termDays=Number(pkg.term_days||0);
+    const specTerm=document.querySelector('#specTerm');
+    const specAdLength=document.querySelector('#specAdLength');
+    const adSeconds=Number(pkg.ad_length_seconds||0);
+    if(specAdLength && adSeconds>0){
+      specAdLength.textContent=`${adSeconds} second${adSeconds===1?'':'s'} per play`;
+    }
+
+    const coverageEl=document.querySelector('#specCoverage');
+    const coveragePackageId=pkg.package_id||pkg.id;
+    if(coverageEl && coveragePackageId){
+      fetch(`/api/public/package-coverage/${encodeURIComponent(coveragePackageId)}`,{cache:'no-store'})
+        .then(r=>r.ok?r.json():null)
+        .then(c=>{
+          if(!c) return;
+          const zones=Number(c.zone_count||0);
+          const locations=Number(c.location_count||0);
+          const screens=Number(c.commercial_screen_count||0);
+
+          if(zones>0){
+            const parts=[
+              `${zones} hyperlocal Zone${zones===1?'':'s'}`,
+              locations>0 ? `${locations} current location${locations===1?'':'s'}` : null,
+              screens>0 ? `${screens} commercial screen${screens===1?'':'s'}` : null
+            ].filter(Boolean);
+            coverageEl.textContent=parts.join(' · ');
+          }else{
+            const market=String(pkg.market||'').trim();
+            const placement=pkg.placement_scope||{};
+            const commissioned=placement.commissioned_only===true;
+            const allEligible=placement.selection==='all_eligible_live_inventory';
+
+            if(market && allEligible){
+              coverageEl.textContent=
+                `${market} · all eligible${commissioned?' commissioned':''} CoastLoop inventory`;
+            }else if(market){
+              coverageEl.textContent=`${market} CoastLoop coverage`;
+            }else{
+              coverageEl.textContent='Coverage assigned with your campaign';
+            }
+          }
+        })
+        .catch(()=>{});
+    }
+    if(specTerm && termDays>0){
+      const months=Math.round(termDays/30.4375);
+      specTerm.textContent=months>=1 ? `${months} month${months===1?'':'s'}` : `${termDays} days`;
+    }
 
     const me=await api('/api/auth/identity');
     const user=me.user||me.identity||me||{};
@@ -204,7 +229,7 @@ button.onclick=async()=>{
   }catch(e){
     alert(e.message||'Could not continue.');
     button.disabled=false;
-    button.textContent='Continue';
+    button.textContent='Continue to order';
   }
 };
 </script>

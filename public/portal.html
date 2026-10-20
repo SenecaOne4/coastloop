@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>My CoastLoop</title>
-<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/styles.css">
 <style>
 body{background:#11100f;color:#f6f2ed}
 .portal-shell{max-width:1180px;margin:auto;padding:22px 24px 80px}
@@ -41,16 +41,60 @@ body{background:#11100f;color:#f6f2ed}
 .portal-welcome h1{font-size:48px}.portal-business-title h2{font-size:31px}
 }
 </style>
+<link rel="stylesheet" href="/coastloop-ui.css">
 </head>
-<body>
-<main class="portal-shell">
-<header class="portal-top">
-<a class="portal-brand" href="/">COASTLOOP</a>
-<button class="portal-account" id="account">Account</button>
-</header>
-<div id="error" class="error"></div>
-<div id="app"></div>
-</main>
+<body class="cl-ui cl-app-body">
+<div class="cl-app-shell">
+  <aside class="cl-sidebar">
+    <div class="cl-workspace-wrap">
+      <button id="workspaceToggle" class="cl-workspace-button" type="button" aria-expanded="false">
+        <span id="workspaceAvatar" class="cl-workspace-avatar cl-workspace-logo"><img src="/brand/coastloop-mark.svg" alt=""></span>
+        <span class="cl-workspace-copy">
+          <strong id="workspaceName">CoastLoop</strong>
+          <small>Workspace</small>
+        </span>
+        <span class="cl-menu-chevrons">⌃⌄</span>
+      </button>
+      <div id="workspaceMenu" class="cl-popover cl-workspace-menu" hidden></div>
+    </div>
+
+    <nav class="cl-side-nav" aria-label="CoastLoop">
+      <a class="cl-side-link is-active" href="#overview"><span class="cl-side-icon"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 8.5 10 3l6.5 5.5v7.5h-5v-4.5h-3V16h-5Z"/></svg></span><span>Overview</span></a>
+      <a class="cl-side-link" href="#create-ad"><span class="cl-side-icon"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4v12M4 10h12"/></svg></span><span>Create ad</span></a>
+      <a class="cl-side-link" href="#creative"><span class="cl-side-icon"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3.5" y="4.5" width="13" height="11" rx="2"/><path d="M6.5 8h7M6.5 11h4.5"/></svg></span><span>Your ads</span></a>
+      <a class="cl-side-link" href="#brand-library"><span class="cl-side-icon"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m10 3 6 7-6 7-6-7Z"/><path d="M7.5 10h5"/></svg></span><span>Brand library</span></a>
+      <a class="cl-side-link" href="#delivery"><span class="cl-side-icon"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 15 15 5M8 5h7v7"/></svg></span><span>Delivery</span></a>
+      <a class="cl-side-link" href="#billing"><span class="cl-side-icon"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M13.5 6.5c-.8-1-2-1.5-3.5-1.5-2 0-3.5 1-3.5 2.5S8 10 10 10s3.5 1 3.5 2.5S12 15 10 15c-1.6 0-2.9-.6-3.7-1.7M10 3.5v13"/></svg></span><span>Billing</span></a>
+    </nav>
+
+    <div class="cl-sidebar-bottom">
+      <a class="cl-side-link cl-side-muted" href="/host"><span class="cl-side-icon"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="4" width="14" height="10" rx="2"/><path d="M7 17h6M10 14v3"/></svg></span><span>Host a screen</span></a>
+      <a class="cl-side-link cl-side-muted" href="/"><span class="cl-side-icon"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M8 5H5.5A1.5 1.5 0 0 0 4 6.5v8A1.5 1.5 0 0 0 5.5 16h8a1.5 1.5 0 0 0 1.5-1.5V12M11 4h5v5M9 11l7-7"/></svg></span><span>Website</span></a>
+
+      <div class="cl-user-wrap">
+        <button id="account" class="cl-user-button" type="button" aria-expanded="false">
+          <span id="userAvatar" class="cl-user-avatar">C</span>
+          <span class="cl-user-copy">
+            <strong id="userName">Account</strong>
+            <small id="userEmail">CoastLoop</small>
+          </span>
+          <span class="cl-user-more">•••</span>
+        </button>
+        <div id="userMenu" class="cl-popover cl-user-menu" hidden>
+          <a href="/account">Account settings <span>→</span></a>
+          <a href="/">CoastLoop website <span>↗</span></a>
+          <button id="portalLogout" type="button">Sign out <span>→</span></button>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <main class="portal-shell">
+    <div id="overview" class="cl-anchor"></div>
+    <div id="error" class="error"></div>
+    <div id="app"></div>
+  </main>
+</div>
 <script type="module" src="/portal.js"></script>
 <script src="/legal-gate.js"></script>
 </body>

@@ -1,0 +1,7 @@
+.env
+state/
+renders/
+*.log
+.worker-token
+__pycache__/
+*.pyc

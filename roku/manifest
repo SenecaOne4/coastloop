@@ -1,7 +1,7 @@
 title=CoastLoop
 major_version=0
 minor_version=1
-build_version=12
+build_version=16
 ui_resolutions=hd,fhd
 supports_input_launch=1
 mm_icon_focus_hd=pkg:/images/channel-icon_HD.png
@@ -11,3 +11,5 @@ splash_screen_hd=pkg:/images/splash-screen_HD.png
 splash_screen_fhd=pkg:/images/splash-screen_FHD.png
 splash_color=#080706
 splash_min_time=650
+
+rsg_version=1.3

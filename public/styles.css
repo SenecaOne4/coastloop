@@ -933,3 +933,77 @@ form .row>input,form .row>select,form .row>label{min-width:150px}
 #platformTermsAdmin input::placeholder{
   color:#777;
 }
+
+/* Secondary CoastLoop brand consistency */
+.broker-brand{
+  display:inline-flex;
+  align-items:center;
+  gap:9px;
+  margin-bottom:10px;
+  color:var(--text);
+  text-decoration:none;
+  font-weight:750;
+  letter-spacing:-.02em;
+  text-transform:none;
+}
+.broker-brand .coastloop-mark{width:28px;height:auto}
+.callback-brand{
+  display:inline-flex;
+  align-items:center;
+  gap:9px;
+  margin-bottom:22px;
+  color:#171412;
+  text-decoration:none;
+  font-size:14px;
+  font-weight:850;
+  letter-spacing:.08em;
+}
+.callback-brand .coastloop-mark{width:31px;height:auto}
+
+
+/* CoastLoop launch creative-review hierarchy */
+.creative-review-item{
+  padding:0!important;
+  border:0!important;
+  border-bottom:1px solid rgba(255,255,255,.075)!important;
+  border-radius:0!important;
+  background:transparent!important;
+}
+.creative-review-grid{
+  grid-template-columns:minmax(220px,340px) minmax(0,1fr)!important;
+  gap:22px!important;
+  align-items:center!important;
+  padding:16px 2px!important;
+}
+.creative-preview-frame{
+  width:100%!important;
+  aspect-ratio:16/9!important;
+  min-height:0!important;
+  max-height:none!important;
+  overflow:hidden!important;
+  border-radius:8px!important;
+  border-color:rgba(255,255,255,.09)!important;
+  background:#08080a!important;
+}
+.creative-preview-media{
+  width:100%!important;
+  height:100%!important;
+  max-height:none!important;
+  object-fit:contain!important;
+  background:#08080a!important;
+}
+.creative-review-title strong{
+  color:#f0f0f2!important;
+}
+.creative-review-copy .muted{
+  color:#76767d!important;
+}
+@media(max-width:760px){
+  .creative-review-grid{
+    grid-template-columns:1fr!important;
+    gap:13px!important;
+  }
+  .creative-preview-frame{
+    max-width:none!important;
+  }
+}

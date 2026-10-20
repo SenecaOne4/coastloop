@@ -144,7 +144,31 @@ export async function requireUserAccess(request, env) {
   const user = await authUserFromToken(env, token);
   if (!user) return null;
   const access = await accessForUser(env, user);
+  if (!access.internal_role && !access.businesses.length) return null;
+  if (ndaEnforcementEnabled(env)) {
+    const config = ndaConfig(env);
+    if (!config || !(await findNdaAcceptance(env, user.id, config.version))) return null;
+  }
   return { token, user, access };
+}
+
+function ndaEnforcementEnabled(env) {
+  return String(env.NDA_ENFORCEMENT_ENABLED || "").trim().toLowerCase() === "true";
+}
+
+function ndaConfig(env) {
+  const version=String(env.NDA_CURRENT_VERSION||"").trim(), raw=String(env.NDA_DOCUMENT_URL||"").trim();
+  if(!version||!raw)return null;
+  let documentUrl=null;
+  try {
+    if(raw.startsWith("/")&&!raw.startsWith("//"))documentUrl=raw;
+    else {const u=new URL(raw);if(u.protocol==="https:")documentUrl=u.toString();}
+  } catch {}
+  return documentUrl?{version,documentUrl}:null;
+}
+async function findNdaAcceptance(env,userId,version) {
+  const rows=await rest(env,`platform_nda_acceptances?user_id=eq.${encodeURIComponent(userId)}&document_version=eq.${encodeURIComponent(version)}&select=user_id,document_version,accepted_at&limit=1`);
+  return rows?.[0]||null;
 }
 
 export async function requireAdminAccess(request, env) {
@@ -173,6 +197,8 @@ async function loginWithPassword(env, email, password) {
   const user = data.user || await authUserFromToken(env, data.access_token);
   if (!user) return { error: "Could not load user", status: 401 };
   const access = await accessForUser(env, user);
+  if (!access.internal_role && !access.businesses.length)
+    return { error: "This CoastLoop account has no assigned access yet.", status: 403 };
 
   return {
     session: {
@@ -248,6 +274,10 @@ async function authSignup(request, env) {
   if (!/^\S+@\S+\.\S+$/.test(email)) return json({ error: "Valid email required" }, 400);
   if (password.length < 10) return json({ error: "Password must be at least 10 characters" }, 400);
 
+  const now = new Date().toISOString();
+  const invites = await rest(env, `user_invitations?organization_id=eq.${ORG_ID}&email=eq.${encodeURIComponent(email)}&status=eq.pending&expires_at=gt.${encodeURIComponent(now)}&select=id`);
+  if (!(invites || []).length) return json({ error: "An invitation is required" }, 403);
+
   const { res, data } = await authRequest(env, "signup", {
     method: "POST",
     body: JSON.stringify({ email, password, data: { full_name: fullName || null } }),
@@ -286,6 +316,7 @@ async function authRefresh(request, env) {
 
   const user = data.user || await authUserFromToken(env, data.access_token);
   const access = await accessForUser(env, user);
+  if (!access.internal_role && !access.businesses.length) return json({ error: "Access removed" }, 403);
 
   return json({
     ok: true,
@@ -315,6 +346,37 @@ async function authIdentity(request, env) {
   });
 }
 
+async function authNdaStatus(request, env) {
+  const user=await authUserFromToken(env,bearer(request));
+  if(!user)return json({error:"unauthorized"},401);
+  const config=ndaConfig(env);
+  if(!config)return json({ok:true,user:{id:user.id,email:user.email||null},nda:{required:ndaEnforcementEnabled(env),configured:false,accepted:false,current_version:null,document_url:null}});
+  const required=ndaEnforcementEnabled(env);
+  let acceptance=null;
+  try { acceptance=await findNdaAcceptance(env,user.id,config.version); }
+  catch { if(required)return json({error:"nda_status_unavailable"},503); }
+  return json({ok:true,user:{id:user.id,email:user.email||null},nda:{required,configured:true,accepted:Boolean(acceptance),current_version:config.version,document_url:config.documentUrl,accepted_at:acceptance?.accepted_at||null}});
+}
+async function authNdaAccept(request,env) {
+  const user=await authUserFromToken(env,bearer(request));
+  if(!user)return json({error:"unauthorized"},401);
+  const config=ndaConfig(env);
+  if(!config)return json({error:"nda_document_unavailable"},503);
+  const b=await bodyJson(request);
+  if(String(b.version||"")!==config.version)return json({error:"nda_version_changed",current_version:config.version},409);
+  try {
+    const prior=await findNdaAcceptance(env,user.id,config.version);
+    if(prior)return json({ok:true,acceptance:{user_id:user.id,document_version:config.version,accepted_at:prior.accepted_at}});
+    const rows=await rest(env,"platform_nda_acceptances?on_conflict=user_id,document_version&select=user_id,document_version,accepted_at",{
+      method:"POST",headers:{Prefer:"resolution=ignore-duplicates,return=representation"},
+      body:JSON.stringify({user_id:user.id,email_snapshot:String(user.email||"").toLowerCase(),document_version:config.version})
+    });
+    let acceptance=rows?.[0]||null;
+    if(!acceptance)acceptance=await findNdaAcceptance(env,user.id,config.version);
+    if(!acceptance)throw new Error("Acceptance write not confirmed");
+    return json({ok:true,acceptance});
+  } catch { return json({error:"nda_acceptance_write_failed"},503); }
+}
 async function authMe(request, env) {
   const auth = await requireUserAccess(request, env);
   if (!auth) return json({ error: "unauthorized" }, 401);
@@ -329,6 +391,11 @@ async function authPassword(request, env) {
   const token = bearer(request);
   const user = await authUserFromToken(env, token);
   if (!user) return json({ error: "unauthorized" }, 401);
+  if (ndaEnforcementEnabled(env)) {
+    const config = ndaConfig(env);
+    if (!config || !(await findNdaAcceptance(env, user.id, config.version)))
+      return json({ error: "unauthorized" }, 401);
+  }
   const b = await bodyJson(request);
   const password = String(b.password || "");
   if (password.length < 10) return json({ error: "Password must be at least 10 characters" }, 400);
@@ -369,7 +436,7 @@ async function authConfig(env) {
   const status = await bootstrapStatus(env);
   return {
     ...status,
-    google_enabled: String(env.GOOGLE_AUTH_ENABLED || "").toLowerCase() === "true",
+    genny_auth_enabled: String(env.GENNY_AUTH_ENABLED || "").toLowerCase() === "true",
     auth_host: (() => { try { return new URL(authBase(env)).hostname; } catch { return null; } })(),
   };
 }
@@ -391,6 +458,10 @@ export async function handleAuthRoute(request, env, url) {
     return authRefresh(request, env);
   if (url.pathname === "/api/auth/identity" && request.method === "GET")
     return authIdentity(request, env);
+  if (url.pathname === "/api/auth/nda/status" && request.method === "GET")
+    return authNdaStatus(request, env);
+  if (url.pathname === "/api/auth/nda/accept" && request.method === "POST")
+    return authNdaAccept(request, env);
   if (url.pathname === "/api/auth/me" && request.method === "GET")
     return authMe(request, env);
   if (url.pathname === "/api/auth/password" && request.method === "PUT")
@@ -399,15 +470,18 @@ export async function handleAuthRoute(request, env, url) {
     return authRecover(request, env);
   if (url.pathname === "/api/auth/logout" && request.method === "POST")
     return authLogout(request, env);
-  if (url.pathname === "/api/auth/google" && request.method === "GET") {
-    if (String(env.GOOGLE_AUTH_ENABLED || "").toLowerCase() !== "true")
-      return json({ error: "Google sign-in is not enabled yet" }, 503);
+  if (
+    (url.pathname === "/api/auth/genny" || url.pathname === "/api/auth/google") &&
+    request.method === "GET"
+  ) {
+    if (String(env.GENNY_AUTH_ENABLED || "").toLowerCase() !== "true")
+      return json({ error: "GENNY Auth sign-in is not enabled yet" }, 503);
     const target = new URL(`${authBase(env)}/auth/v1/authorize`);
     const requestedNext = String(url.searchParams.get("next") || "/advertise");
     const safeNext = requestedNext.startsWith("/") && !requestedNext.startsWith("//")
       ? requestedNext
       : "/advertise";
-    target.searchParams.set("provider", "google");
+    target.searchParams.set("provider", "custom:gennyauth");
     target.searchParams.set(
       "redirect_to",
       `https://coastloop.site/auth-callback?next=${encodeURIComponent(safeNext)}`
