@@ -689,10 +689,36 @@ async function hydrateCreative(){
 
   for(const box of document.querySelectorAll('.creative-jobs')){
     const id=box.dataset.businessId;
+
     try{
-      const rows=await api(`/api/portal/creative-jobs?business_id=${encodeURIComponent(id)}`);
-      box.innerHTML=(rows||[]).map(j=>{
+      const rows=await api(
+        `/api/portal/creative-jobs?business_id=${encodeURIComponent(id)}`
+      );
+
+      const grouped=new Map();
+
+      for(const job of rows||[]){
+        const root=String(job.parent_job_id||job.metadata?.root_job_id||job.id);
+        if(!grouped.has(root)) grouped.set(root,[]);
+        grouped.get(root).push(job);
+      }
+
+      const groups=[...grouped.values()].map(versions=>{
+        versions.sort((a,b)=>
+          Number(b.revision_number||1)-Number(a.revision_number||1) ||
+          String(b.created_at||'').localeCompare(String(a.created_at||''))
+        );
+        return {latest:versions[0],versions};
+      }).sort((a,b)=>
+        String(b.latest.created_at||'').localeCompare(
+          String(a.latest.created_at||'')
+        )
+      );
+
+      box.innerHTML=groups.map(group=>{
+        const j=group.latest;
         const revisionRequested=j.review_status==='changes_requested';
+
         const internalReviewPending=
           j.internal_review_status==='pending' ||
           Boolean(j.metadata?.internal_review_pending);
@@ -720,61 +746,148 @@ async function hydrateCreative(){
                 : 'neutral';
 
         const rev=Number(j.revision_number||j.metadata?.revision_number||1);
-        const ready=j.status==='completed'&&j.output_asset_id&&!revisionRequested&&!internalReviewPending&&j.review_status!=='approved';
+
+        const ready=
+          j.status==='completed' &&
+          j.output_asset_id &&
+          !revisionRequested &&
+          !internalReviewPending &&
+          j.review_status!=='approved';
+
         const media=j.output_asset_id
           ? `<div class="cl-creative-preview">${
               j.job_type==='video'
-                ? `<video src="/media/${encodeURIComponent(j.output_asset_id)}" muted playsinline preload="metadata" controls></video>`
-                : `<img src="/media/${encodeURIComponent(j.output_asset_id)}" alt="${esc(j.metadata?.title||'CoastLoop creative')}">`
+                ? `<video
+                     src="/media/${encodeURIComponent(j.output_asset_id)}"
+                     muted
+                     playsinline
+                     preload="metadata"
+                     controls
+                   ></video>`
+                : `<img
+                     src="/media/${encodeURIComponent(j.output_asset_id)}"
+                     alt="${esc(j.metadata?.title||'CoastLoop creative')}"
+                   >`
             }</div>`
-          : `<div class="cl-creative-preview is-empty"><span>${
-              state==='Creating'
-                ? 'Creating…'
-                : state==='CoastLoop quality review'
-                  ? 'CoastLoop is reviewing your creative'
-                  : 'Creative preview'
-            }</span></div>`;
+          : `<div class="cl-creative-preview is-empty">
+               <span>${
+                 state==='Creating'
+                   ? 'GENNY is crafting your campaign'
+                   : state==='CoastLoop quality review'
+                     ? 'CoastLoop is completing your private quality review'
+                     : 'Creative in preparation'
+               }</span>
+             </div>`;
+
         const actions=ready
           ? `<div class="cl-creative-actions">
-              <button type="button" class="cl-review-approve" data-job-id="${esc(j.id)}">Approve</button>
-              <button type="button" class="cl-review-revise" data-job-id="${esc(j.id)}">Request changes</button>
-            </div>
-            <form class="cl-revision-form" data-job-id="${esc(j.id)}" hidden>
-              <label>What should we change?
-                <textarea name="notes" maxlength="1000" required placeholder="Tell us exactly what you want adjusted."></textarea>
-              </label>
-              <div>
-                <button type="submit">Send revision</button>
-                <button type="button" class="cl-revision-cancel">Cancel</button>
-              </div>
-              <span class="cl-review-status" aria-live="polite"></span>
-            </form>`
+               <button
+                 type="button"
+                 class="cl-review-approve"
+                 data-job-id="${esc(j.id)}">
+                 Approve creative
+               </button>
+               <button
+                 type="button"
+                 class="cl-review-revise"
+                 data-job-id="${esc(j.id)}">
+                 Request changes
+               </button>
+             </div>
+
+             <form
+               class="cl-revision-form"
+               data-job-id="${esc(j.id)}"
+               hidden>
+               <label>
+                 <span>Tell CoastLoop what you would like refined</span>
+                 <textarea
+                   name="notes"
+                   maxlength="1000"
+                   required
+                   placeholder="Describe what feels wrong and what you want instead. CoastLoop separates rejected details from the positive creative direction."
+                 ></textarea>
+               </label>
+               <div>
+                 <button type="submit">Send refinement</button>
+                 <button type="button" class="cl-revision-cancel">Cancel</button>
+               </div>
+               <span class="cl-review-status" aria-live="polite"></span>
+             </form>`
           : '';
+
         const building=state==='Creating'||state==='Preparing';
         if(building) hasBuildingCreative=true;
+
         const buildProgress=building
-          ? `<div class="cl-creative-build-progress ${state==='Creating'?'is-active':'is-queued'}"
-                role="progressbar"
-                aria-label="${state==='Creating'?'GENNY is creating your ad':'Waiting for GENNY'}"
-                aria-valuetext="${esc(state)}"><span></span></div>
-             <small class="cl-creative-build-label">${state==='Creating'?'GENNY is creating your ad':'Queued for GENNY'}</small>`
+          ? `<div
+               class="cl-creative-build-progress ${state==='Creating'?'is-active':'is-queued'}"
+               role="progressbar"
+               aria-label="${state==='Creating'?'GENNY is creating your campaign':'Waiting for GENNY'}"
+               aria-valuetext="${esc(state)}">
+               <span></span>
+             </div>
+             <small class="cl-creative-build-label">
+               ${state==='Creating'
+                 ? 'GENNY is crafting your campaign'
+                 : 'Queued for GENNY'}
+             </small>`
           : '';
-        return `<article class="cl-creative-row cl-creative-review-row">
-          <div class="cl-creative-row-mark" aria-hidden="true"></div>
-          ${media}
-          <div class="cl-creative-row-main">
-            <strong>${esc(j.metadata?.title||'CoastLoop creative')}</strong>
-            <span>${esc(j.job_type||'image')} · Revision ${rev}</span>
-            ${buildProgress}
-            ${revisionRequested&&j.review_notes?`<small>${esc(j.review_notes)}</small>`:''}
-          </div>
-          <div class="cl-creative-row-state ${tone}">
-            <i></i><span>${esc(state)}</span>
-          </div>
-          ${actions}
-        </article>`;
-      }).join('')||'<div class="portal-empty">No creative requests yet.</div>';
-    }catch(e){ box.textContent='Creative status unavailable.'; }
+
+        const history=group.versions.length>1
+          ? `<details class="cl-creative-history">
+               <summary>Version history · ${group.versions.length}</summary>
+               <div class="cl-creative-history-list">
+                 ${group.versions.map(v=>`
+                   <div>
+                     <span>Revision ${Number(v.revision_number||1)}</span>
+                     <small>${
+                       v.review_status==='approved'
+                         ? 'Approved'
+                         : v.review_status==='changes_requested'
+                           ? 'Changes requested'
+                           : v.status==='completed'
+                             ? 'Completed'
+                             : esc(v.status||'Preparing')
+                     }</small>
+                   </div>
+                 `).join('')}
+               </div>
+             </details>`
+          : '';
+
+        return `
+          <article class="cl-creative-row cl-creative-review-row cl-creative-luxury-card">
+            ${media}
+
+            <div class="cl-creative-row-main">
+              <div class="cl-creative-eyebrow">COASTLOOP CREATIVE</div>
+              <strong>${esc(j.metadata?.title||'Your CoastLoop campaign')}</strong>
+              <span>${esc(j.job_type||'image')} · Revision ${rev}</span>
+              ${buildProgress}
+              ${
+                revisionRequested&&j.review_notes
+                  ? `<small>${esc(j.review_notes)}</small>`
+                  : ''
+              }
+              ${history}
+            </div>
+
+            <div class="cl-creative-row-state ${tone}">
+              <i></i><span>${esc(state)}</span>
+            </div>
+
+            ${actions}
+          </article>
+        `;
+      }).join('') || `
+        <div class="portal-empty">
+          No creative requests yet.
+        </div>
+      `;
+    }catch(e){
+      box.textContent='Creative status unavailable.';
+    }
   }
 
   clearTimeout(creativeHydrateTimer);

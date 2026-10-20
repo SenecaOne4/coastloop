@@ -13,34 +13,22 @@ function creativeAdminProgress(job){
   const status=String(job?.status||'queued').toLowerCase();
   const working=['claimed','rendering','processing'].includes(status);
   const pct=working ? 72 : 22;
-  const label=working ? 'GENNY is creating this ad' : 'Queued for GENNY';
-  const worker=job?.claimed_by ? ` · ${esc(job.claimed_by)}` : '';
-  const attempt=job?.attempt_count!=null
-    ? ` · attempt ${Number(job.attempt_count)||0}/${Number(job.max_attempts)||0}`
-    : '';
-
-  const prompt=esc(String(job?.prompt||'').slice(0,1200));
+  const label=working
+    ? 'GENNY is crafting this campaign'
+    : 'Queued for GENNY';
 
   return `
     <div class="genny-admin-build">
       <div class="genny-admin-build-head">
         <strong>${label}</strong>
-        <small>${esc(status)}${worker}${attempt}</small>
+        <small>${working?'Signature render in progress':'Preparing luxury render'}</small>
       </div>
-
       <div class="genny-admin-progress"
            role="progressbar"
            aria-label="${label}">
         <div class="genny-admin-progress-fill"
              style="width:${pct}%"></div>
       </div>
-
-      ${prompt ? `
-        <details class="genny-admin-prompt">
-          <summary>What GENNY is building</summary>
-          <div>${prompt}</div>
-        </details>
-      ` : ''}
     </div>
   `;
 }
@@ -50,6 +38,298 @@ function normalizeCreativeAdminPayload(payload){
   if(Array.isArray(payload?.jobs)) return payload.jobs;
   if(Array.isArray(payload?.creative_jobs)) return payload.creative_jobs;
   return [];
+}
+
+
+let creativeStudioFilter='review';
+
+function creativeStudioReleaseState(job){
+  const md=job?.metadata && typeof job.metadata==='object' ? job.metadata : {};
+  const revision=Number(job?.revision_number||md.revision_number||1);
+  const releaseRevision=Number(md.client_review_release_revision||0);
+  const explicitlyReleased=Boolean(
+    md.client_review_released_at &&
+    releaseRevision===revision
+  );
+  const historicallyReviewed=
+    job?.review_status==='approved' ||
+    job?.review_status==='changes_requested';
+
+  return {
+    md,
+    revision,
+    explicitlyReleased,
+    releasedToClient:explicitlyReleased||historicallyReviewed
+  };
+}
+
+function creativeStudioGroups(){
+  const groups=new Map();
+
+  for(const job of state.creativeJobs||[]){
+    const root=String(job.parent_job_id||job.id);
+    if(!groups.has(root)) groups.set(root,[]);
+    groups.get(root).push(job);
+  }
+
+  return [...groups.entries()].map(([root,versions])=>{
+    versions.sort((a,b)=>
+      Number(b.revision_number||1)-Number(a.revision_number||1) ||
+      String(b.created_at||'').localeCompare(String(a.created_at||''))
+    );
+    return {root,versions,latest:versions[0]};
+  }).sort((a,b)=>
+    String(b.latest.created_at||'').localeCompare(
+      String(a.latest.created_at||'')
+    )
+  );
+}
+
+function creativeStudioBucket(job){
+  const release=creativeStudioReleaseState(job);
+  const building=creativeAdminBuilding(job);
+  const needsReview=
+    job.status==='completed' &&
+    Boolean(job.output_asset_id) &&
+    job.review_status==='pending' &&
+    !release.releasedToClient;
+
+  if(building || needsReview) return 'review';
+  if(release.explicitlyReleased && job.review_status==='pending') return 'client';
+  if(job.review_status==='approved') return 'approved';
+  return 'history';
+}
+
+function creativeStudioStatus(job){
+  const release=creativeStudioReleaseState(job);
+
+  if(creativeAdminBuilding(job))
+    return ['GENNY CREATING','creating'];
+
+  if(
+    job.status==='completed' &&
+    job.output_asset_id &&
+    job.review_status==='pending' &&
+    !release.releasedToClient
+  )
+    return ['INTERNAL REVIEW','review'];
+
+  if(release.explicitlyReleased && job.review_status==='pending')
+    return ['WITH CLIENT','client'];
+
+  if(job.review_status==='approved')
+    return ['APPROVED','approved'];
+
+  if(job.review_status==='changes_requested')
+    return ['CHANGES REQUESTED','changes'];
+
+  if(job.status==='failed')
+    return ['FAILED','failed'];
+
+  return [String(job.status||'').toUpperCase()||'CREATIVE','neutral'];
+}
+
+function renderCreativeStudioTabs(){
+  const host=$('#creativeStudioTabs');
+  if(!host) return;
+
+  const groups=creativeStudioGroups();
+  const counts={review:0,client:0,approved:0,history:0};
+
+  for(const group of groups)
+    counts[creativeStudioBucket(group.latest)]++;
+
+  const tabs=[
+    ['review','Needs review'],
+    ['client','With client'],
+    ['approved','Approved'],
+    ['history','History']
+  ];
+
+  host.innerHTML=tabs.map(([key,label])=>`
+    <button
+      type="button"
+      class="creative-studio-tab ${creativeStudioFilter===key?'is-active':''}"
+      data-creative-filter="${key}">
+      <span>${label}</span>
+      <b>${counts[key]||0}</b>
+    </button>
+  `).join('');
+}
+
+function creativeStudioHistory(group){
+  if(group.versions.length<2) return '';
+
+  return `
+    <details class="creative-studio-tech creative-studio-history">
+      <summary>Version history · ${group.versions.length}</summary>
+      <div class="creative-studio-history-list">
+        ${group.versions.map(v=>{
+          const status=creativeStudioStatus(v)[0];
+          return `
+            <div>
+              <span>Revision ${Number(v.revision_number||1)}</span>
+              <small>${esc(status)}</small>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    </details>
+  `;
+}
+
+function creativeStudioCard(group){
+  const j=group.latest;
+  const release=creativeStudioReleaseState(j);
+  const md=release.md;
+  const [statusLabel,statusTone]=creativeStudioStatus(j);
+
+  const advertiser=state.businesses.find(
+    b=>b.id===j.advertiser_business_id
+  );
+
+  const needsInternalReview=
+    j.status==='completed' &&
+    Boolean(j.output_asset_id) &&
+    j.review_status==='pending' &&
+    !release.releasedToClient;
+
+  const preview=j.output_asset_id
+    ? `<button
+         type="button"
+         class="creative-studio-thumb creative-open-preview"
+         data-job="${esc(j.id)}"
+         data-asset="${esc(j.output_asset_id)}"
+         data-kind="${esc(j.job_type||'image')}"
+         data-title="${esc(md.title||'CoastLoop creative')}">
+         ${
+           j.job_type==='video'
+             ? `<video
+                  src="/media/${encodeURIComponent(j.output_asset_id)}"
+                  muted
+                  playsinline
+                  preload="metadata"
+                ></video>`
+             : `<img
+                  src="/media/${encodeURIComponent(j.output_asset_id)}"
+                  alt="${esc(md.title||'CoastLoop creative')}"
+                >`
+         }
+         <span>Open full review</span>
+       </button>`
+    : `<div class="creative-studio-thumb is-empty">
+         <span>${creativeAdminBuilding(j)?'Crafting campaign':'No preview'}</span>
+       </div>`;
+
+  const actions=needsInternalReview
+    ? `<div class="creative-studio-actions">
+         <button
+           type="button"
+           class="creative-release-client creative-primary"
+           data-job="${esc(j.id)}">
+           Release to client
+         </button>
+         <button
+           type="button"
+           class="secondary creative-internal-refine"
+           data-job="${esc(j.id)}">
+           Refine internally
+         </button>
+       </div>
+       <form
+         class="creative-internal-revision-form"
+         data-job="${esc(j.id)}"
+         hidden>
+         <label>
+           <span>Internal art-direction notes</span>
+           <textarea
+             name="notes"
+             maxlength="1200"
+             required
+             placeholder="Example: The steak should be a spectacular prime-steak hero with a perfect exterior sear. The current meat texture looks like mold."
+           ></textarea>
+         </label>
+         <div class="creative-studio-form-actions">
+           <button type="submit">Create refined version</button>
+           <button type="button" class="secondary creative-internal-cancel">Cancel</button>
+         </div>
+       </form>`
+    : '';
+
+  const technical=`
+    <details class="creative-studio-tech">
+      <summary>Generation details</summary>
+      <dl>
+        <div><dt>Status</dt><dd>${esc(j.status||'')}</dd></div>
+        <div><dt>Revision</dt><dd>${release.revision}</dd></div>
+        <div><dt>Worker</dt><dd>${esc(j.claimed_by||'not assigned')}</dd></div>
+        <div><dt>Attempts</dt><dd>${Number(j.attempt_count||0)}/${Number(j.max_attempts||0)}</dd></div>
+        <div><dt>Quality</dt><dd>${esc(md.quality_profile||'legacy')}</dd></div>
+        <div><dt>Steps</dt><dd>${esc(md.steps||'default')}</dd></div>
+      </dl>
+      <div class="creative-studio-prompt-detail">
+        <strong>Positive prompt</strong>
+        <p>${esc(String(md.positive_prompt||j.prompt||''))}</p>
+      </div>
+      ${md.negative_prompt?`
+        <div class="creative-studio-prompt-detail">
+          <strong>Negative prompt</strong>
+          <p>${esc(String(md.negative_prompt))}</p>
+        </div>
+      `:''}
+    </details>
+  `;
+
+  return `
+    <article class="creative-studio-card ${needsInternalReview?'needs-review':''}">
+      ${preview}
+      <div class="creative-studio-card-body">
+        <div class="creative-studio-card-top">
+          <div>
+            <strong>${esc(md.title||'CoastLoop creative')}</strong>
+            <span>
+              ${esc(advertiser?.name||md.business_name||'House / internal')}
+              · Revision ${release.revision}
+            </span>
+          </div>
+          <span class="creative-studio-status ${statusTone}">
+            ${esc(statusLabel)}
+          </span>
+        </div>
+
+        ${creativeAdminProgress(j)}
+
+        ${needsInternalReview?`
+          <p class="creative-studio-review-note">
+            Private CoastLoop quality control. The client cannot see this render until you release it.
+          </p>
+        `:''}
+
+        ${actions}
+        ${technical}
+        ${creativeStudioHistory(group)}
+      </div>
+    </article>
+  `;
+}
+
+function renderCreativeStudio(){
+  renderCreativeStudioTabs();
+
+  const host=$('#creativeJobs');
+  if(!host) return;
+
+  const groups=creativeStudioGroups();
+  const visible=groups.filter(
+    g=>creativeStudioBucket(g.latest)===creativeStudioFilter
+  );
+
+  host.innerHTML=visible.length
+    ? `<div class="creative-studio-grid">${visible.map(creativeStudioCard).join('')}</div>`
+    : `<div class="creative-studio-empty">
+         <strong>Nothing here right now.</strong>
+         <span>Creative will appear automatically as it moves through the workflow.</span>
+       </div>`;
 }
 
 const isCommercialScreen = s => Boolean(
@@ -2316,117 +2596,7 @@ function render(){
   $('#creativeBusiness').innerHTML = '<option value="">House / internal</option>' +
     state.businesses.filter(b=>b.is_advertiser).map(b=>`<option value="${b.id}">${esc(b.name)}</option>`).join('');
 
-  $('#creativeJobs').innerHTML = (state.creativeJobs||[]).map(j=>{
-    const md=j.metadata && typeof j.metadata==='object' ? j.metadata : {};
-    const revision=Number(j.revision_number||md.revision_number||1);
-    const releaseRevision=Number(md.client_review_release_revision||0);
-    const explicitlyReleased=Boolean(
-      md.client_review_released_at &&
-      releaseRevision===revision
-    );
-    const historicallyReviewed=
-      j.review_status==='approved' ||
-      j.review_status==='changes_requested';
-    const releasedToClient=explicitlyReleased||historicallyReviewed;
-
-    const needsInternalReview=
-      j.status==='completed' &&
-      Boolean(j.output_asset_id) &&
-      j.review_status==='pending' &&
-      !releasedToClient;
-
-    const advertiser=state.businesses.find(
-      b=>b.id===j.advertiser_business_id
-    );
-
-    const reviewLabel=needsInternalReview
-      ? 'INTERNAL REVIEW'
-      : j.review_status==='approved'
-        ? 'CLIENT APPROVED'
-        : j.review_status==='changes_requested'
-          ? 'CLIENT CHANGES'
-          : explicitlyReleased
-            ? 'CLIENT REVIEW'
-            : String(j.status||'').toUpperCase();
-
-    const reviewNote=needsInternalReview
-      ? 'Held from client portal until CoastLoop releases it.'
-      : explicitlyReleased && j.review_status==='pending'
-        ? 'Released to the client for approval.'
-        : '';
-
-    const preview=j.output_asset_id
-      ? `<div style="
-            margin:12px 0;
-            border-radius:12px;
-            overflow:hidden;
-            background:#090b0e;
-            border:1px solid rgba(255,255,255,.08);
-          ">${
-            j.job_type==='video'
-              ? `<video
-                   src="/media/${encodeURIComponent(j.output_asset_id)}"
-                   controls
-                   muted
-                   playsinline
-                   preload="metadata"
-                   style="display:block;width:100%;max-height:420px;object-fit:contain"
-                 ></video>`
-              : `<img
-                   src="/media/${encodeURIComponent(j.output_asset_id)}"
-                   alt="${esc(md.title||'CoastLoop generated creative')}"
-                   style="display:block;width:100%;max-height:420px;object-fit:contain"
-                 >`
-          }</div>`
-      : '';
-
-    return `
-      ${creativeAdminProgress(j)}
-      <div class="media-item creative-admin-review-card"
-           style="${needsInternalReview
-             ? 'border-color:rgba(231,255,36,.42);box-shadow:0 0 26px rgba(231,255,36,.06)'
-             : ''}">
-        <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start">
-          <div>
-            <strong>${esc(md.title||'Generated creative')}</strong>
-            <div class="muted">
-              ${esc(advertiser?.name||'House / internal')}
-              · revision ${revision}
-            </div>
-          </div>
-          <span class="pill">${esc(reviewLabel)}</span>
-        </div>
-
-        ${preview}
-
-        <div class="muted">${esc((j.prompt||'').slice(0,220))}</div>
-
-        ${reviewNote
-          ? `<div style="
-               margin-top:10px;
-               padding:9px 11px;
-               border-radius:9px;
-               background:rgba(231,255,36,.06);
-               border:1px solid rgba(231,255,36,.18);
-               font-size:12px;
-             ">${esc(reviewNote)}</div>`
-          : ''}
-
-        ${needsInternalReview
-          ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
-               <button
-                 class="creative-release-client"
-                 data-job="${esc(j.id)}"
-                 type="button"
-               >Release to client</button>
-               <span class="muted" style="align-self:center">
-                 Client cannot see this finished render yet.
-               </span>
-             </div>`
-          : ''}
-      </div>
-    `;
-  }).join('') || '<div class="muted">No generated creative jobs yet.</div>';
+  renderCreativeStudio();
 
   renderScheduling();
 
@@ -4051,9 +4221,64 @@ document.querySelectorAll('.admin-nav .cl-side-link').forEach(link=>{
 
 
 
+const creativeStudioTabs=$('#creativeStudioTabs');
+if(creativeStudioTabs){
+  creativeStudioTabs.addEventListener('click',e=>{
+    const tab=e.target.closest('[data-creative-filter]');
+    if(!tab) return;
+    creativeStudioFilter=tab.dataset.creativeFilter||'review';
+    renderCreativeStudio();
+  });
+}
+
 const creativeJobsPanel=$('#creativeJobs');
 if(creativeJobsPanel){
   creativeJobsPanel.addEventListener('click',async e=>{
+    const preview=e.target.closest('.creative-open-preview');
+    if(preview){
+      const dialog=$('#creativeStudioPreviewDialog');
+      const stage=$('#creativeStudioPreviewStage');
+      const title=$('#creativeStudioPreviewTitle');
+      const asset=preview.dataset.asset;
+      const kind=preview.dataset.kind||'image';
+
+      if(title) title.textContent=preview.dataset.title||'Creative preview';
+
+      if(stage && asset){
+        stage.innerHTML=kind==='video'
+          ? `<video src="/media/${encodeURIComponent(asset)}" controls autoplay muted playsinline></video>`
+          : `<img src="/media/${encodeURIComponent(asset)}" alt="CoastLoop creative preview">`;
+      }
+
+      if(dialog){
+        if(typeof dialog.showModal==='function') dialog.showModal();
+        else dialog.setAttribute('open','');
+      }
+      return;
+    }
+
+    const refine=e.target.closest('.creative-internal-refine');
+    if(refine){
+      const form=creativeJobsPanel.querySelector(
+        `.creative-internal-revision-form[data-job="${CSS.escape(refine.dataset.job||'')}"]`
+      );
+      if(form){
+        form.hidden=false;
+        form.querySelector('textarea')?.focus();
+      }
+      return;
+    }
+
+    const cancel=e.target.closest('.creative-internal-cancel');
+    if(cancel){
+      const form=cancel.closest('.creative-internal-revision-form');
+      if(form){
+        form.reset();
+        form.hidden=true;
+      }
+      return;
+    }
+
     const button=e.target.closest('.creative-release-client');
     if(!button) return;
 
@@ -4061,13 +4286,13 @@ if(creativeJobsPanel){
     if(!jobId) return;
 
     const ok=confirm(
-      'Release this exact creative revision to the client portal for approval?'
+      'Release this exact creative revision to the client for approval?'
     );
     if(!ok) return;
 
     const original=button.textContent;
     button.disabled=true;
-    button.textContent='Releasing…';
+    button.textContent='Releasing...';
 
     try{
       await api(
@@ -4078,7 +4303,6 @@ if(creativeJobsPanel){
           body:JSON.stringify({action:'release_to_client'})
         }
       );
-
       await load();
     }catch(err){
       $('#error').textContent=err.message;
@@ -4086,85 +4310,69 @@ if(creativeJobsPanel){
       button.textContent=original;
     }
   });
+
+  creativeJobsPanel.addEventListener('submit',async e=>{
+    const form=e.target.closest('.creative-internal-revision-form');
+    if(!form) return;
+
+    e.preventDefault();
+
+    const jobId=form.dataset.job;
+    const notes=String(new FormData(form).get('notes')||'').trim();
+    if(!jobId || !notes) return;
+
+    const submit=form.querySelector('button[type="submit"]');
+    const original=submit?.textContent||'Create refined version';
+
+    if(submit){
+      submit.disabled=true;
+      submit.textContent='Sending to GENNY...';
+    }
+
+    try{
+      await api(
+        `/api/admin/creative-jobs/${encodeURIComponent(jobId)}/revise`,
+        {
+          method:'POST',
+          headers:{'content-type':'application/json'},
+          body:JSON.stringify({notes})
+        }
+      );
+
+      form.reset();
+      form.hidden=true;
+      creativeStudioFilter='review';
+      await load();
+    }catch(err){
+      $('#error').textContent=err.message;
+      if(submit){
+        submit.disabled=false;
+        submit.textContent=original;
+      }
+    }
+  });
+}
+
+const creativeStudioPreviewDialog=$('#creativeStudioPreviewDialog');
+if(creativeStudioPreviewDialog){
+  creativeStudioPreviewDialog.addEventListener('click',e=>{
+    if(e.target.closest('.creative-preview-close')){
+      creativeStudioPreviewDialog.close();
+      return;
+    }
+
+    if(e.target===creativeStudioPreviewDialog)
+      creativeStudioPreviewDialog.close();
+  });
+
+  creativeStudioPreviewDialog.addEventListener('close',()=>{
+    const stage=$('#creativeStudioPreviewStage');
+    if(stage) stage.innerHTML='';
+  });
 }
 
 function ensureCreativeAdminLiveMonitor(){
   if(window.__coastloopCreativeAdminPoll) return;
-
-  if(!document.querySelector('#coastloopCreativeAdminStyle')){
-    const style=document.createElement('style');
-    style.id='coastloopCreativeAdminStyle';
-    style.textContent=`
-      @keyframes coastloopGennyPulse {
-        from { opacity:.60; filter:brightness(.92); }
-        to   { opacity:1; filter:brightness(1.20); }
-      }
-
-      .genny-admin-build {
-        margin:10px 0 14px;
-        padding:12px 14px;
-        border:1px solid rgba(231,255,36,.32);
-        border-radius:12px;
-        background:linear-gradient(
-          180deg,
-          rgba(231,255,36,.07),
-          rgba(231,255,36,.02)
-        );
-        box-shadow:0 0 24px rgba(231,255,36,.05);
-      }
-
-      .genny-admin-build-head {
-        display:flex;
-        align-items:center;
-        justify-content:space-between;
-        gap:12px;
-        margin-bottom:8px;
-      }
-
-      .genny-admin-build-head strong {
-        font-size:13px;
-        letter-spacing:.02em;
-      }
-
-      .genny-admin-build-head small {
-        opacity:.72;
-      }
-
-      .genny-admin-progress {
-        height:5px;
-        overflow:hidden;
-        border-radius:999px;
-        background:rgba(255,255,255,.08);
-        box-shadow:inset 0 0 0 1px rgba(255,255,255,.04);
-      }
-
-      .genny-admin-progress-fill {
-        height:100%;
-        border-radius:inherit;
-        background:#e7ff24;
-        box-shadow:
-          0 0 9px rgba(231,255,36,.72),
-          0 0 22px rgba(231,255,36,.28);
-        animation:coastloopGennyPulse 1.15s ease-in-out infinite alternate;
-      }
-
-      .genny-admin-prompt {
-        margin-top:9px;
-        font-size:12px;
-      }
-
-      .genny-admin-prompt summary {
-        cursor:pointer;
-        opacity:.72;
-      }
-
-      .genny-admin-prompt div {
-        margin-top:7px;
-        line-height:1.45;
-      }
-    `;
-    document.head.appendChild(style);
-  }
 
   async function refreshCreativeAdminLive(){
     if(document.hidden) return;

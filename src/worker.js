@@ -1723,6 +1723,20 @@ async function adminReleaseCreativeToClient(request,env,auth,jobId){
 
   const state=creativeClientReleaseState(job);
 
+  const rootId=job.parent_job_id||job.id;
+  const newer=await sb(
+    env,
+    `creative_jobs?organization_id=eq.${ORG_ID}`+
+    `&parent_job_id=eq.${encodeURIComponent(rootId)}`+
+    `&revision_number=gt.${Number(state.revision||1)}`+
+    `&select=id,revision_number&order=revision_number.desc&limit=1`
+  );
+
+  if(newer?.length)
+    return json({
+      error:"a newer creative revision exists; review the newest revision instead"
+    },409);
+
   if(state.explicitlyReleased){
     return json({
       ok:true,
@@ -1764,19 +1778,264 @@ async function adminReleaseCreativeToClient(request,env,auth,jobId){
   });
 }
 
+
+async function adminReviseCreative(request,env,auth,jobId){
+  const rows=await sb(
+    env,
+    `creative_jobs?id=eq.${encodeURIComponent(jobId)}`+
+    `&organization_id=eq.${ORG_ID}&select=*&limit=1`
+  );
+
+  const job=rows?.[0];
+
+  if(!job)
+    return json({error:"creative job not found"},404);
+
+  if(job.status!=="completed" || !job.output_asset_id)
+    return json({error:"creative must be completed before internal revision"},409);
+
+  const release=creativeClientReleaseState(job);
+
+  if(release.released)
+    return json({
+      error:"creative has already been released to the client; use the client revision workflow"
+    },409);
+
+  const b=await bodyJson(request);
+  const notes=String(b.notes||"").trim().slice(0,1200);
+
+  if(!notes)
+    return json({error:"internal revision notes required"},400);
+
+  const rootId=job.parent_job_id||job.id;
+
+  const revisions=await sb(
+    env,
+    `creative_jobs?organization_id=eq.${ORG_ID}`+
+    `&or=(id.eq.${encodeURIComponent(rootId)},parent_job_id.eq.${encodeURIComponent(rootId)})`+
+    `&select=id,revision_number,metadata&order=revision_number.desc&limit=50`
+  )||[];
+
+  const existing=revisions.find(
+    x=>x.metadata?.internal_revision_of===job.id
+  );
+
+  if(existing)
+    return json({
+      ok:true,
+      action:"internal_revision_requested",
+      job:existing,
+      reused:true
+    });
+
+  const nextRevision=Math.max(
+    Number(job.revision_number||1),
+    Number(revisions[0]?.revision_number||1)
+  )+1;
+
+  const priorMetadata=
+    job.metadata && typeof job.metadata==="object"
+      ? job.metadata
+      : {};
+
+  const {
+    client_review_released_at:_clientReleasedAt,
+    client_review_release_revision:_clientReleaseRevision,
+    client_review_released_by:_clientReleasedBy,
+    internal_reviewed_at:_internalReviewedAt,
+    internal_review_pending:_internalPending,
+    internal_review_status:_internalStatus,
+    ...revisionMetadataBase
+  }=priorMetadata;
+
+  const revisionContext=[
+    priorMetadata.business_category,
+    priorMetadata.business_description,
+    priorMetadata.promotion
+  ].filter(Boolean).join(" ");
+
+  const basePositive=coastloopLegacyPositivePrompt(
+    priorMetadata.positive_prompt || job.prompt
+  );
+
+  const positivePrompt=[
+    basePositive,
+    coastloopRevisionDirection(notes,revisionContext)
+  ].filter(Boolean).join("\n\n").slice(0,8000);
+
+  const negativePrompt=coastloopMergeNegativePrompts(
+    priorMetadata.negative_prompt,
+    coastloopCreativeNegativePrompt(
+      {category:priorMetadata.business_category||"local business"},
+      {
+        business_category:priorMetadata.business_category,
+        business_description:priorMetadata.business_description
+      },
+      {
+        promotion:priorMetadata.promotion,
+        notes:priorMetadata.creative_notes
+      },
+      notes
+    )
+  );
+
+  const created=await sb(env,"creative_jobs",{
+    method:"POST",
+    headers:{Prefer:"return=representation"},
+    body:JSON.stringify({
+      organization_id:ORG_ID,
+      advertiser_business_id:job.advertiser_business_id,
+      job_type:job.job_type,
+      prompt:positivePrompt,
+      requested_by:auth?.user?.id||null,
+      metadata:{
+        ...revisionMetadataBase,
+        brief_version:2,
+        internal_revision_of:job.id,
+        internal_revision_notes:notes,
+        internal_review_status:"queued",
+        positive_prompt:positivePrompt,
+        negative_prompt:negativePrompt,
+        quality_profile:"coastloop-signature-luxury-v2",
+        network_template:"signature-luxury-02",
+        steps:20,
+        render_scene_count:job.job_type==="video"?5:1,
+        requested_variants:job.job_type==="video"?5:1
+      },
+      parent_job_id:rootId,
+      revision_number:nextRevision,
+      review_status:"pending"
+    })
+  });
+
+  const revision=Array.isArray(created)?created[0]:created;
+
+  if(!revision)
+    throw new Error("internal creative revision insert failed");
+
+  const sources=await sb(
+    env,
+    `creative_job_sources?creative_job_id=eq.${encodeURIComponent(job.id)}`+
+    `&select=source_asset_id,role`
+  );
+
+  if(sources?.length){
+    await sb(env,"creative_job_sources",{
+      method:"POST",
+      body:JSON.stringify(
+        sources.map(x=>({
+          creative_job_id:revision.id,
+          source_asset_id:x.source_asset_id,
+          role:x.role
+        }))
+      )
+    });
+  }
+
+  const now=new Date().toISOString();
+
+  await sb(
+    env,
+    `creative_jobs?id=eq.${encodeURIComponent(job.id)}`+
+    `&organization_id=eq.${ORG_ID}`,
+    {
+      method:"PATCH",
+      headers:{Prefer:"return=minimal"},
+      body:JSON.stringify({
+        metadata:{
+          ...priorMetadata,
+          internal_review_status:"revision_requested",
+          internal_revision_requested_at:now,
+          internal_revision_notes:notes
+        }
+      })
+    }
+  );
+
+  const rejected={
+    approval_status:"rejected",
+    approved_at:null,
+    approved_by:null,
+    rejection_reason:`Internal CoastLoop QC: ${notes}`.slice(0,1000)
+  };
+
+  await sb(
+    env,
+    `media_assets?id=eq.${encodeURIComponent(job.output_asset_id)}`+
+    `&organization_id=eq.${ORG_ID}`,
+    {
+      method:"PATCH",
+      headers:{Prefer:"return=minimal"},
+      body:JSON.stringify(rejected)
+    }
+  );
+
+  await sb(
+    env,
+    `media_assets?parent_asset_id=eq.${encodeURIComponent(job.output_asset_id)}`+
+    `&organization_id=eq.${ORG_ID}`,
+    {
+      method:"PATCH",
+      headers:{Prefer:"return=minimal"},
+      body:JSON.stringify(rejected)
+    }
+  );
+
+  return json({
+    ok:true,
+    action:"internal_revision_requested",
+    job:revision
+  },201);
+}
+
 async function adminCreativeJobs(env) {
   return await sb(env, `creative_jobs?organization_id=eq.${ORG_ID}&select=*&order=created_at.desc&limit=100`) || [];
 }
 
 async function createCreativeJob(request, env, auth=null) {
   const b=await bodyJson(request);
-  const prompt=String(b.prompt||"").trim().slice(0,8000);
+  const rawPrompt=String(b.prompt||"").trim().slice(0,5000);
   const advertiser=String(b.advertiser_business_id||"").trim()||null;
-  if(!prompt) return json({error:"creative prompt required"},400);
+
+  if(!rawPrompt)
+    return json({error:"creative prompt required"},400);
+
+  const prompt=[
+    rawPrompt,
+    "COASTLOOP SIGNATURE LUXURY STANDARD:",
+    "Elevate this concept into flagship national-agency advertising art with exceptional photographic realism, sophisticated art direction, impeccable materials, dramatic controlled lighting, precise composition and premium television-ready finish.",
+    "Make the result feel expensive, deliberate, aspirational and portfolio-defining."
+  ].join(" ").slice(0,8000);
+
+  const metadata={
+    title:String(b.title||"Generated creative").slice(0,180),
+    quality_profile:"coastloop-signature-luxury-v2",
+    positive_prompt:prompt,
+    negative_prompt:coastloopCreativeNegativePrompt(
+      {category:"local business"},
+      null,
+      {notes:rawPrompt}
+    ),
+    steps:20,
+    render_scene_count:1,
+    requested_variants:1,
+    network_template:"signature-luxury-02",
+    master_resolution:"3840x2160"
+  };
+
   const rows=await sb(env,"creative_jobs",{
-    method:"POST",headers:{Prefer:"return=representation"},
-    body:JSON.stringify({organization_id:ORG_ID,advertiser_business_id:advertiser,prompt,job_type:"image",requested_by:auth?.user?.id||null,metadata:{title:String(b.title||"").slice(0,180)}})
+    method:"POST",
+    headers:{Prefer:"return=representation"},
+    body:JSON.stringify({
+      organization_id:ORG_ID,
+      advertiser_business_id:advertiser,
+      prompt,
+      job_type:"image",
+      requested_by:auth?.user?.id||null,
+      metadata
+    })
   });
+
   return json({ok:true,job:rows?.[0]||null},201);
 }
 
@@ -2442,35 +2701,8 @@ async function portalSourceAssets(request,env,auth,url){
 }
 
 
-function coastloopCreativePromptBase(business,profile,brief,jobType){
-  const category=profile?.business_category||business.category||"local business";
-  const desc=profile?.business_description||"";
-  const websiteContext=profile?.website_context?.summary||"";
-  const categoryStyle={
-    restaurant:"editorial food photography, atmospheric premium dining",
-    spa:"quiet luxury, refined wellness and hospitality",
-    construction:"architectural photography, craftsmanship and scale",
-    retail:"premium editorial product photography, clean merchandising",
-    automotive:"cinematic premium automotive advertising",
-  };
-  const style=categoryStyle[String(category).toLowerCase()]||
-    "premium editorial commercial photography";
+function coastloopCreativeContextText(business,profile,brief){
   return [
-    `Create a ${jobType==="video"?"cinematic advertising keyframe":"premium advertising hero image"} for ${business.name}.`,
-    `Business category: ${category}. ${desc}`,
-    `Promotion: ${brief.promotion||"general brand awareness"}.`,
-    `Visual direction: ${style}; sophisticated, restrained, luxury-leaning, television-ready 16:9 composition.`,
-    `Leave clean negative space for exact logo, headline and CTA overlays added later by CoastLoop.`,
-    `No baked-in text, logos, prices, claims, badges, flyer styling, visual clutter, or AI-looking artifacts.`,
-    `Public-display appropriate. Local ads do not need to look local.`,
-    websiteContext ? `First-party website context: ${websiteContext.slice(0,2200)}` : "",
-    brief.notes ? `Client context: ${brief.notes}` : ""
-  ].filter(Boolean).join(" ");
-}
-
-
-function coastloopCreativeQualityContext(business,profile,brief){
-  const context=[
     business?.category,
     profile?.business_category,
     profile?.business_description,
@@ -2479,77 +2711,256 @@ function coastloopCreativeQualityContext(business,profile,brief){
     brief?.promotion,
     brief?.notes
   ].filter(Boolean).join(" ").toLowerCase();
+}
 
-  const culinary=/(restaurant|dining|chef|culinary|food|steak|beef|meat|chicken|seafood|grill|barbecue|bbq|cafe|café|bakery|dish|plate|seared)/i.test(context);
+function coastloopCreativeIsCulinary(context){
+  return /(restaurant|dining|chef|culinary|food|steak|beef|meat|chicken|seafood|grill|barbecue|bbq|cafe|café|bakery|dish|plate|seared)/i
+    .test(String(context||""));
+}
+
+function coastloopCreativePromptBase(business,profile,brief,jobType){
+  const category=profile?.business_category||business.category||"local business";
+  const desc=profile?.business_description||"";
+  const websiteContext=profile?.website_context?.summary||"";
+  const noteContext=[
+    category,
+    desc,
+    websiteContext,
+    brief?.promotion
+  ].filter(Boolean).join(" ");
+
+  const noteDirection=brief?.notes
+    ? coastloopRevisionPromptParts(
+        brief.notes,
+        noteContext
+      ).positiveRequested
+    : "";
+
+  const categoryStyle={
+    restaurant:"world-class fine-dining editorial photography, exquisite culinary art direction, cinematic hospitality lighting",
+    spa:"ultra-luxury wellness editorial, serene architectural beauty, refined hospitality art direction",
+    construction:"prestige architectural photography, monumental craftsmanship, immaculate materials and scale",
+    retail:"luxury editorial product campaign, immaculate merchandising, fashion-house level composition",
+    automotive:"prestige automotive campaign photography, sculpted cinematic light, exact premium material rendering"
+  };
+
+  const style=categoryStyle[String(category).toLowerCase()]||
+    "top-tier international luxury advertising photography, editorial art direction and cinematic commercial polish";
+
+  return [
+    `Create a ${jobType==="video"?"cinematic luxury advertising keyframe":"signature luxury advertising hero image"} for ${business.name}.`,
+    `Business category: ${category}. ${desc}`,
+    `Campaign objective: ${brief.promotion||"prestige brand awareness"}.`,
+    `Visual direction: ${style}.`,
+    "The image must feel commissioned by a top national advertising agency for a flagship campaign, not generated as a generic local advertisement.",
+    "Treat this frame as portfolio-defining advertising art: immediate visual impact, impeccable taste, confident restraint, exceptional realism and obsessive attention to every visible material.",
+    "Use deliberate cinematic composition, sophisticated editorial lighting, controlled highlights, nuanced shadow detail, natural depth, premium lens character and a single unmistakable visual hero.",
+    "The first impression should communicate expensive production value before the viewer reads any copy.",
+    "Reserve elegant uncluttered visual space for CoastLoop to apply exact brand typography, logo, offer and CTA during deterministic composition.",
+    "Public-display appropriate and television-ready in a 16:9 composition.",
+    websiteContext ? `First-party brand and business context: ${websiteContext.slice(0,2200)}` : "",
+    noteDirection ? `Requested creative direction: ${noteDirection}` : ""
+  ].filter(Boolean).join(" ");
+}
+
+function coastloopCreativeQualityContext(business,profile,brief){
+  const context=coastloopCreativeContextText(business,profile,brief);
+  const culinary=coastloopCreativeIsCulinary(context);
 
   const rules=[
-    "COASTLOOP COMMERCIAL IMAGE STANDARD:",
-    "Create a believable premium advertising photograph, with the finish and restraint of a national television commercial keyframe.",
-    "Everything visible should feel intentionally art-directed, recently maintained, clean, polished and camera-ready.",
-    "Use sophisticated editorial lighting, natural material response, realistic depth, deliberate composition and one clear visual hero.",
-    "Reserve generous uncluttered negative space for CoastLoop to add the exact logo, headline and CTA later.",
-    "Keep all reserved branding areas visually clean and free of lettering, symbols, labels, signage or text-like marks.",
-    "Surfaces and props should look premium and presentation-ready. Wood should have clean refined grain and a fresh well-maintained finish. Stone, metal, glass, fabric and painted surfaces should look professionally maintained.",
-    "Favor pristine contemporary hospitality and commercial styling over rustic wear, heavy patina, stains, scars, grime or distressed finishes.",
-    "Maintain strict physical realism: coherent geometry, ordinary real-world textures, accurate reflections, believable edges and natural object structure.",
-    "Prioritize a finished campaign photograph over visual novelty. If an unusual interpretation competes with realism, choose realism."
+    "COASTLOOP SIGNATURE LUXURY STANDARD:",
+    "Every deliverable must look substantially more expensive than the campaign price and should be visually credible beside national luxury-brand advertising.",
+    "Aim for flawless campaign photography rather than merely acceptable imagery.",
+    "Everything visible must feel intentionally selected, art-directed, freshly prepared, professionally maintained and camera-ready.",
+    "Use precise photographic realism, coherent geometry, believable optics, natural material response, accurate reflections, dimensional highlights and refined depth separation.",
+    "Surfaces should read as new or meticulously maintained premium materials with tasteful contemporary styling.",
+    "Composition must remain elegant at television viewing distance, with disciplined hierarchy and one powerful focal subject.",
+    "Prefer sophisticated realism and timeless luxury over novelty, gimmicks, exaggerated fantasy or trendy visual noise.",
+    "The finished frame should create an immediate desire to experience, own, visit or buy what is being advertised."
   ];
 
   if(culinary){
     rules.push(
-      "CULINARY IMAGE STANDARD:",
-      "Food must look freshly prepared, appetizing, restaurant-quality and immediately recognizable as real food.",
-      "Proteins should show natural fibers, moisture and believable cooking texture. Browning and searing should read as clean caramelization on the exterior surface.",
-      "For steak or similar meat, favor a clean dark-golden exterior sear with a natural tender interior and realistic juices.",
-      "Plateware, garnishes, counters, tables and serving surfaces should look pristine, dry, food-safe and freshly prepared for a professional food shoot.",
-      "If wood appears near food, use premium clean serving wood with subtle fresh grain and restrained wear, like a newly maintained upscale restaurant presentation board."
+      "COASTLOOP SIGNATURE CULINARY STANDARD:",
+      "Food photography must be extraordinary, crave-inducing and worthy of a flagship fine-dining campaign.",
+      "The hero food should look freshly prepared at the exact peak moment for photography, with precise culinary texture and appetizing natural moisture.",
+      "Proteins must show believable muscle grain, dimensional fibers, clean caramelization and realistic juices.",
+      "For steak, create an exceptional prime-steak hero: a rich mahogany-brown exterior crust with a precise hard sear confined to the exterior, a tender natural interior, subtle rendered fat and jewel-like realistic juices.",
+      "Make the steak feel sculptural and luxurious under controlled restaurant lighting, with elegant specular highlights and rich dimensional shadow.",
+      "Plateware, garnishes, flatware, counters, tables and serving surfaces should feel immaculate, contemporary and intentionally styled by a world-class food photographer.",
+      "Visible wood should be refined premium serving wood with beautiful clean grain and a fresh immaculate finish."
     );
   }
 
   return rules.join(" ");
 }
 
-function coastloopRevisionDirection(notes){
+function coastloopRevisionPromptParts(notes,context=""){
   const original=String(notes||"").replace(/\s+/g," ").trim();
-
-  const culinary=/(restaurant|food|steak|beef|meat|chicken|seafood|dish|plate|sear|seared|cook|grill)/i.test(original);
-
-  // Important: rejected visual defects should not be repeated into the
-  // generation prompt. Models can treat the mere noun as subject matter.
-  const rejectedDefect=/\b(mold|mould|alien|fuzzy|fuzz|rotten|rotting|decay|decayed|gross|disgusting|diseased|fungus|fungal|slime|slimy|contaminated|contamination|infected|infection|monster|mutant|mangled)\b/i;
-
   const sentences=original
     .split(/(?<=[.!?])\s+/)
     .map(x=>x.trim())
     .filter(Boolean);
 
-  const positiveRequested=sentences
-    .filter(sentence=>!rejectedDefect.test(sentence))
-    .join(" ")
-    .trim();
+  const negativeCue=/\b(no|not|dont|don't|avoid|remove|wrong|bad|ugly|horrible|terrible|awful|gross|disgusting|looks?\s+like|too\s+much|mold|mould|fungus|fuzzy|fuzz|rotten|rot|decay|slime|spoiled|alien|mutant|mangled|dirty|stained|warped|fake|plastic|artificial|weird)\b/i;
 
-  const rules=[
-    "COASTLOOP REVISION INTERPRETATION:",
-    "Treat advertiser revision notes as correction intent, not as a list of visual subjects to reproduce.",
-    "Remove rejected characteristics by replacing them with ordinary, polished, physically realistic equivalents.",
-    "Preserve useful composition, lighting, framing and campaign intent unless the requested correction requires changing them.",
-    "The revised frame must satisfy the full CoastLoop commercial image standard."
-  ];
+  const rejected=[];
+  const positive=[];
 
-  if(positiveRequested){
-    rules.push(`Requested positive direction: ${positiveRequested}`);
+  for(const sentence of sentences){
+    if(negativeCue.test(sentence)){
+      rejected.push(sentence);
+
+      const salvage=sentence.match(
+        /\b(?:instead|but|however|we need|need|we want|want|should be|make it|make the|only)\b(.+)$/i
+      );
+      if(salvage && salvage[1]?.trim())
+        positive.push(salvage[1].trim());
+    }else{
+      positive.push(sentence);
+    }
   }
 
-  if(culinary){
+  const culinary=coastloopCreativeIsCulinary(`${context} ${original}`);
+
+  return {
+    original,
+    positiveRequested:positive.join(" ").trim(),
+    rejectedDescription:rejected.join(" ").trim(),
+    culinary
+  };
+}
+
+function coastloopRevisionDirection(notes,context=""){
+  const parts=coastloopRevisionPromptParts(notes,context);
+
+  const rules=[
+    "COASTLOOP REVISION - POSITIVE CREATIVE DIRECTION:",
+    "Create a fresh premium interpretation that resolves the requested correction while preserving only the strongest useful campaign intent.",
+    "Treat this as another full agency art-direction pass, not a patch.",
+    "The replacement must meet the complete CoastLoop Signature Luxury Standard."
+  ];
+
+  if(parts.positiveRequested)
+    rules.push(`Requested result: ${parts.positiveRequested}`);
+
+  if(parts.culinary){
     rules.push(
-      "For this culinary revision, make the food look freshly prepared and naturally photographed.",
-      "If meat is present, use realistic fibers and moisture with a clean exterior sear; keep the interior natural and tender-looking.",
-      "Use pristine contemporary plating and immaculate premium serving surfaces.",
-      "Any visible wood should look clean, refined, food-safe, recently maintained and appropriate for an upscale restaurant advertising shoot."
+      "For culinary work, make the hero food spectacular, fresh, natural and intensely appetizing.",
+      "For steak or similar meat, emphasize a rich precise exterior sear, natural meat grain, tender interior structure, realistic moisture and luxurious food-photography lighting.",
+      "Use immaculate contemporary plating and flawless premium serving surfaces."
     );
   }
 
   return rules.join(" ");
+}
+
+function coastloopUniversalNegativePrompt(){
+  return [
+    "text",
+    "letters",
+    "words",
+    "numbers",
+    "typography",
+    "logo",
+    "watermark",
+    "badge",
+    "signage",
+    "pseudo-text",
+    "gibberish lettering",
+    "flyer layout",
+    "cheap local ad",
+    "clip art",
+    "stock-photo cliche",
+    "visual clutter",
+    "low resolution",
+    "soft detail",
+    "muddy detail",
+    "compression artifacts",
+    "oversharpening",
+    "plastic CGI look",
+    "waxy texture",
+    "uncanny texture",
+    "warped geometry",
+    "malformed objects",
+    "duplicate objects",
+    "broken reflections",
+    "impossible shadows",
+    "dirty surfaces",
+    "grime",
+    "stains",
+    "damage",
+    "distressed finish",
+    "battered materials",
+    "splintered wood",
+    "greasy surfaces"
+  ];
+}
+
+function coastloopCreativeNegativePrompt(business,profile,brief,revisionNotes=""){
+  const context=coastloopCreativeContextText(business,profile,brief);
+  const culinary=coastloopCreativeIsCulinary(`${context} ${revisionNotes}`);
+  const negatives=coastloopUniversalNegativePrompt();
+
+  if(culinary){
+    negatives.push(
+      "mold",
+      "mould",
+      "fungus",
+      "fungal growth",
+      "fuzzy growth",
+      "fuzz",
+      "spores",
+      "rot",
+      "rotting food",
+      "decay",
+      "slime",
+      "spoiled food",
+      "contamination",
+      "diseased texture",
+      "alien meat texture",
+      "mutated fibers",
+      "cauliflower texture",
+      "green meat",
+      "gray meat",
+      "blue meat",
+      "raw exterior",
+      "burned charcoal crust",
+      "rubbery meat",
+      "plastic food",
+      "dry lifeless meat",
+      "dirty plate",
+      "dirty cutting board",
+      "stained serving board",
+      "old battered wood"
+    );
+  }
+
+  const revision=coastloopRevisionPromptParts(revisionNotes,context);
+  if(revision.rejectedDescription)
+    negatives.push(`rejected client description: ${revision.rejectedDescription}`);
+
+  return [...new Set(
+    negatives
+      .map(x=>String(x||"").trim())
+      .filter(Boolean)
+  )].join(", ").slice(0,4000);
+}
+
+function coastloopMergeNegativePrompts(...values){
+  return [...new Set(
+    values
+      .flatMap(x=>String(x||"").split(","))
+      .map(x=>x.trim())
+      .filter(Boolean)
+  )].join(", ").slice(0,4000);
+}
+
+function coastloopLegacyPositivePrompt(prompt){
+  return String(prompt||"")
+    .replace(/\n{0,2}REVISION REQUEST:[\s\S]*$/i,"")
+    .replace(/\bNo baked-in text, logos, prices, claims, badges, flyer styling, visual clutter, or AI-looking artifacts\.\s*/gi,"")
+    .trim();
 }
 
 function coastloopCreativePrompt(business,profile,brief,jobType){
@@ -2566,6 +2977,7 @@ function coastloopCreativePrompt(business,profile,brief,jobType){
   return `${base}\n\n${quality}`.slice(0,8000);
 }
 
+
 async function portalCreativeJobs(request,env,auth,url){
   if(request.method==="GET"){
     const businessId=String(url.searchParams.get("business_id")||"").trim();
@@ -2573,7 +2985,7 @@ async function portalCreativeJobs(request,env,auth,url){
       return json({error:"advertiser access required"},403);
     const rows=await sb(env,
       `creative_jobs?organization_id=eq.${ORG_ID}&advertiser_business_id=eq.${encodeURIComponent(businessId)}`+
-      `&select=id,job_type,status,output_asset_id,metadata,review_status,review_notes,revision_number,created_at,completed_at&order=created_at.desc&limit=50`);
+      `&select=id,job_type,status,output_asset_id,metadata,review_status,review_notes,revision_number,parent_job_id,created_at,completed_at&order=created_at.desc&limit=50`);
     const clientRows=(rows||[]).map(job=>{
 const release=creativeClientReleaseState(job);
 const internalReviewPending=
@@ -2621,12 +3033,31 @@ return json(clientRows);
   const campaignContinuity=currentCampaignCreative.length
     ? ` Existing approved creative is currently assigned to an active campaign: ${currentCampaignCreative.map(x=>`${x.campaign.name}: ${x.asset.title}`).join("; ")}. Preserve useful brand continuity while making the requested creative distinct and purposeful.`
     : "";
-  const prompt=coastloopCreativePrompt(business,profile,brief,jobType)+campaignContinuity;
+  const positivePrompt=coastloopCreativePrompt(
+    business,
+    profile,
+    brief,
+    jobType
+  );
+
+  const prompt=`${positivePrompt}${campaignContinuity}`.slice(0,8000);
+
+  const negativePrompt=coastloopCreativeNegativePrompt(
+    business,
+    profile,
+    brief,
+    brief.notes
+  );
+
   const metadata={
-    brief_version:1,title:String(b.title||"New CoastLoop ad").slice(0,180),
-    business_name:business.name,business_category:profile?.business_category||business.category||null,
-    business_description:profile?.business_description||null,promotion:brief.promotion||null,
-    cta:brief.cta||null,website_url:profile?.website_url||business.website||null,
+    brief_version:2,
+    title:String(b.title||"New CoastLoop ad").slice(0,180),
+    business_name:business.name,
+    business_category:profile?.business_category||business.category||null,
+    business_description:profile?.business_description||null,
+    promotion:brief.promotion||null,
+    cta:brief.cta||null,
+    website_url:profile?.website_url||business.website||null,
     creative_notes:brief.notes||null,
     website_context:profile?.website_context||null,
     current_campaign_creative:currentCampaignCreative.map(x=>({
@@ -2635,8 +3066,14 @@ return json(clientRows);
       asset_id:x.asset.id,
       asset_title:x.asset.title
     })),
-    network_template:"luxury-editorial-01",
-    requested_variants:jobType==="video"?3:1,master_resolution:"3840x2160"
+    network_template:"signature-luxury-02",
+    quality_profile:"coastloop-signature-luxury-v2",
+    positive_prompt:prompt,
+    negative_prompt:negativePrompt,
+    steps:20,
+    render_scene_count:jobType==="video"?5:1,
+    requested_variants:jobType==="video"?5:1,
+    master_resolution:"3840x2160"
   };
 
   const rows=await sb(env,"creative_jobs",{
@@ -2744,6 +3181,52 @@ async function portalCreativeReview(request,env,auth,jobId){
   const nextRevision=Math.max(Number(job.revision_number||1),Number(revisions[0]?.revision_number||1))+1;
 
   /* Create the replacement before mutating the reviewed creative. */
+  const priorMetadata=
+    job.metadata && typeof job.metadata==="object"
+      ? job.metadata
+      : {};
+
+  const {
+    client_review_released_at:_clientReleasedAt,
+    client_review_release_revision:_clientReleaseRevision,
+    client_review_released_by:_clientReleasedBy,
+    internal_reviewed_at:_internalReviewedAt,
+    internal_review_pending:_internalPending,
+    internal_review_status:_internalStatus,
+    ...revisionMetadataBase
+  }=priorMetadata;
+
+  const revisionContext=[
+    priorMetadata.business_category,
+    priorMetadata.business_description,
+    priorMetadata.promotion
+  ].filter(Boolean).join(" ");
+
+  const basePositive=coastloopLegacyPositivePrompt(
+    priorMetadata.positive_prompt || job.prompt
+  );
+
+  const revisionPositive=[
+    basePositive,
+    coastloopRevisionDirection(notes,revisionContext)
+  ].filter(Boolean).join("\n\n").slice(0,8000);
+
+  const revisionNegative=coastloopMergeNegativePrompts(
+    priorMetadata.negative_prompt,
+    coastloopCreativeNegativePrompt(
+      {category:priorMetadata.business_category||"local business"},
+      {
+        business_category:priorMetadata.business_category,
+        business_description:priorMetadata.business_description
+      },
+      {
+        promotion:priorMetadata.promotion,
+        notes:priorMetadata.creative_notes
+      },
+      notes
+    )
+  );
+
   const created=await sb(env,"creative_jobs",{
     method:"POST",
     headers:{Prefer:"return=representation"},
@@ -2751,11 +3234,19 @@ async function portalCreativeReview(request,env,auth,jobId){
       organization_id:ORG_ID,
       advertiser_business_id:job.advertiser_business_id,
       job_type:job.job_type,
-      prompt:`${String(job.prompt||"").trim()}\n\n${coastloopRevisionDirection(notes)}`.slice(0,8000),
+      prompt:revisionPositive,
       metadata:{
-        ...(job.metadata||{}),
+        ...revisionMetadataBase,
+        brief_version:2,
         revision_of:job.id,
-        revision_notes:notes
+        revision_notes:notes,
+        positive_prompt:revisionPositive,
+        negative_prompt:revisionNegative,
+        quality_profile:"coastloop-signature-luxury-v2",
+        network_template:"signature-luxury-02",
+        steps:20,
+        render_scene_count:job.job_type==="video"?5:1,
+        requested_variants:job.job_type==="video"?5:1
       },
       parent_job_id:rootId,
       revision_number:nextRevision,
@@ -5564,6 +6055,28 @@ export default {
 
         if (url.pathname === "/api/admin/media" && request.method === "GET")
           return json(await adminMedia(env));
+
+        const creativeInternalReviseMatch = url.pathname.match(
+          /^\/api\/admin\/creative-jobs\/([^/]+)\/revise$/
+        );
+
+        if (creativeInternalReviseMatch && request.method === "POST")
+          return auditMutation(
+            request,
+            env,
+            adminAuth,
+            {
+              action: "creative.internal_revision",
+              entity_type: "creative_job",
+              entity_id: creativeInternalReviseMatch[1]
+            },
+            () => adminReviseCreative(
+              request,
+              env,
+              adminAuth,
+              creativeInternalReviseMatch[1]
+            )
+          );
 
         if (url.pathname === "/api/admin/media" && request.method === "POST")
           return auditMutation(request, env, adminAuth,

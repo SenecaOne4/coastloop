@@ -1176,26 +1176,57 @@ summary{cursor:pointer;font-weight:750}
   <p class="muted">Host operating hours and advertiser dayparts feed the player and pacing engine directly.</p>
   <div id="scheduling"></div>
 </section>
-<div id="creative" class="admin-anchor" data-workspace="creative"></div><section class="card">
-  <h2>Creative review</h2>
-  <p class="muted">Upload creative, bind advertiser work to the correct customer, then approve it before campaign delivery. House media stays separate from advertiser campaigns.</p>
-  <form id="creativeRequest" class="row">
-    <input name="title" placeholder="Ad title">
-    <select name="advertiser_business_id" id="creativeBusiness"><option value="">House / internal</option></select>
-    <input name="prompt" placeholder="Describe the ad you want CoastLoop to make…" required>
-    <button>Generate creative</button>
-  </form>
-  <div id="creativeJobs"></div>
-  <form id="upload" class="row">
-    <input name="title" placeholder="Creative title">
-    <select name="advertiser_business_id" id="mediaBusiness">
-      <option value="">House / internal</option>
-    </select>
-    <input name="file" type="file" accept="image/*,video/*" required>
-    <input name="duration_seconds" type="number" value="15" min="1" max="300" placeholder="Seconds">
-    <button>Upload for review</button>
-  </form>
-  <div id="media" class="media-list"></div>
+<div id="creative" class="admin-anchor" data-workspace="creative"></div>
+<section class="card creative-studio-shell">
+  <div class="creative-studio-heading">
+    <div>
+      <div class="ops-kicker">COASTLOOP CREATIVE</div>
+      <h2>Creative Studio</h2>
+      <p class="muted">Signature-luxury generation, internal quality control, client review and approved creative in one organized workspace.</p>
+    </div>
+    <div class="creative-studio-standard">SIGNATURE LUXURY</div>
+  </div>
+
+  <div class="creative-studio-compose">
+    <form id="creativeRequest" class="creative-studio-create">
+      <input name="title" placeholder="Creative title">
+      <select name="advertiser_business_id" id="creativeBusiness">
+        <option value="">House / internal</option>
+      </select>
+      <input name="prompt" placeholder="Describe the campaign concept..." required>
+      <button>Create with GENNY</button>
+    </form>
+  </div>
+
+  <div id="creativeStudioTabs" class="creative-studio-tabs" aria-label="Creative workflow"></div>
+  <div id="creativeJobs" class="creative-studio-jobs"></div>
+
+  <details class="creative-studio-library">
+    <summary>Creative library and manual upload</summary>
+    <div class="creative-studio-library-body">
+      <form id="upload" class="row">
+        <input name="title" placeholder="Creative title">
+        <select name="advertiser_business_id" id="mediaBusiness">
+          <option value="">House / internal</option>
+        </select>
+        <input name="file" type="file" accept="image/*,video/*" required>
+        <input name="duration_seconds" type="number" value="15" min="1" max="300" placeholder="Seconds">
+        <button>Upload for review</button>
+      </form>
+      <div id="media" class="media-list"></div>
+    </div>
+  </details>
+
+  <dialog id="creativeStudioPreviewDialog" class="creative-studio-preview-dialog">
+    <div class="creative-studio-preview-head">
+      <div>
+        <small>COASTLOOP INTERNAL REVIEW</small>
+        <strong id="creativeStudioPreviewTitle">Creative preview</strong>
+      </div>
+      <button type="button" class="secondary creative-preview-close">Close</button>
+    </div>
+    <div id="creativeStudioPreviewStage" class="creative-studio-preview-stage"></div>
+  </dialog>
 </section>
 <section class="card"><h2>Playlists</h2><form id="newPlaylist" class="row"><input name="name" placeholder="South Strand Demo" required><button>Create playlist</button></form><div id="playlists" class="playlist-list"></div></section>
 

@@ -85,14 +85,33 @@ def find_render(name):
 def render_still(job, prompt=None, suffix=""):
     meta=job.get("metadata") or {}
     name=f"coastloop-{job['id']}{suffix}"
-    cmd=[LOCALGEN,prompt or job["prompt"],"--w","1536","--h","864","--out",name+".png",
-         "--render-root",RENDER_ROOT]
+
+    steps=int(meta.get("steps") or 20)
+    steps=max(9,min(steps,30))
+
+    cmd=[
+        LOCALGEN,
+        prompt or job["prompt"],
+        "--profile","quality",
+        "--w","1536",
+        "--h","864",
+        "--steps",str(steps),
+        "--out",name+".png",
+        "--render-root",RENDER_ROOT
+    ]
+
     if meta.get("negative_prompt"):
         cmd+=["--negative",str(meta["negative_prompt"])]
-    if meta.get("steps") is not None:
-        cmd+=["--steps",str(meta["steps"])]
-    refs=[p for a,p in job.get("_sources",[]) if a.get("asset_type") in {"photo","reference"} and p.suffix.lower() in {".png",".jpg",".jpeg",".webp"}]
-    if refs: cmd+=["--image",str(refs[0]),"--strength","0.35"]
+
+    refs=[
+        p for a,p in job.get("_sources",[])
+        if a.get("asset_type") in {"photo","reference"}
+        and p.suffix.lower() in {".png",".jpg",".jpeg",".webp"}
+    ]
+
+    if refs and meta.get("allow_reference_image",True):
+        cmd+=["--image",str(refs[0]),"--strength","0.35"]
+
     run_with_heartbeat(job,cmd)
     return find_render(name)
 
@@ -110,8 +129,10 @@ def compose_board(job, background, scene=1):
 
     if scene==1:
         copy=f'<div class="headline">{promotion or business}</div>'
-    elif scene==2:
+    elif scene in {2,4}:
         copy=f'<div class="brand-only">{business}</div>'
+    elif scene==3:
+        copy=f'<div class="headline">{promotion or business}</div>'
     else:
         copy=f'<div class="headline">{cta or business}</div><div class="url">{website}</div>'
 
@@ -141,58 +162,131 @@ body{{font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-s
     return out
 
 def render_video(job):
-    scenes=[
-        " Establishing hero scene. Premium wide commercial composition.",
-        " Second distinct editorial scene. New angle and visual story.",
-        " Final aspirational hero scene with strong negative space for branding."
+    meta=job.get("metadata") or {}
+
+    scene_prompts=[
+        " Opening prestige hero. Establish the world of the brand with a breathtaking cinematic wide composition and immediate luxury impact.",
+        " Product or service hero close-up. Reveal exceptional materials, texture, craftsmanship and sensory detail with flagship campaign polish.",
+        " Editorial detail scene. Create a distinct premium angle with immaculate art direction, dimensional lighting and a clear visual focal point.",
+        " Aspirational experience scene. Show the emotional promise of the brand with sophisticated cinematic storytelling and elegant atmosphere.",
+        " Final signature hero. Deliver the strongest campaign image with disciplined negative space for exact CoastLoop branding and CTA composition."
     ]
-    cached=[Path(RENDER_ROOT)/f"coastloop-{job['id']}-board-{i}-4k.png" for i in (1,2,3)]
+
+    requested=int(meta.get("render_scene_count") or 5)
+    count=max(3,min(requested,5))
+    scenes=scene_prompts[:count]
+
+    cached=[
+        Path(RENDER_ROOT)/f"coastloop-{job['id']}-board-{i}-4k.png"
+        for i in range(1,count+1)
+    ]
+
     if all(x.exists() for x in cached):
         frames=cached
     else:
-        raw=[render_still(job,job["prompt"]+scene,f"-scene-{i+1}")
-             for i,scene in enumerate(scenes)]
-        frames=[compose_board(job,img,i+1) for i,img in enumerate(raw)]
+        raw=[
+            render_still(
+                job,
+                job["prompt"]+scene,
+                f"-scene-{i+1}"
+            )
+            for i,scene in enumerate(scenes)
+        ]
+        frames=[
+            compose_board(job,img,i+1)
+            for i,img in enumerate(raw)
+        ]
+
     out=Path(RENDER_ROOT)/f"coastloop-{job['id']}-master-4k.mp4"
-    filt=(
-      "[0:v]scale=3840:2160:force_original_aspect_ratio=increase,"
-      "crop=3840:2160,setsar=1[v0];"
-      "[1:v]scale=3840:2160:force_original_aspect_ratio=increase,"
-      "crop=3840:2160,setsar=1[v1];"
-      "[2:v]scale=3840:2160:force_original_aspect_ratio=increase,"
-      "crop=3840:2160,setsar=1[v2];"
-      "[v0][v1]xfade=transition=fade:duration=0.6:offset=4.8[x1];"
-      "[x1][v2]xfade=transition=fade:duration=0.6:offset=9.6[v]"
-    )
-    cmd=["/opt/homebrew/bin/ffmpeg","-y",
-         "-loop","1","-t","5.4","-i",str(frames[0]),
-         "-loop","1","-t","5.4","-i",str(frames[1]),
-         "-loop","1","-t","5.4","-i",str(frames[2]),
-         "-filter_complex",filt,"-map","[v]","-t","15","-r","30",
-         "-c:v","libx264","-preset","slow","-crf","16",
-         "-pix_fmt","yuv420p","-movflags","+faststart",str(out)]
+
+    transition=0.45
+    input_duration=(15.0 + (count-1)*transition)/count
+    segment=input_duration-transition
+
+    filt_parts=[]
+
+    for i in range(count):
+        filt_parts.append(
+            f"[{i}:v]scale=3840:2160:force_original_aspect_ratio=increase,"
+            f"crop=3840:2160,setsar=1[v{i}]"
+        )
+
+    current="[v0]"
+
+    for i in range(1,count):
+        out_label="[v]" if i==count-1 else f"[x{i}]"
+        offset=segment*i
+        filt_parts.append(
+            f"{current}[v{i}]xfade=transition=fade:"
+            f"duration={transition:.2f}:offset={offset:.2f}{out_label}"
+        )
+        current=out_label
+
+    filt=";".join(filt_parts)
+
+    cmd=["/opt/homebrew/bin/ffmpeg","-y"]
+
+    for frame in frames:
+        cmd += [
+            "-loop","1",
+            "-t",f"{input_duration:.2f}",
+            "-i",str(frame)
+        ]
+
+    cmd += [
+        "-filter_complex",filt,
+        "-map","[v]",
+        "-t","15",
+        "-r","30",
+        "-c:v","libx264",
+        "-preset","slow",
+        "-crf","14",
+        "-pix_fmt","yuv420p",
+        "-movflags","+faststart",
+        str(out)
+    ]
+
     if not valid_video(out,3840,2160):
         out.unlink(missing_ok=True)
         tmp=out.with_name(out.stem+".partial.mp4")
         tmp.unlink(missing_ok=True)
         cmd[-1]=str(tmp)
         run_with_heartbeat(job,cmd)
+
         if not valid_video(tmp,3840,2160):
             tmp.unlink(missing_ok=True)
             raise RuntimeError("invalid 4K master after render")
+
         tmp.replace(out)
+
     delivery=Path(RENDER_ROOT)/f"coastloop-{job['id']}-delivery-1080p.mp4"
+
     if not valid_video(delivery,1920,1080):
         delivery.unlink(missing_ok=True)
         tmp=delivery.with_name(delivery.stem+".partial.mp4")
         tmp.unlink(missing_ok=True)
-        run_with_heartbeat(job,["/opt/homebrew/bin/ffmpeg","-y","-hide_banner","-loglevel","error",
-            "-i",str(out),"-vf","scale=1920:1080","-c:v","libx264","-preset","medium","-crf","20",
-            "-pix_fmt","yuv420p","-movflags","+faststart",str(tmp)])
+
+        run_with_heartbeat(job,[
+            "/opt/homebrew/bin/ffmpeg",
+            "-y",
+            "-hide_banner",
+            "-loglevel","error",
+            "-i",str(out),
+            "-vf","scale=1920:1080",
+            "-c:v","libx264",
+            "-preset","medium",
+            "-crf","18",
+            "-pix_fmt","yuv420p",
+            "-movflags","+faststart",
+            str(tmp)
+        ])
+
         if not valid_video(tmp,1920,1080):
             tmp.unlink(missing_ok=True)
             raise RuntimeError("invalid 1080p delivery after render")
+
         tmp.replace(delivery)
+
     return out
 
 def render(job):
