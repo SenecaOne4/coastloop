@@ -91,7 +91,7 @@ def render_still(job, prompt=None, suffix=""):
         cmd+=["--negative",str(meta["negative_prompt"])]
     if meta.get("steps") is not None:
         cmd+=["--steps",str(meta["steps"])]
-    refs=[p for a,p in job.get("_sources",[]) if a.get("asset_type") in {"photo","reference"} and p.suffix.lower() in {".png",".jpg",".jpeg"}]
+    refs=[p for a,p in job.get("_sources",[]) if a.get("asset_type") in {"photo","reference"} and p.suffix.lower() in {".png",".jpg",".jpeg",".webp"}]
     if refs: cmd+=["--image",str(refs[0]),"--strength","0.35"]
     run_with_heartbeat(job,cmd)
     return find_render(name)

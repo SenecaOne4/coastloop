@@ -1,6 +1,14 @@
 import { api as sessionApi, readSession, logout as sessionLogout } from '/session.js';
 
 const $ = s => document.querySelector(s);
+const isCommercialScreen = s => Boolean(
+  s &&
+  !s.is_test &&
+  ['pilot','production'].includes(s.deployment_class) &&
+  s.location_id &&
+  s.paired_at &&
+  s.status !== 'retired'
+);
 const state = {
   token: sessionStorage.getItem('adminToken') || '',
   screens:[], media:[], creativeJobs:[], playlists:[], prospects:[], businesses:[],
@@ -36,7 +44,7 @@ async function api(path, options={}) {
 function esc(v=''){ return String(v).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function money(cents){ return '$'+(Number(cents||0)/100).toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:2}); }
 function renderOpsCommandCenter(stats){
-  const commercialScreens=(state.screens||[]).filter(s=>!s.is_test);
+  const commercialScreens=(state.screens||[]).filter(isCommercialScreen);
   const attentionScreens=commercialScreens.filter(s=>
     s.status!=='active' || !online(s.last_seen_at)
   );
@@ -2041,7 +2049,7 @@ function ensureTodayOperatorPanel(){
 function renderTodayOperatorPanel(){
   ensureTodayOperatorPanel();
 
-  const commercial=(state.screens||[]).filter(x=>!x.is_test);
+  const commercial=(state.screens||[]).filter(isCommercialScreen);
   const onlineScreens=commercial.filter(
     x=>online(x.last_seen_at)
   );
@@ -2105,7 +2113,7 @@ function renderTodayOperatorPanel(){
 }
 function renderCommandCenter(){
   const screens=state.screens||[];
-  const commercial=screens.filter(s=>!s.is_test);
+  const commercial=screens.filter(isCommercialScreen);
   const onlineScreens=commercial.filter(s=>online(s.last_seen_at));
   const campaigns=state.campaigns||[];
   const active=campaigns.filter(c=>c.status==='active');
@@ -3303,7 +3311,7 @@ document.addEventListener('submit',async e=>{
 
 
 function workspaceMetricData(key){
-  const screens=(state.screens||[]).filter(x=>!x.is_test);
+  const screens=(state.screens||[]).filter(isCommercialScreen);
   const campaigns=state.campaigns||[];
   const media=state.media||[];
   const prospects=state.prospects||[];
@@ -3676,7 +3684,7 @@ function initAdminSidebar(){
   function badge(link,key){
     let value='';
     if(key==='network'){
-      value=(state.screens||[]).filter(x=>!x.is_test).length;
+      value=(state.screens||[]).filter(isCommercialScreen).length;
     }else if(key==='sales'){
       value=(state.campaigns||[]).filter(x=>x.status==='active').length;
     }else if(key==='creative'){

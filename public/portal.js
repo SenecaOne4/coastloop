@@ -280,6 +280,17 @@ function advertiserDashboard(b){
         <input type="text" name="title" maxlength="120" placeholder="Ad name (optional)">
         <input type="text" name="promotion" maxlength="1500" placeholder="What are you promoting?" required>
         <input type="text" name="cta" maxlength="160" placeholder="Call to action — Book Now, Visit Us, Learn More…">
+
+        <div class="cl-create-site-source">
+          <input type="url" name="website_url" maxlength="500"
+            placeholder="Your website — we can pull your logo, approved imagery and business context"
+            value="${esc(b.website||'')}">
+          <button class="cl-btn cl-site-scan" type="button">Scan website</button>
+        </div>
+        <div class="website-scan-status cl-form-status" aria-live="polite"></div>
+
+        <div class="create-existing-context" data-business-id="${esc(b.id)}"></div>
+
         <div class="cl-form-row">
           <select name="job_type">
             <option value="video">Premium video</option>
@@ -287,6 +298,7 @@ function advertiserDashboard(b){
           </select>
           <input type="text" name="notes" maxlength="1500" placeholder="Anything else we should know?">
         </div>
+
         <button class="cl-btn cl-btn-primary" type="submit">Create my ad</button>
         <div class="creative-request-status cl-form-status" aria-live="polite"></div>
       </form>
@@ -546,7 +558,127 @@ document.querySelectorAll('.cl-side-link[href^="#"]').forEach(a=>{
   });
 });
 
+function createContextMedia(x){
+  const asset=x?.asset||x;
+  if(!asset?.id) return "";
+  return asset.kind==="video"
+    ? `<video src="/media/${encodeURIComponent(asset.id)}" muted playsinline preload="metadata" controls></video>`
+    : `<img src="/media/${encodeURIComponent(asset.id)}" alt="${esc(asset.title||'Approved creative')}">`;
+}
+
+function websiteScanSummary(data){
+  const context=data?.context||{};
+  const current=Array.isArray(data?.current_campaign_creative)
+    ? data.current_campaign_creative : [];
+  const campaign=current.length
+    ? `<div class="cl-existing-campaign-note">
+        <strong>Current campaign creative found.</strong>
+        <span>${esc(current.map(x=>x?.campaign?.name||'Active campaign').join(' · '))}</span>
+      </div>`
+    : "";
+  return `<div class="cl-site-scan-result">
+    <strong>Website ready.</strong>
+    <span>${Number(context.logos||0)} logo${Number(context.logos||0)===1?'':'s'} · ${Number(context.photos||0)} photo${Number(context.photos||0)===1?'':'s'} · ${Number(context.page_count||0)} page${Number(context.page_count||0)===1?'':'s'} read</span>
+    ${campaign}
+  </div>`;
+}
+
+async function scanCreateWebsite(form){
+  const field=form.querySelector('[name="website_url"]');
+  const status=form.querySelector('.website-scan-status');
+  const button=form.querySelector('.cl-site-scan');
+  const website=String(field?.value||"").trim();
+  if(!website) return null;
+
+  if(button) button.disabled=true;
+  if(status){
+    status.innerHTML=`<div class="cl-inline-progress"><span></span></div><span>Reading your website…</span>`;
+  }
+
+  try{
+    const data=await api('/api/portal/website-scan',{
+      method:'POST',
+      headers:{'content-type':'application/json'},
+      body:JSON.stringify({
+        business_id:form.dataset.businessId,
+        website_url:website
+      })
+    });
+    form.dataset.siteScanned=String(data.website_url||website);
+    if(field&&data.website_url) field.value=data.website_url;
+    if(status) status.innerHTML=websiteScanSummary(data);
+    return data;
+  }finally{
+    if(button) button.disabled=false;
+  }
+}
+
+let creativeHydrateTimer=null;
+let creativeHydrateBusy=false;
+
+function scheduleCreativeHydrate(delay=5000){
+  clearTimeout(creativeHydrateTimer);
+  creativeHydrateTimer=setTimeout(async()=>{
+    if(document.hidden){
+      scheduleCreativeHydrate(5000);
+      return;
+    }
+    if(creativeHydrateBusy) return;
+    creativeHydrateBusy=true;
+    try{
+      await hydrateCreative();
+    }finally{
+      creativeHydrateBusy=false;
+    }
+  },delay);
+}
+
 async function hydrateCreative(){
+  let hasBuildingCreative=false;
+
+  for(const box of document.querySelectorAll('.create-existing-context')){
+    const id=box.dataset.businessId;
+    try{
+      const data=await api(`/api/portal/create-context?business_id=${encodeURIComponent(id)}`);
+      const current=Array.isArray(data.current_campaign_creative)
+        ? data.current_campaign_creative : [];
+      const approved=Array.isArray(data.approved_creative)
+        ? data.approved_creative : [];
+
+      if(current.length){
+        box.innerHTML=`<div class="cl-create-context-head">
+            <strong>Already running</strong>
+            <span>Approved creative in a current campaign</span>
+          </div>
+          <div class="cl-create-context-media">
+            ${current.slice(0,3).map(x=>`<article>
+              ${createContextMedia(x)}
+              <div>
+                <strong>${esc(x.asset?.title||'Approved creative')}</strong>
+                <span>${esc(x.campaign?.name||'Current campaign')}</span>
+              </div>
+            </article>`).join('')}
+          </div>`;
+      }else if(approved.length){
+        box.innerHTML=`<div class="cl-create-context-head">
+            <strong>Approved creative available</strong>
+            <span>Not currently attached to a live campaign</span>
+          </div>`;
+      }else{
+        box.innerHTML='';
+      }
+
+      const form=box.closest('.creative-request');
+      const website=form?.querySelector('[name="website_url"]');
+      if(website && !website.value && data.website_url)
+        website.value=data.website_url;
+      if(form && data.website_scanned_at && data.website_url)
+        form.dataset.siteScanned=data.website_url;
+    }catch{
+      box.innerHTML='';
+    }
+  }
+
   for(const box of document.querySelectorAll('.source-library')){
     const id=box.dataset.businessId;
     try{
@@ -604,12 +736,22 @@ async function hydrateCreative(){
               <span class="cl-review-status" aria-live="polite"></span>
             </form>`
           : '';
+        const building=state==='Creating'||state==='Preparing';
+        if(building) hasBuildingCreative=true;
+        const buildProgress=building
+          ? `<div class="cl-creative-build-progress ${state==='Creating'?'is-active':'is-queued'}"
+                role="progressbar"
+                aria-label="${state==='Creating'?'GENNY is creating your ad':'Waiting for GENNY'}"
+                aria-valuetext="${esc(state)}"><span></span></div>
+             <small class="cl-creative-build-label">${state==='Creating'?'GENNY is creating your ad':'Queued for GENNY'}</small>`
+          : '';
         return `<article class="cl-creative-row cl-creative-review-row">
           <div class="cl-creative-row-mark" aria-hidden="true"></div>
           ${media}
           <div class="cl-creative-row-main">
             <strong>${esc(j.metadata?.title||'CoastLoop creative')}</strong>
             <span>${esc(j.job_type||'image')} · Revision ${rev}</span>
+            ${buildProgress}
             ${revisionRequested&&j.review_notes?`<small>${esc(j.review_notes)}</small>`:''}
           </div>
           <div class="cl-creative-row-state ${tone}">
@@ -620,9 +762,33 @@ async function hydrateCreative(){
       }).join('')||'<div class="portal-empty">No creative requests yet.</div>';
     }catch(e){ box.textContent='Creative status unavailable.'; }
   }
+
+  clearTimeout(creativeHydrateTimer);
+  if(hasBuildingCreative) scheduleCreativeHydrate(4000);
 }
 
+document.addEventListener('visibilitychange',()=>{
+  if(!document.hidden) scheduleCreativeHydrate(250);
+});
+
 document.addEventListener('click',async e=>{
+  const scan=e.target.closest('.cl-site-scan');
+  if(scan){
+    const form=scan.closest('.creative-request');
+    if(!form) return;
+    try{
+      await scanCreateWebsite(form);
+      await hydrateCreative();
+    }catch(err){
+      const status=form.querySelector('.website-scan-status');
+      if(status){
+        status.textContent=err.message||'Could not read website.';
+        status.classList.add('is-error');
+      }
+    }
+    return;
+  }
+
   const approve=e.target.closest('.cl-review-approve');
   if(approve){
     approve.disabled=true;
@@ -726,14 +892,54 @@ document.addEventListener('submit',async e=>{
   if(form.matches('.creative-request')){
     e.preventDefault();
     const status=form.querySelector('.creative-request-status');
-    const data=Object.fromEntries(new FormData(form));
-    data.business_id=form.dataset.businessId;
-    status.textContent='Submitting…';
+    const submit=form.querySelector('button[type="submit"]');
+    const websiteField=form.querySelector('[name="website_url"]');
+    const website=String(websiteField?.value||"").trim();
+
+    if(submit) submit.disabled=true;
+    status.classList.remove('is-error','is-success');
+    status.innerHTML=`<div class="cl-inline-progress"><span></span></div><span>Preparing your creative…</span>`;
+
     try{
-      await api('/api/portal/creative-jobs',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(data)});
-      form.reset(); status.textContent='Creative request received.';
+      if(website && form.dataset.siteScanned!==website){
+        try{
+          await scanCreateWebsite(form);
+        }catch(scanErr){
+          const scanStatus=form.querySelector('.website-scan-status');
+          if(scanStatus){
+            scanStatus.textContent=`Website scan skipped: ${scanErr.message||'site unavailable'}`;
+            scanStatus.classList.add('is-error');
+          }
+        }
+      }
+
+      const data=Object.fromEntries(new FormData(form));
+      data.business_id=form.dataset.businessId;
+
+      status.innerHTML=`<div class="cl-inline-progress"><span></span></div><span>Sending to GENNY…</span>`;
+
+      await api('/api/portal/creative-jobs',{
+        method:'POST',
+        headers:{'content-type':'application/json'},
+        body:JSON.stringify(data)
+      });
+
+      const keepWebsite=String(websiteField?.value||website);
+      form.querySelector('[name="title"]').value='';
+      form.querySelector('[name="promotion"]').value='';
+      form.querySelector('[name="cta"]').value='';
+      form.querySelector('[name="notes"]').value='';
+      if(websiteField) websiteField.value=keepWebsite;
+
+      status.textContent='Creative request received.';
+      status.classList.add('is-success');
       await hydrateCreative();
-    }catch(err){ status.textContent=err.message||'Could not submit creative.'; }
+    }catch(err){
+      status.textContent=err.message||'Could not submit creative.';
+      status.classList.add('is-error');
+    }finally{
+      if(submit) submit.disabled=false;
+    }
   }
 
   if(form.matches('.source-upload')){

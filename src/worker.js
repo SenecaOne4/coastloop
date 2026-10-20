@@ -1717,6 +1717,586 @@ async function portalCreativeProfile(request,env,auth,url) {
 }
 
 
+function unsafeWebsiteHost(hostname){
+  const host=String(hostname||"")
+    .toLowerCase()
+    .replace(/^\[/,"")
+    .replace(/\]$/,"");
+
+  if(
+    !host ||
+    host==="localhost" ||
+    host.endsWith(".localhost") ||
+    host.endsWith(".local") ||
+    host.endsWith(".internal")
+  ) return true;
+
+  const ipv4=host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if(ipv4){
+    const octets=ipv4.slice(1).map(Number);
+    if(octets.some(x=>x<0||x>255)) return true;
+    const [a,b]=octets;
+
+    if(a===0) return true;
+    if(a===10) return true;
+    if(a===100 && b>=64 && b<=127) return true;
+    if(a===127) return true;
+    if(a===169 && b===254) return true;
+    if(a===172 && b>=16 && b<=31) return true;
+    if(a===192 && b===168) return true;
+    if(a===198 && (b===18 || b===19)) return true;
+    if(a>=224) return true;
+  }
+
+  if(
+    host==="::" ||
+    host==="::1" ||
+    /^f[cd][0-9a-f]*:/i.test(host) ||
+    /^fe[89ab][0-9a-f]*:/i.test(host) ||
+    /^::ffff:(?:0\.|10\.|127\.|169\.254\.|172\.(?:1[6-9]|2\d|3[01])\.|192\.168\.)/i.test(host)
+  ) return true;
+
+  return false;
+}
+
+function normalizeAdvertiserWebsite(raw){
+  let value=String(raw||"").trim();
+  if(!value) return null;
+  if(!/^https?:\/\//i.test(value)) value=`https://${value}`;
+
+  try{
+    const u=new URL(value);
+    if(!["http:","https:"].includes(u.protocol)) return null;
+    if(u.username||u.password) return null;
+    if(unsafeWebsiteHost(u.hostname)) return null;
+    u.hash="";
+    return u;
+  }catch{
+    return null;
+  }
+}
+
+async function websiteFetchSameHost(rawUrl,rootUrl,headers={},maxRedirects=5){
+  const root=normalizeAdvertiserWebsite(rootUrl);
+  let current=normalizeAdvertiserWebsite(rawUrl);
+
+  if(!root || !current) return null;
+  if(!sameWebsiteHost(current.toString(),root.toString())) return null;
+
+  for(let hop=0;hop<=maxRedirects;hop++){
+    if(unsafeWebsiteHost(current.hostname)) return null;
+    if(!sameWebsiteHost(current.toString(),root.toString())) return null;
+
+    let res;
+    try{
+      res=await fetch(current.toString(),{
+        redirect:"manual",
+        headers
+      });
+    }catch{
+      return null;
+    }
+
+    if(res.status>=300 && res.status<400){
+      const location=res.headers.get("location");
+      if(!location) return null;
+
+      const next=webAbsoluteUrl(location,current.toString());
+      if(!next) return null;
+
+      const safeNext=normalizeAdvertiserWebsite(next.toString());
+      if(!safeNext) return null;
+      if(!sameWebsiteHost(safeNext.toString(),root.toString())) return null;
+
+      current=safeNext;
+      continue;
+    }
+
+    return res;
+  }
+
+  return null;
+}
+
+function webHtmlAttr(tag,name){
+  const escaped=String(name).replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
+  const m=String(tag).match(new RegExp(
+    `\\b${escaped}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`,
+    "i"
+  ));
+  return m ? String(m[1]??m[2]??m[3]??"").trim() : "";
+}
+
+function webAbsoluteUrl(raw,base){
+  const value=String(raw||"").trim();
+  if(!value || value.startsWith("data:") || value.startsWith("blob:")) return null;
+  try{
+    const u=new URL(value,base);
+    if(!["http:","https:"].includes(u.protocol)) return null;
+    u.hash="";
+    return u;
+  }catch{
+    return null;
+  }
+}
+
+function webText(html,max=2600){
+  return String(html||"")
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi," ")
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi," ")
+    .replace(/<svg\b[^>]*>[\s\S]*?<\/svg>/gi," ")
+    .replace(/<!--[\s\S]*?-->/g," ")
+    .replace(/<[^>]+>/g," ")
+    .replace(/&nbsp;/gi," ")
+    .replace(/&amp;/gi,"&")
+    .replace(/&quot;/gi,'"')
+    .replace(/&#39;/gi,"'")
+    .replace(/&lt;/gi,"<")
+    .replace(/&gt;/gi,">")
+    .replace(/\s+/g," ")
+    .trim()
+    .slice(0,max);
+}
+
+function websitePageFacts(html,pageUrl){
+  const titleMatch=String(html||"").match(/<title\b[^>]*>([\s\S]*?)<\/title>/i);
+  let description="";
+  let ogTitle="";
+  const images=[];
+  const links=[];
+
+  for(const tag of String(html||"").match(/<meta\b[^>]*>/gi)||[]){
+    const name=(webHtmlAttr(tag,"name")||webHtmlAttr(tag,"property")).toLowerCase();
+    const content=webHtmlAttr(tag,"content");
+    if(name==="description" && content) description=content.trim().slice(0,500);
+    if(name==="og:title" && content) ogTitle=content.trim().slice(0,240);
+    if(["og:image","og:image:url","twitter:image"].includes(name) && content){
+      const u=webAbsoluteUrl(content,pageUrl);
+      if(u) images.push({
+        url:u.toString(),
+        page_url:pageUrl,
+        hint:`${name} ${content}`.toLowerCase(),
+        alt:""
+      });
+    }
+  }
+
+  for(const tag of String(html||"").match(/<img\b[^>]*>/gi)||[]){
+    const src=webHtmlAttr(tag,"src")||webHtmlAttr(tag,"data-src")||webHtmlAttr(tag,"data-lazy-src");
+    const alt=webHtmlAttr(tag,"alt");
+    const cls=webHtmlAttr(tag,"class");
+    const id=webHtmlAttr(tag,"id");
+    const u=webAbsoluteUrl(src,pageUrl);
+    if(u) images.push({
+      url:u.toString(),
+      page_url:pageUrl,
+      hint:`${src} ${alt} ${cls} ${id}`.toLowerCase(),
+      alt:alt.slice(0,240)
+    });
+
+    const srcset=webHtmlAttr(tag,"srcset");
+    if(srcset){
+      const candidates=srcset.split(",").map(x=>x.trim().split(/\s+/)[0]).filter(Boolean);
+      const best=candidates[candidates.length-1];
+      const su=webAbsoluteUrl(best,pageUrl);
+      if(su) images.push({
+        url:su.toString(),
+        page_url:pageUrl,
+        hint:`${best} ${alt} ${cls} ${id}`.toLowerCase(),
+        alt:alt.slice(0,240)
+      });
+    }
+  }
+
+  for(const tag of String(html||"").match(/<link\b[^>]*>/gi)||[]){
+    const rel=webHtmlAttr(tag,"rel").toLowerCase();
+    const href=webHtmlAttr(tag,"href");
+    if(!href || !/(icon|logo|apple-touch-icon)/.test(rel)) continue;
+    const u=webAbsoluteUrl(href,pageUrl);
+    if(u) images.push({
+      url:u.toString(),
+      page_url:pageUrl,
+      hint:`${rel} ${href}`.toLowerCase(),
+      alt:""
+    });
+  }
+
+  for(const tag of String(html||"").match(/<a\b[^>]*>/gi)||[]){
+    const href=webHtmlAttr(tag,"href");
+    const u=webAbsoluteUrl(href,pageUrl);
+    if(u) links.push(u.toString());
+  }
+
+  return {
+    url:pageUrl,
+    title:webText(titleMatch?.[1]||ogTitle||"",240),
+    description:webText(description,500),
+    text:webText(html,2600),
+    images,
+    links
+  };
+}
+
+function sameWebsiteHost(candidate,root){
+  try{
+    const a=new URL(candidate).hostname.toLowerCase().replace(/^www\./,"");
+    const b=new URL(root).hostname.toLowerCase().replace(/^www\./,"");
+    return a===b;
+  }catch{
+    return false;
+  }
+}
+
+function websiteAssetKind(candidate){
+  const hint=String(candidate?.hint||"").toLowerCase();
+  const url=String(candidate?.url||"").toLowerCase();
+  if(
+    /\blogo\b/.test(hint) ||
+    /(?:^|[\/_.-])logo(?:[\/_.-]|$)/.test(url) ||
+    /brand[-_ ]?mark/.test(hint) ||
+    /site[-_ ]?logo/.test(hint)
+  ) return "logo";
+  return "photo";
+}
+
+function sourceFilename(url,mime,kind){
+  try{
+    const u=new URL(url);
+    let name=decodeURIComponent(u.pathname.split("/").pop()||"").replace(/[^a-zA-Z0-9._-]+/g,"-");
+    if(name && /\.[a-z0-9]{2,5}$/i.test(name)) return name.slice(0,120);
+  }catch{}
+  const ext={
+    "image/jpeg":"jpg",
+    "image/png":"png",
+    "image/webp":"webp",
+    "image/svg+xml":"svg"
+  }[mime]||"bin";
+  return `${kind}.${ext}`;
+}
+
+async function currentApprovedCampaignCreative(env,businessId){
+  const now=Date.now();
+  const campaigns=await sb(env,
+    `campaigns?organization_id=eq.${ORG_ID}&advertiser_business_id=eq.${encodeURIComponent(businessId)}`+
+    `&status=in.(active,scheduled)&select=id,name,status,starts_at,ends_at&order=created_at.desc&limit=20`
+  )||[];
+
+  const current=campaigns.filter(c=>{
+    const start=c.starts_at ? new Date(c.starts_at).getTime() : -Infinity;
+    const end=c.ends_at ? new Date(c.ends_at).getTime() : Infinity;
+    return start<=now && end>=now;
+  });
+
+  if(!current.length) return [];
+
+  const campaignIds=current.map(c=>c.id);
+  const items=await sb(env,
+    `playlist_items?organization_id=eq.${ORG_ID}`+
+    `&campaign_id=in.(${campaignIds.map(encodeURIComponent).join(",")})`+
+    `&active=eq.true&select=id,campaign_id,playlist_id,media_asset_id,position,starts_at,ends_at`
+  )||[];
+
+  const liveItems=items.filter(i=>{
+    const start=i.starts_at ? new Date(i.starts_at).getTime() : -Infinity;
+    const end=i.ends_at ? new Date(i.ends_at).getTime() : Infinity;
+    return start<=now && end>=now;
+  });
+
+  const mediaIds=[...new Set(liveItems.map(i=>i.media_asset_id).filter(Boolean))];
+  if(!mediaIds.length) return [];
+
+  const assets=await sb(env,
+    `media_assets?organization_id=eq.${ORG_ID}`+
+    `&id=in.(${mediaIds.map(encodeURIComponent).join(",")})`+
+    `&status=eq.ready&approval_status=eq.approved`+
+    `&select=id,title,kind,mime_type,width,height,duration_seconds,delivery_tier,parent_asset_id,approved_at`
+  )||[];
+
+  const assetMap=new Map(assets.map(a=>[a.id,a]));
+  const campaignMap=new Map(current.map(c=>[c.id,c]));
+
+  return liveItems
+    .map(item=>({
+      campaign:campaignMap.get(item.campaign_id)||null,
+      playlist_id:item.playlist_id,
+      position:item.position,
+      asset:assetMap.get(item.media_asset_id)||null
+    }))
+    .filter(x=>x.campaign&&x.asset);
+}
+
+async function latestApprovedCreative(env,businessId){
+  return await sb(env,
+    `media_assets?organization_id=eq.${ORG_ID}`+
+    `&advertiser_business_id=eq.${encodeURIComponent(businessId)}`+
+    `&status=eq.ready&approval_status=eq.approved`+
+    `&select=id,title,kind,mime_type,width,height,duration_seconds,delivery_tier,parent_asset_id,approved_at,created_at`+
+    `&order=approved_at.desc.nullslast,created_at.desc&limit=6`
+  )||[];
+}
+
+async function portalCreateContext(request,env,auth,url){
+  const businessId=String(url.searchParams.get("business_id")||"").trim();
+  const business=await portalAdvertiserBusiness(env,auth,businessId);
+  if(!business) return json({error:"advertiser access required"},403);
+
+  const [currentCampaignCreative,approvedCreative,profiles]=await Promise.all([
+    currentApprovedCampaignCreative(env,businessId),
+    latestApprovedCreative(env,businessId),
+    sb(env,
+      `advertiser_creative_profiles?organization_id=eq.${ORG_ID}&business_id=eq.${encodeURIComponent(businessId)}`+
+      `&select=website_url,website_context,website_scanned_at&limit=1`
+    )
+  ]);
+
+  return json({
+    ok:true,
+    business_id:businessId,
+    website_url:profiles?.[0]?.website_url||business.website||null,
+    website_context:profiles?.[0]?.website_context||{},
+    website_scanned_at:profiles?.[0]?.website_scanned_at||null,
+    current_campaign_creative:currentCampaignCreative,
+    approved_creative:approvedCreative
+  });
+}
+
+async function portalWebsiteScan(request,env,auth){
+  const b=await bodyJson(request);
+  const businessId=String(b.business_id||"").trim();
+  const business=await portalAdvertiserBusiness(env,auth,businessId);
+  if(!business) return json({error:"advertiser access required"},403);
+
+  const root=normalizeAdvertiserWebsite(b.website_url||business.website);
+  if(!root) return json({error:"valid public website required"},400);
+
+  const rootOrigin=root.origin;
+  const pages=[];
+  const seenPages=new Set();
+  const queue=[root.toString()];
+
+  while(queue.length && pages.length<5){
+    const pageUrl=queue.shift();
+    if(seenPages.has(pageUrl)) continue;
+    seenPages.add(pageUrl);
+
+    const res=await websiteFetchSameHost(
+      pageUrl,
+      root.toString(),
+      {
+        "user-agent":"CoastLoop-Brand-Scanner/1.0",
+        "accept":"text/html,application/xhtml+xml"
+      }
+    );
+
+    if(!res || !res.ok) continue;
+    const type=String(res.headers.get("content-type")||"").toLowerCase();
+    if(!type.includes("text/html")&&!type.includes("application/xhtml")) continue;
+
+    const length=Number(res.headers.get("content-length")||0);
+    if(length>2_000_000) continue;
+
+    const finalUrl=res.url||pageUrl;
+    const html=(await res.text()).slice(0,1_250_000);
+    const facts=websitePageFacts(html,finalUrl);
+    pages.push(facts);
+
+    if(pages.length===1){
+      const priority=/\/(about|services?|menu|gallery|portfolio|products?|work|shop|contact)(\/|$|\?)/i;
+      const links=[...new Set(facts.links)]
+        .filter(x=>sameWebsiteHost(x,root.toString()))
+        .filter(x=>{
+          try{
+            const u=new URL(x);
+            return u.origin===rootOrigin && !/\.(pdf|jpg|jpeg|png|gif|webp|svg|zip)$/i.test(u.pathname);
+          }catch{return false;}
+        })
+        .sort((a,b)=>(priority.test(b)?1:0)-(priority.test(a)?1:0))
+        .slice(0,12);
+
+      for(const link of links){
+        if(!seenPages.has(link)&&queue.length<8) queue.push(link);
+      }
+    }
+  }
+
+  if(!pages.length) return json({error:"website could not be read"},422);
+
+  const candidates=[];
+  const seenAssets=new Set();
+
+  for(const page of pages){
+    for(const candidate of page.images){
+      if(!sameWebsiteHost(candidate.url,root.toString())) continue;
+      if(seenAssets.has(candidate.url)) continue;
+      seenAssets.add(candidate.url);
+      candidates.push(candidate);
+    }
+  }
+
+  candidates.sort((a,b)=>{
+    const ak=websiteAssetKind(a)==="logo"?0:1;
+    const bk=websiteAssetKind(b)==="logo"?0:1;
+    return ak-bk;
+  });
+
+  const accepted=[];
+  const reused=[];
+  let totalBytes=0;
+
+  for(const candidate of candidates.slice(0,30)){
+    if(accepted.length>=12 || totalBytes>=24*1024*1024) break;
+
+    const existing=await sb(env,
+      `advertiser_source_assets?organization_id=eq.${ORG_ID}`+
+      `&business_id=eq.${encodeURIComponent(businessId)}`+
+      `&source_kind=eq.website&source_url=eq.${encodeURIComponent(candidate.url)}`+
+      `&usage_status=eq.approved&select=id,title,asset_type,source_url&limit=1`
+    ).catch(()=>[]);
+
+    if(existing?.[0]){
+      reused.push(existing[0]);
+      continue;
+    }
+
+    const assetRes=await websiteFetchSameHost(
+      candidate.url,
+      root.toString(),
+      {
+        "user-agent":"CoastLoop-Brand-Scanner/1.0",
+        "accept":"image/avif,image/webp,image/png,image/jpeg,image/svg+xml,image/*"
+      }
+    );
+
+    if(!assetRes || !assetRes.ok) continue;
+
+    let mime=String(assetRes.headers.get("content-type")||"")
+      .toLowerCase().split(";")[0].trim();
+
+    if(!["image/jpeg","image/png","image/webp","image/svg+xml"].includes(mime))
+      continue;
+
+    const declared=Number(assetRes.headers.get("content-length")||0);
+    if(declared>8*1024*1024) continue;
+
+    const raw=await assetRes.arrayBuffer();
+    if(!raw.byteLength || raw.byteLength>8*1024*1024) continue;
+    if(totalBytes+raw.byteLength>24*1024*1024) continue;
+
+    totalBytes+=raw.byteLength;
+
+    const kind=websiteAssetKind(candidate);
+    const filename=sourceFilename(candidate.url,mime,kind);
+    const id=crypto.randomUUID();
+    const safe=filename.replace(/[^a-zA-Z0-9._-]+/g,"-").slice(0,120)||`${kind}.bin`;
+    const key=`source-assets/${ORG_ID}/${businessId}/${id}/${safe}`;
+    const digest=await crypto.subtle.digest("SHA-256",raw);
+    const checksum=[...new Uint8Array(digest)]
+      .map(x=>x.toString(16).padStart(2,"0")).join("");
+
+    await env.MEDIA.put(key,raw,{
+      httpMetadata:{contentType:mime}
+    });
+
+    try{
+      const rows=await sb(env,"advertiser_source_assets",{
+        method:"POST",
+        headers:{Prefer:"return=representation"},
+        body:JSON.stringify({
+          id,
+          organization_id:ORG_ID,
+          business_id:businessId,
+          title:candidate.alt || (kind==="logo"?"Website logo":"Website photo"),
+          asset_type:kind,
+          storage_key:key,
+          original_filename:filename,
+          mime_type:mime,
+          byte_size:raw.byteLength,
+          checksum,
+          usage_status:"approved",
+          ingest_status:"ready",
+          uploaded_by:auth.user?.id||null,
+          source_kind:"website",
+          source_url:candidate.url,
+          source_page_url:candidate.page_url,
+          source_fetched_at:new Date().toISOString(),
+          source_metadata:{
+            alt:candidate.alt||null,
+            discovered_on:candidate.page_url,
+            website_root:root.toString()
+          }
+        })
+      });
+      if(rows?.[0]) accepted.push(rows[0]);
+    }catch(e){
+      await env.MEDIA.delete(key).catch(()=>{});
+    }
+  }
+
+  const pageContext=pages.map(p=>({
+    url:p.url,
+    title:p.title||null,
+    description:p.description||null,
+    text:p.text.slice(0,1400)
+  }));
+
+  const summary=pages
+    .map(p=>[p.title,p.description,p.text.slice(0,900)].filter(Boolean).join(" — "))
+    .filter(Boolean)
+    .join("\n")
+    .slice(0,5000);
+
+  const context={
+    root_url:root.toString(),
+    scanned_at:new Date().toISOString(),
+    page_count:pages.length,
+    pages:pageContext,
+    summary,
+    assets_added:accepted.length,
+    assets_reused:reused.length,
+    logos:[...accepted,...reused].filter(x=>x.asset_type==="logo").length,
+    photos:[...accepted,...reused].filter(x=>x.asset_type==="photo").length
+  };
+
+  const prior=await sb(env,
+    `advertiser_creative_profiles?organization_id=eq.${ORG_ID}&business_id=eq.${encodeURIComponent(businessId)}`+
+    `&select=business_description,default_cta,brand_notes&limit=1`
+  );
+
+  const first=pages[0];
+  const profileRows=await sb(env,
+    "advertiser_creative_profiles?on_conflict=organization_id,business_id",{
+      method:"POST",
+      headers:{Prefer:"resolution=merge-duplicates,return=representation"},
+      body:JSON.stringify({
+        organization_id:ORG_ID,
+        business_id:businessId,
+        business_category:business.category||null,
+        business_description:prior?.[0]?.business_description ||
+          first.description || first.text.slice(0,1800) || null,
+        website_url:root.toString(),
+        default_cta:prior?.[0]?.default_cta||null,
+        brand_notes:prior?.[0]?.brand_notes||null,
+        website_context:context,
+        website_scanned_at:context.scanned_at,
+        created_by:auth.user?.id||null,
+        updated_at:new Date().toISOString()
+      })
+    }
+  );
+
+  const currentCampaignCreative=await currentApprovedCampaignCreative(env,businessId);
+
+  return json({
+    ok:true,
+    website_url:root.toString(),
+    profile:profileRows?.[0]||null,
+    context,
+    assets:[...accepted,...reused],
+    current_campaign_creative:currentCampaignCreative
+  });
+}
+
+
 async function portalSourceAssets(request,env,auth,url){
   if(request.method==="GET"){
     const businessId=String(url.searchParams.get("business_id")||"").trim();
@@ -1766,6 +2346,7 @@ async function portalSourceAssets(request,env,auth,url){
 function coastloopCreativePrompt(business,profile,brief,jobType){
   const category=profile?.business_category||business.category||"local business";
   const desc=profile?.business_description||"";
+  const websiteContext=profile?.website_context?.summary||"";
   const categoryStyle={
     restaurant:"editorial food photography, atmospheric premium dining",
     spa:"quiet luxury, refined wellness and hospitality",
@@ -1783,6 +2364,7 @@ function coastloopCreativePrompt(business,profile,brief,jobType){
     `Leave clean negative space for exact logo, headline and CTA overlays added later by CoastLoop.`,
     `No baked-in text, logos, prices, claims, badges, flyer styling, visual clutter, or AI-looking artifacts.`,
     `Public-display appropriate. Local ads do not need to look local.`,
+    websiteContext ? `First-party website context: ${websiteContext.slice(0,2200)}` : "",
     brief.notes ? `Client context: ${brief.notes}` : ""
   ].filter(Boolean).join(" ");
 }
@@ -1811,13 +2393,25 @@ async function portalCreativeJobs(request,env,auth,url){
     cta:String(b.cta||profile?.default_cta||"").trim().slice(0,160),
     notes:String(b.notes||"").trim().slice(0,1500)
   };
-  const prompt=coastloopCreativePrompt(business,profile,brief,jobType);
+  const currentCampaignCreative=await currentApprovedCampaignCreative(env,businessId);
+  const campaignContinuity=currentCampaignCreative.length
+    ? ` Existing approved creative is currently assigned to an active campaign: ${currentCampaignCreative.map(x=>`${x.campaign.name}: ${x.asset.title}`).join("; ")}. Preserve useful brand continuity while making the requested creative distinct and purposeful.`
+    : "";
+  const prompt=coastloopCreativePrompt(business,profile,brief,jobType)+campaignContinuity;
   const metadata={
     brief_version:1,title:String(b.title||"New CoastLoop ad").slice(0,180),
     business_name:business.name,business_category:profile?.business_category||business.category||null,
     business_description:profile?.business_description||null,promotion:brief.promotion||null,
     cta:brief.cta||null,website_url:profile?.website_url||business.website||null,
-    creative_notes:brief.notes||null,network_template:"luxury-editorial-01",
+    creative_notes:brief.notes||null,
+    website_context:profile?.website_context||null,
+    current_campaign_creative:currentCampaignCreative.map(x=>({
+      campaign_id:x.campaign.id,
+      campaign_name:x.campaign.name,
+      asset_id:x.asset.id,
+      asset_title:x.asset.title
+    })),
+    network_template:"luxury-editorial-01",
     requested_variants:jobType==="video"?3:1,master_resolution:"3840x2160"
   };
 
@@ -3995,7 +4589,7 @@ async function publicNetworkStats(env) {
 
 async function stats(env) {
   const [screens, media, plays] = await Promise.all([
-    sb(env, `screens?organization_id=eq.${ORG_ID}&select=id,last_seen_at,is_test`),
+    sb(env, `screens?organization_id=eq.${ORG_ID}&select=id,location_id,status,last_seen_at,is_test,deployment_class,paired_at`),
     sb(env, `media_assets?organization_id=eq.${ORG_ID}&status=eq.ready&select=id`),
     sb(env, `playback_daily?organization_id=eq.${ORG_ID}&select=screen_id,play_count,last_played_at`),
   ]);
@@ -4003,7 +4597,13 @@ async function stats(env) {
   const cutoff = Date.now() - 120000;
   const dayCutoff = Date.now() - 86400000;
 
-  const commercialScreens = (screens || []).filter(s => !s.is_test);
+  const commercialScreens = (screens || []).filter(s =>
+    !s.is_test &&
+    ["pilot", "production"].includes(s.deployment_class) &&
+    Boolean(s.location_id) &&
+    Boolean(s.paired_at) &&
+    s.status !== "retired"
+  );
   const commercialIds = new Set(commercialScreens.map(s => s.id));
 
   return {
@@ -4264,6 +4864,20 @@ export default {
 
       if (url.pathname === "/api/portal/overview" && request.method === "GET")
         return portalOverview(request, env);
+
+      if (url.pathname === "/api/portal/create-context" &&
+          request.method === "GET") {
+        const userAuth = await requireUserAccess(request, env);
+        if (!userAuth) return json({ error: "unauthorized" }, 401);
+        return portalCreateContext(request, env, userAuth, url);
+      }
+
+      if (url.pathname === "/api/portal/website-scan" &&
+          request.method === "POST") {
+        const userAuth = await requireUserAccess(request, env);
+        if (!userAuth) return json({ error: "unauthorized" }, 401);
+        return portalWebsiteScan(request, env, userAuth);
+      }
 
       if (url.pathname === "/api/portal/creative-profile" &&
           (request.method === "GET" || request.method === "PUT")) {
