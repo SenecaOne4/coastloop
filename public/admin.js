@@ -1,6 +1,57 @@
 import { api as sessionApi, readSession, logout as sessionLogout } from '/session.js';
 
 const $ = s => document.querySelector(s);
+
+function creativeAdminBuilding(job){
+  return ['queued','claimed','rendering','processing']
+    .includes(String(job?.status||'').toLowerCase());
+}
+
+function creativeAdminProgress(job){
+  if(!creativeAdminBuilding(job)) return '';
+
+  const status=String(job?.status||'queued').toLowerCase();
+  const working=['claimed','rendering','processing'].includes(status);
+  const pct=working ? 72 : 22;
+  const label=working ? 'GENNY is creating this ad' : 'Queued for GENNY';
+  const worker=job?.claimed_by ? ` · ${esc(job.claimed_by)}` : '';
+  const attempt=job?.attempt_count!=null
+    ? ` · attempt ${Number(job.attempt_count)||0}/${Number(job.max_attempts)||0}`
+    : '';
+
+  const prompt=esc(String(job?.prompt||'').slice(0,1200));
+
+  return `
+    <div class="genny-admin-build">
+      <div class="genny-admin-build-head">
+        <strong>${label}</strong>
+        <small>${esc(status)}${worker}${attempt}</small>
+      </div>
+
+      <div class="genny-admin-progress"
+           role="progressbar"
+           aria-label="${label}">
+        <div class="genny-admin-progress-fill"
+             style="width:${pct}%"></div>
+      </div>
+
+      ${prompt ? `
+        <details class="genny-admin-prompt">
+          <summary>What GENNY is building</summary>
+          <div>${prompt}</div>
+        </details>
+      ` : ''}
+    </div>
+  `;
+}
+
+function normalizeCreativeAdminPayload(payload){
+  if(Array.isArray(payload)) return payload;
+  if(Array.isArray(payload?.jobs)) return payload.jobs;
+  if(Array.isArray(payload?.creative_jobs)) return payload.creative_jobs;
+  return [];
+}
+
 const isCommercialScreen = s => Boolean(
   s &&
   !s.is_test &&
@@ -2266,6 +2317,7 @@ function render(){
     state.businesses.filter(b=>b.is_advertiser).map(b=>`<option value="${b.id}">${esc(b.name)}</option>`).join('');
 
   $('#creativeJobs').innerHTML = (state.creativeJobs||[]).map(j=>`
+    ${creativeAdminProgress(j)}
     <div class="media-item">
       <strong>${esc(j.metadata?.title||'Generated creative')}</strong>
       <span class="pill">${esc(j.status)}</span>
@@ -3891,3 +3943,109 @@ document.querySelectorAll('.admin-nav .cl-side-link').forEach(link=>{
     link.classList.add('is-active');
   });
 });
+
+
+function ensureCreativeAdminLiveMonitor(){
+  if(window.__coastloopCreativeAdminPoll) return;
+
+  if(!document.querySelector('#coastloopCreativeAdminStyle')){
+    const style=document.createElement('style');
+    style.id='coastloopCreativeAdminStyle';
+    style.textContent=`
+      @keyframes coastloopGennyPulse {
+        from { opacity:.60; filter:brightness(.92); }
+        to   { opacity:1; filter:brightness(1.20); }
+      }
+
+      .genny-admin-build {
+        margin:10px 0 14px;
+        padding:12px 14px;
+        border:1px solid rgba(231,255,36,.32);
+        border-radius:12px;
+        background:linear-gradient(
+          180deg,
+          rgba(231,255,36,.07),
+          rgba(231,255,36,.02)
+        );
+        box-shadow:0 0 24px rgba(231,255,36,.05);
+      }
+
+      .genny-admin-build-head {
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap:12px;
+        margin-bottom:8px;
+      }
+
+      .genny-admin-build-head strong {
+        font-size:13px;
+        letter-spacing:.02em;
+      }
+
+      .genny-admin-build-head small {
+        opacity:.72;
+      }
+
+      .genny-admin-progress {
+        height:5px;
+        overflow:hidden;
+        border-radius:999px;
+        background:rgba(255,255,255,.08);
+        box-shadow:inset 0 0 0 1px rgba(255,255,255,.04);
+      }
+
+      .genny-admin-progress-fill {
+        height:100%;
+        border-radius:inherit;
+        background:#e7ff24;
+        box-shadow:
+          0 0 9px rgba(231,255,36,.72),
+          0 0 22px rgba(231,255,36,.28);
+        animation:coastloopGennyPulse 1.15s ease-in-out infinite alternate;
+      }
+
+      .genny-admin-prompt {
+        margin-top:9px;
+        font-size:12px;
+      }
+
+      .genny-admin-prompt summary {
+        cursor:pointer;
+        opacity:.72;
+      }
+
+      .genny-admin-prompt div {
+        margin-top:7px;
+        line-height:1.45;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  async function refreshCreativeAdminLive(){
+    if(document.hidden) return;
+    if(!document.querySelector('#creativeJobs')) return;
+    if(!(state.creativeJobs||[]).some(creativeAdminBuilding)) return;
+
+    try{
+      const payload=await api('/api/admin/creative-jobs');
+      state.creativeJobs=normalizeCreativeAdminPayload(payload);
+      render();
+    }catch(_err){}
+  }
+
+  window.__coastloopCreativeAdminPoll=setInterval(
+    refreshCreativeAdminLive,
+    4000
+  );
+
+  document.addEventListener(
+    'visibilitychange',
+    ()=>{
+      if(!document.hidden) refreshCreativeAdminLive();
+    }
+  );
+}
+
+ensureCreativeAdminLiveMonitor();

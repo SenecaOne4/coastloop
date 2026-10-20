@@ -2343,7 +2343,7 @@ async function portalSourceAssets(request,env,auth,url){
 }
 
 
-function coastloopCreativePrompt(business,profile,brief,jobType){
+function coastloopCreativePromptBase(business,profile,brief,jobType){
   const category=profile?.business_category||business.category||"local business";
   const desc=profile?.business_description||"";
   const websiteContext=profile?.website_context?.summary||"";
@@ -2367,6 +2367,104 @@ function coastloopCreativePrompt(business,profile,brief,jobType){
     websiteContext ? `First-party website context: ${websiteContext.slice(0,2200)}` : "",
     brief.notes ? `Client context: ${brief.notes}` : ""
   ].filter(Boolean).join(" ");
+}
+
+
+function coastloopCreativeQualityContext(business,profile,brief){
+  const context=[
+    business?.category,
+    profile?.business_category,
+    profile?.business_description,
+    profile?.website_context?.summary,
+    brief?.title,
+    brief?.promotion,
+    brief?.notes
+  ].filter(Boolean).join(" ").toLowerCase();
+
+  const culinary=/(restaurant|dining|chef|culinary|food|steak|beef|meat|chicken|seafood|grill|barbecue|bbq|cafe|café|bakery|dish|plate|seared)/i.test(context);
+
+  const rules=[
+    "COASTLOOP COMMERCIAL IMAGE STANDARD:",
+    "Create a believable premium advertising photograph, with the finish and restraint of a national television commercial keyframe.",
+    "Everything visible should feel intentionally art-directed, recently maintained, clean, polished and camera-ready.",
+    "Use sophisticated editorial lighting, natural material response, realistic depth, deliberate composition and one clear visual hero.",
+    "Reserve generous uncluttered negative space for CoastLoop to add the exact logo, headline and CTA later.",
+    "Keep all reserved branding areas visually clean and free of lettering, symbols, labels, signage or text-like marks.",
+    "Surfaces and props should look premium and presentation-ready. Wood should have clean refined grain and a fresh well-maintained finish. Stone, metal, glass, fabric and painted surfaces should look professionally maintained.",
+    "Favor pristine contemporary hospitality and commercial styling over rustic wear, heavy patina, stains, scars, grime or distressed finishes.",
+    "Maintain strict physical realism: coherent geometry, ordinary real-world textures, accurate reflections, believable edges and natural object structure.",
+    "Prioritize a finished campaign photograph over visual novelty. If an unusual interpretation competes with realism, choose realism."
+  ];
+
+  if(culinary){
+    rules.push(
+      "CULINARY IMAGE STANDARD:",
+      "Food must look freshly prepared, appetizing, restaurant-quality and immediately recognizable as real food.",
+      "Proteins should show natural fibers, moisture and believable cooking texture. Browning and searing should read as clean caramelization on the exterior surface.",
+      "For steak or similar meat, favor a clean dark-golden exterior sear with a natural tender interior and realistic juices.",
+      "Plateware, garnishes, counters, tables and serving surfaces should look pristine, dry, food-safe and freshly prepared for a professional food shoot.",
+      "If wood appears near food, use premium clean serving wood with subtle fresh grain and restrained wear, like a newly maintained upscale restaurant presentation board."
+    );
+  }
+
+  return rules.join(" ");
+}
+
+function coastloopRevisionDirection(notes){
+  const original=String(notes||"").replace(/\s+/g," ").trim();
+
+  const culinary=/(restaurant|food|steak|beef|meat|chicken|seafood|dish|plate|sear|seared|cook|grill)/i.test(original);
+
+  // Important: rejected visual defects should not be repeated into the
+  // generation prompt. Models can treat the mere noun as subject matter.
+  const rejectedDefect=/\b(mold|mould|alien|fuzzy|fuzz|rotten|rotting|decay|decayed|gross|disgusting|diseased|fungus|fungal|slime|slimy|contaminated|contamination|infected|infection|monster|mutant|mangled)\b/i;
+
+  const sentences=original
+    .split(/(?<=[.!?])\s+/)
+    .map(x=>x.trim())
+    .filter(Boolean);
+
+  const positiveRequested=sentences
+    .filter(sentence=>!rejectedDefect.test(sentence))
+    .join(" ")
+    .trim();
+
+  const rules=[
+    "COASTLOOP REVISION INTERPRETATION:",
+    "Treat advertiser revision notes as correction intent, not as a list of visual subjects to reproduce.",
+    "Remove rejected characteristics by replacing them with ordinary, polished, physically realistic equivalents.",
+    "Preserve useful composition, lighting, framing and campaign intent unless the requested correction requires changing them.",
+    "The revised frame must satisfy the full CoastLoop commercial image standard."
+  ];
+
+  if(positiveRequested){
+    rules.push(`Requested positive direction: ${positiveRequested}`);
+  }
+
+  if(culinary){
+    rules.push(
+      "For this culinary revision, make the food look freshly prepared and naturally photographed.",
+      "If meat is present, use realistic fibers and moisture with a clean exterior sear; keep the interior natural and tender-looking.",
+      "Use pristine contemporary plating and immaculate premium serving surfaces.",
+      "Any visible wood should look clean, refined, food-safe, recently maintained and appropriate for an upscale restaurant advertising shoot."
+    );
+  }
+
+  return rules.join(" ");
+}
+
+function coastloopCreativePrompt(business,profile,brief,jobType){
+  const base=String(
+    coastloopCreativePromptBase(business,profile,brief,jobType) || ""
+  ).trim();
+
+  const quality=coastloopCreativeQualityContext(
+    business,
+    profile,
+    brief
+  );
+
+  return `${base}\n\n${quality}`.slice(0,8000);
 }
 
 async function portalCreativeJobs(request,env,auth,url){
@@ -2521,7 +2619,7 @@ async function portalCreativeReview(request,env,auth,jobId){
       organization_id:ORG_ID,
       advertiser_business_id:job.advertiser_business_id,
       job_type:job.job_type,
-      prompt:`${String(job.prompt||"").trim()}\n\nREVISION REQUEST: ${notes}`.slice(0,8000),
+      prompt:`${String(job.prompt||"").trim()}\n\n${coastloopRevisionDirection(notes)}`.slice(0,8000),
       metadata:{
         ...(job.metadata||{}),
         revision_of:job.id,
