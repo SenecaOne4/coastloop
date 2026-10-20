@@ -2316,13 +2316,117 @@ function render(){
   $('#creativeBusiness').innerHTML = '<option value="">House / internal</option>' +
     state.businesses.filter(b=>b.is_advertiser).map(b=>`<option value="${b.id}">${esc(b.name)}</option>`).join('');
 
-  $('#creativeJobs').innerHTML = (state.creativeJobs||[]).map(j=>`
-    ${creativeAdminProgress(j)}
-    <div class="media-item">
-      <strong>${esc(j.metadata?.title||'Generated creative')}</strong>
-      <span class="pill">${esc(j.status)}</span>
-      <div class="muted">${esc((j.prompt||'').slice(0,180))}</div>
-    </div>`).join('') || '<div class="muted">No generated creative jobs yet.</div>';
+  $('#creativeJobs').innerHTML = (state.creativeJobs||[]).map(j=>{
+    const md=j.metadata && typeof j.metadata==='object' ? j.metadata : {};
+    const revision=Number(j.revision_number||md.revision_number||1);
+    const releaseRevision=Number(md.client_review_release_revision||0);
+    const explicitlyReleased=Boolean(
+      md.client_review_released_at &&
+      releaseRevision===revision
+    );
+    const historicallyReviewed=
+      j.review_status==='approved' ||
+      j.review_status==='changes_requested';
+    const releasedToClient=explicitlyReleased||historicallyReviewed;
+
+    const needsInternalReview=
+      j.status==='completed' &&
+      Boolean(j.output_asset_id) &&
+      j.review_status==='pending' &&
+      !releasedToClient;
+
+    const advertiser=state.businesses.find(
+      b=>b.id===j.advertiser_business_id
+    );
+
+    const reviewLabel=needsInternalReview
+      ? 'INTERNAL REVIEW'
+      : j.review_status==='approved'
+        ? 'CLIENT APPROVED'
+        : j.review_status==='changes_requested'
+          ? 'CLIENT CHANGES'
+          : explicitlyReleased
+            ? 'CLIENT REVIEW'
+            : String(j.status||'').toUpperCase();
+
+    const reviewNote=needsInternalReview
+      ? 'Held from client portal until CoastLoop releases it.'
+      : explicitlyReleased && j.review_status==='pending'
+        ? 'Released to the client for approval.'
+        : '';
+
+    const preview=j.output_asset_id
+      ? `<div style="
+            margin:12px 0;
+            border-radius:12px;
+            overflow:hidden;
+            background:#090b0e;
+            border:1px solid rgba(255,255,255,.08);
+          ">${
+            j.job_type==='video'
+              ? `<video
+                   src="/media/${encodeURIComponent(j.output_asset_id)}"
+                   controls
+                   muted
+                   playsinline
+                   preload="metadata"
+                   style="display:block;width:100%;max-height:420px;object-fit:contain"
+                 ></video>`
+              : `<img
+                   src="/media/${encodeURIComponent(j.output_asset_id)}"
+                   alt="${esc(md.title||'CoastLoop generated creative')}"
+                   style="display:block;width:100%;max-height:420px;object-fit:contain"
+                 >`
+          }</div>`
+      : '';
+
+    return `
+      ${creativeAdminProgress(j)}
+      <div class="media-item creative-admin-review-card"
+           style="${needsInternalReview
+             ? 'border-color:rgba(231,255,36,.42);box-shadow:0 0 26px rgba(231,255,36,.06)'
+             : ''}">
+        <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start">
+          <div>
+            <strong>${esc(md.title||'Generated creative')}</strong>
+            <div class="muted">
+              ${esc(advertiser?.name||'House / internal')}
+              · revision ${revision}
+            </div>
+          </div>
+          <span class="pill">${esc(reviewLabel)}</span>
+        </div>
+
+        ${preview}
+
+        <div class="muted">${esc((j.prompt||'').slice(0,220))}</div>
+
+        ${reviewNote
+          ? `<div style="
+               margin-top:10px;
+               padding:9px 11px;
+               border-radius:9px;
+               background:rgba(231,255,36,.06);
+               border:1px solid rgba(231,255,36,.18);
+               font-size:12px;
+             ">${esc(reviewNote)}</div>`
+          : ''}
+
+        ${needsInternalReview
+          ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+               <button
+                 class="creative-release-client"
+                 data-job="${esc(j.id)}"
+                 type="button"
+               >Release to client</button>
+               <span class="muted" style="align-self:center">
+                 Client cannot see this finished render yet.
+               </span>
+             </div>`
+          : ''}
+      </div>
+    `;
+  }).join('') || '<div class="muted">No generated creative jobs yet.</div>';
 
   renderScheduling();
 
@@ -3944,6 +4048,45 @@ document.querySelectorAll('.admin-nav .cl-side-link').forEach(link=>{
   });
 });
 
+
+
+
+const creativeJobsPanel=$('#creativeJobs');
+if(creativeJobsPanel){
+  creativeJobsPanel.addEventListener('click',async e=>{
+    const button=e.target.closest('.creative-release-client');
+    if(!button) return;
+
+    const jobId=button.dataset.job;
+    if(!jobId) return;
+
+    const ok=confirm(
+      'Release this exact creative revision to the client portal for approval?'
+    );
+    if(!ok) return;
+
+    const original=button.textContent;
+    button.disabled=true;
+    button.textContent='Releasing…';
+
+    try{
+      await api(
+        `/api/admin/creative-jobs/${encodeURIComponent(jobId)}/release`,
+        {
+          method:'POST',
+          headers:{'content-type':'application/json'},
+          body:JSON.stringify({action:'release_to_client'})
+        }
+      );
+
+      await load();
+    }catch(err){
+      $('#error').textContent=err.message;
+      button.disabled=false;
+      button.textContent=original;
+    }
+  });
+}
 
 function ensureCreativeAdminLiveMonitor(){
   if(window.__coastloopCreativeAdminPoll) return;

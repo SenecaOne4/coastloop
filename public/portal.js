@@ -693,33 +693,47 @@ async function hydrateCreative(){
       const rows=await api(`/api/portal/creative-jobs?business_id=${encodeURIComponent(id)}`);
       box.innerHTML=(rows||[]).map(j=>{
         const revisionRequested=j.review_status==='changes_requested';
+        const internalReviewPending=
+          j.internal_review_status==='pending' ||
+          Boolean(j.metadata?.internal_review_pending);
+
         const state=j.review_status==='approved'
           ? 'Approved'
           : revisionRequested
             ? 'Revision requested'
-            : j.status==='completed'
-              ? 'Ready for review'
-              : j.status==='claimed'
-                ? 'Creating'
-                : 'Preparing';
+            : internalReviewPending
+              ? 'CoastLoop quality review'
+              : j.status==='completed'
+                ? 'Ready for review'
+                : j.status==='claimed'
+                  ? 'Creating'
+                  : 'Preparing';
+
         const tone=state==='Approved'
-          ? 'good'
+          ? 'approved'
           : state==='Ready for review'
-            ? 'watch'
+            ? 'ready'
             : state==='Creating'
-              ? 'active'
+              ? 'creating'
               : state==='Revision requested'
                 ? 'revision'
                 : 'neutral';
+
         const rev=Number(j.revision_number||j.metadata?.revision_number||1);
-        const ready=j.status==='completed'&&j.output_asset_id&&!revisionRequested&&j.review_status!=='approved';
+        const ready=j.status==='completed'&&j.output_asset_id&&!revisionRequested&&!internalReviewPending&&j.review_status!=='approved';
         const media=j.output_asset_id
           ? `<div class="cl-creative-preview">${
               j.job_type==='video'
                 ? `<video src="/media/${encodeURIComponent(j.output_asset_id)}" muted playsinline preload="metadata" controls></video>`
                 : `<img src="/media/${encodeURIComponent(j.output_asset_id)}" alt="${esc(j.metadata?.title||'CoastLoop creative')}">`
             }</div>`
-          : `<div class="cl-creative-preview is-empty"><span>${state==='Creating'?'Creating…':'Creative preview'}</span></div>`;
+          : `<div class="cl-creative-preview is-empty"><span>${
+              state==='Creating'
+                ? 'Creating…'
+                : state==='CoastLoop quality review'
+                  ? 'CoastLoop is reviewing your creative'
+                  : 'Creative preview'
+            }</span></div>`;
         const actions=ready
           ? `<div class="cl-creative-actions">
               <button type="button" class="cl-review-approve" data-job-id="${esc(j.id)}">Approve</button>

@@ -1665,6 +1665,105 @@ async function adminMedia(env) {
   }));
 }
 
+
+function creativeClientReleaseState(job){
+  const metadata=job?.metadata &&
+    typeof job.metadata==="object" &&
+    !Array.isArray(job.metadata)
+      ? job.metadata
+      : {};
+
+  const revision=Number(
+    job?.revision_number ||
+    metadata.revision_number ||
+    1
+  );
+
+  const releaseRevision=Number(
+    metadata.client_review_release_revision ||
+    0
+  );
+
+  const explicitlyReleased=Boolean(
+    metadata.client_review_released_at &&
+    releaseRevision===revision
+  );
+
+  // These states prove the client has already interacted with
+  // historical creative. Preserve access to that history.
+  const historicallyClientReviewed=
+    job?.review_status==="approved" ||
+    job?.review_status==="changes_requested";
+
+  return {
+    metadata,
+    revision,
+    explicitlyReleased,
+    historicallyClientReviewed,
+    released:explicitlyReleased || historicallyClientReviewed
+  };
+}
+
+async function adminReleaseCreativeToClient(request,env,auth,jobId){
+  const rows=await sb(
+    env,
+    `creative_jobs?id=eq.${encodeURIComponent(jobId)}`+
+    `&organization_id=eq.${ORG_ID}&select=*&limit=1`
+  );
+
+  const job=rows?.[0];
+
+  if(!job)
+    return json({error:"creative job not found"},404);
+
+  if(job.status!=="completed" || !job.output_asset_id)
+    return json({
+      error:"creative must be completed before client release"
+    },409);
+
+  const state=creativeClientReleaseState(job);
+
+  if(state.explicitlyReleased){
+    return json({
+      ok:true,
+      already_released:true,
+      job
+    });
+  }
+
+  const now=new Date().toISOString();
+
+  const metadata={
+    ...state.metadata,
+    internal_review_status:"released",
+    internal_reviewed_at:now,
+    client_review_released_at:now,
+    client_review_release_revision:state.revision,
+    client_review_released_by:
+      auth?.user?.id ||
+      auth?.subject ||
+      null
+  };
+
+  const updated=await sb(
+    env,
+    `creative_jobs?id=eq.${encodeURIComponent(job.id)}`+
+    `&organization_id=eq.${ORG_ID}`,
+    {
+      method:"PATCH",
+      headers:{Prefer:"return=representation"},
+      body:JSON.stringify({metadata})
+    }
+  );
+
+  return json({
+    ok:true,
+    job:Array.isArray(updated) && updated[0]
+      ? updated[0]
+      : {...job,metadata}
+  });
+}
+
 async function adminCreativeJobs(env) {
   return await sb(env, `creative_jobs?organization_id=eq.${ORG_ID}&select=*&order=created_at.desc&limit=100`) || [];
 }
@@ -2475,7 +2574,34 @@ async function portalCreativeJobs(request,env,auth,url){
     const rows=await sb(env,
       `creative_jobs?organization_id=eq.${ORG_ID}&advertiser_business_id=eq.${encodeURIComponent(businessId)}`+
       `&select=id,job_type,status,output_asset_id,metadata,review_status,review_notes,revision_number,created_at,completed_at&order=created_at.desc&limit=50`);
-    return json(rows||[]);
+    const clientRows=(rows||[]).map(job=>{
+const release=creativeClientReleaseState(job);
+const internalReviewPending=
+job.status==="completed" &&
+job.review_status==="pending" &&
+!release.released;
+
+if(!internalReviewPending){
+return {
+...job,
+internal_review_status:release.released ? "released" : null
+};
+}
+
+// SECURITY / EXPERIENCE GATE:
+// do not hand the client the generated asset UUID before
+// CoastLoop staff has explicitly reviewed this revision.
+return {
+...job,
+output_asset_id:null,
+internal_review_status:"pending",
+metadata:{
+...(release.metadata||{}),
+internal_review_pending:true
+}
+};
+});
+return json(clientRows);
   }
 
   const b=await bodyJson(request);
@@ -2547,6 +2673,12 @@ async function portalCreativeReview(request,env,auth,jobId){
 
   const business=await portalAdvertiserBusiness(env,auth,job.advertiser_business_id);
   if(!business) return json({error:"advertiser access required"},403);
+  const clientRelease=creativeClientReleaseState(job);
+  if(!clientRelease.released)
+    return json({
+      error:"creative is still in CoastLoop internal quality review"
+    },409);
+
   if(job.status!=="completed" || !job.output_asset_id)
     return json({error:"creative is not ready for review"},409);
 
@@ -5406,6 +5538,29 @@ export default {
 
         if (url.pathname === "/api/admin/creative-jobs" && request.method === "POST")
           return createCreativeJob(request, env, adminAuth);
+
+
+        const creativeClientReleaseMatch = url.pathname.match(
+          /^\/api\/admin\/creative-jobs\/([^/]+)\/release$/
+        );
+
+        if (creativeClientReleaseMatch && request.method === "POST")
+          return auditMutation(
+            request,
+            env,
+            adminAuth,
+            {
+              action: "creative.release_to_client",
+              entity_type: "creative_job",
+              entity_id: creativeClientReleaseMatch[1]
+            },
+            () => adminReleaseCreativeToClient(
+              request,
+              env,
+              adminAuth,
+              creativeClientReleaseMatch[1]
+            )
+          );
 
         if (url.pathname === "/api/admin/media" && request.method === "GET")
           return json(await adminMedia(env));
