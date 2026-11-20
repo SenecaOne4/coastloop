@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CoastLoop Admin — Operations (MVP Prototype)</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#0b0b0e;color:#ece7da;font-family:system-ui,-apple-system,Segoe UI,sans-serif}
+header{display:flex;justify-content:space-between;align-items:center;padding:14px 22px;border-bottom:1px solid #26262e;background:#101014}
+.logo{font-weight:700;letter-spacing:.18em;color:#c9a227}
+.pill{font-size:12px;border:1px solid #c9a227;color:#c9a227;border-radius:99px;padding:3px 10px}
+main{max-width:1080px;margin:0 auto;padding:22px}
+h2{font-size:16px;letter-spacing:.12em;text-transform:uppercase;color:#c9a227;margin:28px 0 10px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.card{background:#141419;border:1px solid #26262e;border-radius:10px;padding:16px}
+.num{font-size:30px;font-weight:700}.lbl{font-size:12px;color:#9b9587;letter-spacing:.08em;text-transform:uppercase}
+table{width:100%;border-collapse:collapse;background:#141419;border:1px solid #26262e;border-radius:10px;overflow:hidden}
+td,th{padding:10px 12px;border-bottom:1px solid #22222a;text-align:left;font-size:14px}
+th{color:#9b9587;font-size:12px;text-transform:uppercase;letter-spacing:.08em}
+.ok{color:#57d38c}.warn{color:#e8b93e}.bad{color:#e86a5e}.muted{color:#9b9587}
+button{background:#c9a227;color:#111;border:0;border-radius:8px;padding:8px 14px;font-weight:600;cursor:pointer}
+button.ghost{background:transparent;color:#ece7da;border:1px solid #3a3a44}
+input{background:#0b0b0e;border:1px solid #3a3a44;border-radius:8px;color:#ece7da;padding:9px 12px;font-size:15px;letter-spacing:.2em;text-transform:uppercase;width:150px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.note{font-size:13px;color:#9b9587;line-height:1.5}
+.danger{border-color:#5a2b26}
+.proto{background:#241f0d;border:1px solid #c9a227;color:#e8d9a0;border-radius:8px;padding:10px 14px;font-size:13px}
+</style></head><body>
+<header><div class="logo">COASTLOOP ADMIN — OPERATIONS</div><span class="pill">MVP PROTOTYPE</span></header>
+<main>
+<p class="proto"><b>Prototype scope:</b> the four operations that hurt — Screens, Pairing, Verified-Hours Ledger, Token. Data below: house TCL figures are REAL (ledger, Nov 20); test-row entries are summarised from D1 records on file. Actions are mocked — wiring map is in ADMIN-MVP.md. No live data is changed from this page.</p>
+
+<h2>Network at a glance</h2>
+<div class="grid">
+<div class="card"><div class="num">1</div><div class="lbl">Commercial-ready screens (house TCL)</div></div>
+<div class="card"><div class="num">10</div><div class="lbl">Total screen rows in D1 (incl. test)</div></div>
+<div class="card"><div class="num">1.81 h</div><div class="lbl">Verified playback — house TCL, current era</div></div>
+<div class="card"><div class="num">305 / 305</div><div class="lbl">Plays / proof receipts — exact cross-match</div></div>
+</div>
+
+<h2>Screens</h2>
+<table>
+<tr><th>Screen</th><th>Status</th><th>Playlist</th><th>Last seen</th><th>Verified (era)</th><th>Action</th></tr>
+<tr><td><b>Home first roku — dev</b><br><span class="muted">House TCL 55S451 · roku-0.2.4 · sleep-proofed ✓ Nov 20 07:02</span></td><td class="ok">● Active / paired</td><td>House playlist</td><td>Playing (overnight run 2 in progress)</td><td>1.81 h · longest run 1h 48m · sleep alarms: 1 (run 1, bandwidth saver — fixed)</td><td><button class="ghost">View ledger</button></td></tr>
+<tr><td><b>Home first roku (original record)</b><br><span class="muted">roku-0.1.16 · superseded by dev record — untouched</span></td><td class="warn">● Stale (last seen Nov 13)</td><td>House playlist</td><td>Nov 13</td><td>All-time incl. Sept era: 4.69 h / 1,234 plays</td><td><button class="ghost">Review</button></td></tr>
+<tr><td><b>Test row — Nov 17 boot test</b><br><span class="muted">device test-check-1117 · is_test</span></td><td class="bad">● Retire owed</td><td>—</td><td>Nov 17</td><td>—</td><td><button>Retire (keep history)</button></td></tr>
+<tr><td><b>Test row — Nov 19 boot test</b><br><span class="muted">device test-check-1119b · is_test</span></td><td class="bad">● Retire owed</td><td>—</td><td>Nov 19</td><td>—</td><td><button>Retire (keep history)</button></td></tr>
+<tr><td colspan="6" class="muted">+ 6 further legacy/test rows from the Sept–Nov build era, listed in the full D1 export — the production Admin shows them under a "Test / legacy" filter, never mixed with commercial screens.</td></tr>
+</table>
+
+<h2>Pair a screen</h2>
+<div class="card">
+<div class="row"><input placeholder="PAIR CODE" maxlength="6"><button>Pair screen</button><span class="note">Code appears on the TV. Pairing writes status=active, paired_at, clears the code — the exact steps done by hand in D1 on Nov 19, now one action. Requires a valid admin session (see Token).</span></div>
+</div>
+
+<h2>Verified-hours ledger — House TCL</h2>
+<div class="card">
+<p><b>Current era (since Nov 20):</b> 1.81 verified hours · 305 plays · 305 proof receipts · longest unbroken run 1h 48m (22:34–00:23 EST) · then Bandwidth Saver stopped run 1 — root-caused and fixed; run 2 is tonight's proof.</p>
+<p><b>All-time:</b> 4.69 h · 1,234 plays · 310 receipts (includes September test era).</p>
+<p class="note">Source: playback_ledger.py — verified hours = SUM(seconds_played) from playback_daily, cross-checked against proof receipts (gap ≤120s = continuous; gap &gt;15 min = sleep alarm). This same ledger is the host-pay basis (≥8 verified hrs/day) and the flagship/add-on reporting product. Target per Seneca's Nov 20 directive: hundreds of verified hours.</p>
+</div>
+
+<h2>Token &amp; access</h2>
+<div class="card danger">
+<p><b class="bad">Admin token: STALE</b> — the saved token was rejected 401 on Nov 19; pairing required direct database work. <b>Rotation owed.</b></p>
+<div class="row"><button>Rotate admin token</button><button class="ghost">Revoke saved token file</button><span class="note">Rotation flow (production): generate → store server-side → invalidate old → confirm with a live admin call → record rotation date here. Token values are never shown in chat, logs, or this page — only status, age, and last-used.</span></div>
+<p class="note" style="margin-top:10px">Broker routes already reject the legacy admin token by design (owner JWT required) — that behaviour is correct and stays.</p>
+</div>
+
+<h2>Playlists (summary)</h2>
+<div class="card"><p>House playlist → House TCL (dev). Nov 20: November business ads cut from rotation by Seneca's order; house pieces + THE GALA art library remain. Paid campaigns will pin above house/portfolio inventory (paying-first rule, pricing paper §3) — assignment UI lands with the first paid campaign.</p></div>
+</main></body></html>
