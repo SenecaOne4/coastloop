@@ -1,0 +1,28 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<title>CoastLoop Admin — Screens Roll-up (Slice 1)</title><style>
+*{box-sizing:border-box}body{margin:0;background:#0b0b0e;color:#ece7da;font-family:system-ui,-apple-system,Segoe UI,sans-serif}
+header{padding:14px 22px;border-bottom:1px solid #26262e;background:#101014;display:flex;justify-content:space-between}
+.logo{font-weight:700;letter-spacing:.18em;color:#c9a227}.pill{font-size:12px;border:1px solid #c9a227;color:#c9a227;border-radius:99px;padding:3px 10px}
+main{max-width:1080px;margin:0 auto;padding:22px}h2{font-size:16px;letter-spacing:.12em;text-transform:uppercase;color:#c9a227;margin:26px 0 10px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.card{background:#141419;border:1px solid #26262e;border-radius:10px;padding:16px}
+.num{font-size:28px;font-weight:700}.lbl{font-size:12px;color:#9b9587;letter-spacing:.08em;text-transform:uppercase}
+table{width:100%;border-collapse:collapse;background:#141419;border:1px solid #26262e}
+td,th{padding:9px 11px;border-bottom:1px solid #22222a;text-align:left;font-size:14px}
+th{color:#9b9587;font-size:12px;text-transform:uppercase;letter-spacing:.08em}
+.ok{color:#57d38c}.warn{color:#e8b93e}.bad{color:#e86a5e}.muted{color:#9b9587}.note{font-size:13px;color:#9b9587;line-height:1.5}
+</style></head><body>
+<header><div class="logo">COASTLOOP ADMIN — SCREENS</div><span class="pill">SLICE 1 · READ-ONLY · LIVE DATA</span></header>
+<main><p class="note">Generated 2026-11-20 18:24 UTC by build_admin_views.py from live D1 (SELECT only). Test/legacy rows are labelled, never hidden and never mixed silently with paired screens.</p>
+<div class="grid">
+<div class="card"><div class="num">1</div><div class="lbl">Playing now</div></div>
+<div class="card"><div class="num">7</div><div class="lbl">Paired / active</div></div>
+<div class="card"><div class="num">3</div><div class="lbl">Unpaired rows</div></div>
+<div class="card"><div class="num">10</div><div class="lbl">Total screen rows</div></div>
+</div>
+<h2>All screens</h2>
+<table><tr><th>Screen</th><th>Status</th><th>Playlist</th><th>Last seen</th><th>Verified playback</th></tr>
+<tr><td><b>Unpaired screen</b><br><span class='muted'>roku-0.2.3 ·  · unreviewed</span></td><td>unpaired</td><td>—</td><td class='warn'>15.0h ago</td><td>0 h / 0 plays</td></tr><tr><td><b>Unpaired screen</b><br><span class='muted'>roku-0.2.0 · 55S451 · unreviewed</span></td><td>unpaired</td><td>—</td><td class='bad'>3d ago</td><td>0 h / 0 plays</td></tr><tr><td><b>Unpaired screen</b><br><span class='muted'>roku-0.1.16 · G000X · unreviewed</span></td><td>unpaired</td><td>—</td><td class='bad'>51d ago</td><td>0 h / 0 plays</td></tr><tr><td><b>Home first roku — dev</b> <span class="warn">[test]</span><br><span class='muted'>roku-0.2.4 · G000X · lab_only</span></td><td>active</td><td>Seneca House Ads — TEST</td><td class='ok'>playing now</td><td>11.05 h / 2058 plays</td></tr><tr><td><b>Home first roku</b> <span class="warn">[test]</span><br><span class='muted'>roku-0.1.16 · G000X · pilot</span></td><td>active</td><td>Seneca House Ads — TEST</td><td class='bad'>7d ago</td><td>12.92 h / 2523 plays</td></tr><tr><td><b>Gramas</b> <span class="warn">[test]</span><br><span class='muted'>roku-0.1.16 · 7000X · unreviewed</span></td><td>active</td><td>CoastLoop House Loop</td><td class='bad'>35d ago</td><td>0.01 h / 3 plays</td></tr><tr><td><b>55" Roku TV - Pilot</b> <span class="warn">[test]</span><br><span class='muted'>roku-0.1.16 · L000X · pilot</span></td><td>active</td><td>CoastLoop House Loop</td><td class='bad'>60d ago</td><td>22.37 h / 5395 plays</td></tr><tr><td><b>Mommas phone</b> <span class="warn">[test]</span><br><span class='muted'>0.15.1 ·  · unreviewed</span></td><td>active</td><td>CoastLoop House Loop</td><td class='bad'>73d ago</td><td>2.92 h / 14 plays</td></tr><tr><td><b>Unpaired screen</b> <span class="warn">[test]</span><br><span class='muted'>synthetic-test ·  · lab_only</span></td><td>active</td><td>CoastLoop House Loop</td><td class='bad'>75d ago</td><td>8.6 h / 2057 plays</td></tr><tr><td><b>Test Screen Tab</b> <span class="warn">[test]</span><br><span class='muted'>0.13.0 ·  · unreviewed</span></td><td>active</td><td>CoastLoop Lab Loop</td><td class='bad'>75d ago</td><td>12.02 h / 1952 plays</td></tr>
+</table>
+<p class="note">Retire actions (Slice 2) stay gated on token rotation (Slice 4, go routed through the Overlord). Unpaired rows last seen Nov 17 / Nov 20 are the boot-test rows from the pairing era — they retire with Slice 2, history kept.</p>
+</main></body></html>

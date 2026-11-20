@@ -1,0 +1,27 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<title>CoastLoop Admin — Verified-Hours Ledger (Slice 3)</title><style>
+*{box-sizing:border-box}body{margin:0;background:#0b0b0e;color:#ece7da;font-family:system-ui,-apple-system,Segoe UI,sans-serif}
+header{padding:14px 22px;border-bottom:1px solid #26262e;background:#101014;display:flex;justify-content:space-between}
+.logo{font-weight:700;letter-spacing:.18em;color:#c9a227}.pill{font-size:12px;border:1px solid #c9a227;color:#c9a227;border-radius:99px;padding:3px 10px}
+main{max-width:1080px;margin:0 auto;padding:22px}h2{font-size:16px;letter-spacing:.12em;text-transform:uppercase;color:#c9a227;margin:26px 0 10px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.card{background:#141419;border:1px solid #26262e;border-radius:10px;padding:16px}
+.num{font-size:28px;font-weight:700}.lbl{font-size:12px;color:#9b9587;letter-spacing:.08em;text-transform:uppercase}
+table{width:100%;border-collapse:collapse;background:#141419;border:1px solid #26262e}
+td,th{padding:9px 11px;border-bottom:1px solid #22222a;text-align:left;font-size:14px}
+th{color:#9b9587;font-size:12px;text-transform:uppercase;letter-spacing:.08em}
+.ok{color:#57d38c}.warn{color:#e8b93e}.bad{color:#e86a5e}.muted{color:#9b9587}.note{font-size:13px;color:#9b9587;line-height:1.5}
+</style></head><body>
+<header><div class="logo">COASTLOOP ADMIN — VERIFIED-HOURS LEDGER</div><span class="pill">SLICE 3 · READ-ONLY · LIVE DATA</span></header>
+<main><p class="note">Generated 2026-11-20 18:24 UTC. Verified hours = SUM(seconds_played) from playback_daily, the billing-grade number (playback_ledger.py method). Proof receipts on file: <b>9056</b>. This ledger is the host-pay basis (&ge;8 verified hrs/day) and the flagship/add-on reporting product.</p>
+<div class="grid">
+<div class="card"><div class="num">69.89 h</div><div class="lbl">Verified hours, all screens, all time</div></div>
+<div class="card"><div class="num">14002</div><div class="lbl">Verified plays, all time</div></div>
+<div class="card"><div class="num">11.05 h</div><div class="lbl">House TCL (dev) — all time</div></div>
+</div>
+<h2>Per-screen ledger</h2>
+<table><tr><th>Screen</th><th>Verified hours</th><th>Plays</th><th>Last play</th></tr>
+<tr><td><b>55" Roku TV - Pilot</b></td><td>22.37 h</td><td>5395</td><td>2026-09-21 22:10:36.579+00</td></tr><tr><td><b>Home first roku</b></td><td>12.92 h</td><td>2523</td><td>2026-11-13T16:54:00.940Z</td></tr><tr><td><b>Test Screen Tab</b></td><td>12.02 h</td><td>1952</td><td>2026-09-06 06:37:20.223+00</td></tr><tr><td><b>Home first roku — dev</b></td><td>11.05 h</td><td>2058</td><td>2026-11-20T18:24:06.335Z</td></tr><tr><td><b>Unpaired screen</b></td><td>8.6 h</td><td>2057</td><td>2026-09-06 22:24:59.962+00</td></tr><tr><td><b>Mommas phone</b></td><td>2.92 h</td><td>14</td><td>2026-09-06 13:31:03.997+00</td></tr><tr><td><b>Gramas</b></td><td>0.01 h</td><td>3</td><td>2026-10-17 00:56:29.671+00</td></tr><tr><td><b>Unpaired screen</b></td><td>0 h</td><td>0</td><td>—</td></tr><tr><td><b>Unpaired screen</b></td><td>0 h</td><td>0</td><td>—</td></tr><tr><td><b>Unpaired screen</b></td><td>0 h</td><td>0</td><td>—</td></tr>
+</table>
+<p class="note">Run/gap analysis (continuous runs, sleep alarms at &gt;15 min gaps) is produced by playback_ledger.py per screen; the house screen's current run and alarm history render in the production view from the same receipt stream.</p>
+</main></body></html>

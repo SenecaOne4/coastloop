@@ -10,7 +10,8 @@
 ## Phase 3 — Admin
 - [x] Admin MVP prototype (admin-prototype/admin-mvp.html): screens+status, pair form, ledger view, token panel — PRESENTABLE, real house-TCL data
 - [x] Wiring map (ADMIN-MVP.md): 4 slices, existing backend per slice, blockers named
-- [ ] Slice builds in order: 1 screens roll-up (read-only, no blocker) → 3 ledger web view (script exists) → 4 token rotation (unlock) → 2 pair/retire live actions (needs slice 4)
+- [x] **Slices 1+3 BUILT Nov 20 (management confirmed the wiring map):** `admin-slices/build_admin_views.py` — a read-only generator (SELECT-only via d1_query.py, same pattern as playback_ledger.py) emitting `screens-rollup.html`, `ledger-view.html`, `admin-data.json` from LIVE D1. First run Nov 20 13:24 EST: 10 screen rows (7 active, 3 unpaired, 1 playing now), 69.89 verified hours / 14,002 plays all-time across screens, 9,056 proof receipts; house TCL (dev) 11.04h all-time, 8.16h today, in a 6h21m unbroken run at generation time. Nothing live changed — views only.
+- [ ] Slice builds remaining: 4 token rotation (unlock; go via Overlord) → 2 pair/retire live actions (needs slice 4)
 - [ ] Retire 2 stray test screen rows — first live use of slice 2, after token fix; until then it remains a D1 action, NOT done by this desk unilaterally
 - [ ] Polish backlog: 21-section de-duplication, Users & access move, dead links
 
@@ -26,7 +27,7 @@
 
 ## GitHub status (Nov 20, 12:41 override)
 - Repo exists: https://github.com/SenecaOne4/coastloop (head still Oct 20 commit 2a2a18e — stale, as the Nov 13 audit said)
-- Desk-owned files (8 files, 56KB: pricing paper + this MVP set) — push ATTEMPTED via GitHub connector: attempt 1 interrupted by a service restart (verified NOT landed), attempt 2 **timed out waiting on the approval card — NOT pushed. Needs an approval to retry.**
+- Desk-owned files (8 files, 56KB: pricing paper + this MVP set) — **PUSHED Nov 20, 13:22 EST on the re-fire (Overlord ruling): commit `63e02cb313d0241533ca0ec5f963e8038739bde6` on main, verified by commit list + file read-back.** History: attempt 1 interrupted by a service restart (verified NOT landed), attempt 2 timed out on the approval card, re-fire approved on sight per Seneca's standing repo-card instruction; the CLI client timed out at 280s but the commit landed server-side — verified, not assumed. Note: the copy of this checklist inside that commit still carries the pre-push status text; this local copy is the current one.
 - Full `coastloop-d1` backend codebase (99MB, 176 files) does NOT fit the connector snapshot path (16MB / UTF-8-only limits; contains .zip/.gz binaries) and contains **5 secret/token files** (.cl_admin_token, .cl_creative_worker_token, .cl_genny_client_secret, shim JWT secrets) that must never be pushed. `gh` CLI is not logged in on this VM. Path forward: secrets sweep + .gitignore, then a git push from an authenticated environment (Mac repo or gh auth) — flagged to management as a guidance/infra gap, not silently stalled.
 
 ## ETAs (from Nov 20, desk working time)
