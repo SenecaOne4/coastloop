@@ -25,6 +25,7 @@
 - [x] Kits UN-WATERMARKED; decided terms set in Broker Kit + Venue Kit + both one-pagers
 - [x] Public price block produced (PUBLIC-PRICE-BLOCK.md) — $1,000 always labelled first-year, $2,999 always on the same surface; NOT yet live on the site (deploy on management's go)
 - [x] Paper reconciled (DECISION section at top of the pricing paper) with 5 one-line flags: monthly HELD at live $100/mo; flagship composition collision (re-base before quoting); add-on HELD; host pay HELD; velvet-carpet bound unstated
+- [x] Flagship re-base OPTIONS prepared (Nov 20, Overlord tasking — options only, no pick): 4 compositions above the $2,999 standard ($4,499 Full Stack / $4,199 Core / $5,799 Max / à-la-carte), margins at the paper's cost model incl. worst case, plus the velvet-inside-the-bundle sub-question — in the paper's FLAGSHIP RE-BASE section, batching into the Overlord's decision list
 - [x] Interim legal line applied everywhere under this desk — CORRECTED Nov 20, 19:36 (Lux umbrella reversed): "CoastLoop Media is a trade name of myprelistingreport.com LLC." (both kits, both one-pagers, admin prototype, price block both versions; the Lux line applied at 19:37 was superseded and fully replaced)
 
 ## Still standing (override confirms)

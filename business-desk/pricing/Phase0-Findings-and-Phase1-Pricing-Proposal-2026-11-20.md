@@ -27,6 +27,38 @@
 
 ---
 
+# FLAGSHIP RE-BASE — COMPOSITION OPTIONS (Nov 20, 2026, for the Overlord's decision batch)
+
+**OPTIONS ONLY — this desk does not pick.** The original flagship ($2,999) was a bundle composed on the old $1,500 standard base; the decided standard is now itself $2,999, so every composition below sits ABOVE $2,999. Until Seneca rules: flagship is do-not-quote. All margins use this paper's cost model (creative $250/campaign, refresh $150 each, standard onboarding $50, host share $200/advertiser/zone at target density, admin ≈$10/yr prepay, broker 15% of collected). Concierge onboarding is costed at a $150 internal allocation (dossier build + priority handling at the $40/hr admin rate) — the one allocation not in the original model, stated openly. "Worst case" = the early-ops 3× creative multiplier from §0e (creative lines double).
+
+### Option 1 — Full Stack, same recipe re-based
+Everything the original flagship had, on the new base: Standard $2,999 + Priority/Refresh add-on $1,200 + second campaign at launch $350 + concierge onboarding $499. **Components $5,048 → price $4,499/yr** (bundle saving $549, the same dollar saving as the original flagship).
+- Costs: creative 2 campaigns $500 + refreshes $300 + concierge $150 + host $200 + admin $10 = **$1,160**
+- **Net kept: $3,339 direct (74%) / $2,664 brokered (59%)** · worst case: $2,539 (56%) / $1,864 (41%)
+- Fulfillment: two finished ads at launch — the 2-flagship-launches/month cap from §1-i applies unchanged.
+
+### Option 2 — Flagship Core (lean)
+Standard $2,999 + Priority/Refresh add-on $1,200 + concierge onboarding $499 — no second campaign (available à la carte at $350). **Components $4,698 → price $4,199/yr** (bundle saving $499).
+- Costs: creative $250 + refreshes $300 + concierge $150 + host $200 + admin $10 = **$910**
+- **Net kept: $3,289 direct (78%) / $2,659 brokered (63%)** · worst case: $2,739 (65%) / $2,109 (50%)
+- Fulfillment: one finished ad at launch — lightest flagship on the render queue; the launch cap could rise above 2/month under this option alone.
+
+### Option 3 — Flagship Max (two campaigns, two zones)
+Option 1 plus a second coverage zone (+50% of base, per the paper's zone rule): components $5,048 + $1,499 = **$6,547 → price $5,799/yr** (bundle saving $748).
+- Costs: creative $500 + refreshes $300 + concierge $150 + host $400 (two zones) + admin $10 = **$1,360**
+- **Net kept: $4,439 direct (77%) / $3,569 brokered (62%)** · worst case: $3,639 (63%) / $2,769 (48%)
+- Fulfillment: two finished ads at launch; 2/month cap applies. This is the only option that sells multi-zone inside the bundle.
+
+### Option 4 — No flagship (à la carte only)
+Retire the flagship tier entirely: Standard $2,999 + add-on $1,200 + second campaign $350 + concierge $499, each at list, assembled per client (full stack = $5,048, no bundle saving).
+- Margins are the component margins from Part B, unchanged; broker earns 15% per component as collected (full stack brokered keeps ≈ $3,131 of $5,048, 62%).
+- Trade-off, stated neutrally: simplest price sheet and no bundle discount anywhere — but it removes the single "full package, handled" price point Seneca directed into existence on Nov 20 07:19 ("ready MVP for those less know clients who are just ready for the full package").
+
+### Sub-question that rides with every option (not decided here)
+Does the velvet-carpet first year apply to the base inside a flagship bundle (base at $1,000 instead of $2,999, i.e. −$1,999 in year one)? If yes: Option 1 first-year price $2,500 (net ≈ $1,340 direct / $965 brokered), Option 2 $2,200 (≈ $1,290 / $960), Option 3 $3,800 (≈ $2,440 / $1,870), Option 4's stack $3,049 at list. If no: flagship prices above apply from year one.
+
+---
+
 # PART A — PHASE 0 FINDINGS (read-only inventory)
 
 ## 0a. The pricing surface today
