@@ -20,10 +20,16 @@
 - [x] Host one-pager HTML — PRESENTABLE
 - [x] Venue install checklist already exists and is proven (~/workspace/coastloop-d1/venue-install-checklist.md, house TCL complete Nov 20 07:02)
 
+## Pricing decision — LANDED Nov 20, 19:33 EST (Seneca via Overlord)
+- [x] Structure A APPROVED with velvet-carpet terms: **first year $1,000/yr for new clients; standard $2,999/yr** ($1,500 tier superseded; renewal lock superseded)
+- [x] Kits UN-WATERMARKED; decided terms set in Broker Kit + Venue Kit + both one-pagers
+- [x] Public price block produced (PUBLIC-PRICE-BLOCK.md) — $1,000 always labelled first-year, $2,999 always on the same surface; NOT yet live on the site (deploy on management's go)
+- [x] Paper reconciled (DECISION section at top of the pricing paper) with 5 one-line flags: monthly HELD at live $100/mo; flagship composition collision (re-base before quoting); add-on HELD; host pay HELD; velvet-carpet bound unstated
+- [x] Interim legal line applied everywhere under this desk: "CoastLoop Media, a trade name of Lux Builders, LLC." (both kits, both one-pagers, admin prototype, price block)
+
 ## Still standing (override confirms)
-- Pricing Structure A + flagship: Seneca's decision, already asked — NOT re-asked, NOT set live
-- Payment rail: Seneca's decision — untouched
-- No outreach to brokers/venues without his yes
+- Payment rail: Seneca's decision — untouched (Cash App remains the rail; Stripe merchant name unchanged)
+- No outreach to brokers/venues without his yes; nothing live moves
 
 ## GitHub status (Nov 20, 12:41 override)
 - Repo exists: https://github.com/SenecaOne4/coastloop (head still Oct 20 commit 2a2a18e — stale, as the Nov 13 audit said)

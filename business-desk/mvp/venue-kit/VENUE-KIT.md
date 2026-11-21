@@ -1,10 +1,10 @@
-# CoastLoop Venue (Host) Kit — MVP-presentable (DRAFT, Nov 20, 2026)
-**Status: PRESENTABLE DRAFT. Host pay figures are Structure A terms, PENDING Seneca's final approval — do not quote as live until management confirms. Nothing is sent to any venue until Seneca says yes.**
+# CoastLoop Venue (Host) Kit — MVP-presentable (Nov 20, 2026)
+**Status: Structure A APPROVED Nov 20, 2026. Host pay figures below are the approved structure's terms, held as proposed (the pricing decision did not separately speak to host pay — flagged to management). Nothing is sent to any venue until Seneca says yes (outreach gate unchanged).**
 
 ## The host offer in one paragraph
 Your TV, earning its wall space. CoastLoop runs a premium, vetted loop of local advertising on a screen you already own — **no additional hardware, no box to buy, nothing to install beyond the CoastLoop channel/player**. You approve the exact screen, schedule, house content, and category exclusions before anything goes live. In return, CoastLoop **pays you** for verified uptime — measured by the same playback ledger that proves plays to advertisers.
 
-## Host terms (Structure A, pending approval)
+## Host terms (Structure A, approved Nov 20, 2026)
 - **Placement fee charged to you: $0. Equipment cost: $0.** There is no equipment.
 - **Founding Host (first 5 signed locations): $300 per screen per year.**
 - **Standard Host: $200 per screen per year.**
@@ -37,3 +37,7 @@ Keep the screen on during agreed hours, don't cover or move it without telling u
 - *How is my pay calculated, really?* Verified playback hours from the ledger, against the ≥8 hrs/day standard, paid annually. You can see the same numbers we pay on.
 - *What plays besides ads?* CoastLoop house pieces and THE GALA art library between campaigns — the loop is designed to look premium in your room, not like a billboard that wandered indoors.
 - *Can I advertise my own business to other venues?* Yes — that's the advertiser track; your host pay credits against it.
+
+
+---
+*CoastLoop Media, a trade name of Lux Builders, LLC · Grand Strand, SC*

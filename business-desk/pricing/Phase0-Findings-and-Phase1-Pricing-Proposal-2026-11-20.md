@@ -5,6 +5,28 @@
 
 ---
 
+# DECISION — Nov 20, 2026, 19:33 EST (Seneca, via the Overlord) — READ FIRST; this section governs
+
+**Structure A is APPROVED, with Seneca's velvet-carpet terms.** Where this decision speaks, it supersedes the proposal body below; where it is silent, the proposed figure is HELD unchanged and flagged (flags at the end of this section). Nothing is live yet — site/package changes deploy on management's go.
+
+| Line | Proposal (below) | DECIDED | Effect |
+|---|---|---|---|
+| Entry price | Founding Annual $1,000, first 10 seats or to Mar 1, 2027, first renewal locked at $1,000 | **First year $1,000/yr for new clients — the velvet-carpet rate** | $1,000 is now a first-year rate for new clients, not a seat-capped founding allocation. The renewal lock is superseded: year two prices at standard. |
+| Standard Annual | $1,500/yr | **$2,999/yr standard price** | The $1,500 tier is superseded and does not exist. Standard margin at the paper's cost model (~$510 direct cost): ≈ **$2,489 kept direct (83%)**, ≈ **$2,039 brokered (68%)** after the $450 broker commission — the strongest tier in the structure. |
+| First-year margin | Founding: $500 direct / $350 brokered | Unchanged math | $1,000 first year still keeps ≈ $500 direct / $350 brokered. The velvet carpet is now the on-ramp to a $2,999 standard instead of a $1,500 one — year-two economics carry the structure. |
+| Broker commission examples | $150 on $1,000; $450 on flagship | $150 on first-year; **$450 on standard $2,999** | Kits updated to the decided examples. |
+
+**FLAGS — held figures the decision did not speak to (each also sent to management in one line):**
+1. **Monthly:** the live $100/mo monthly package is HELD exactly as-is; the proposed restructure ($150/mo + $250 setup, quarterly billing, 6-mo minimum) is NOT adopted by this decision and is not live.
+2. **Flagship collision:** the Full Package flagship was priced at $2,999 as a bundle built on the old $1,500 base — the decided standard base is now itself $2,999, so the flagship composition must be re-based before it is quoted; flagship figures ($2,999 / founding-window $2,499) are HELD and the broker kit marks the flagship do-not-quote until the reconciled composition lands.
+3. **Add-on:** Priority + Refresh at $1,200/yr ($100/mo) is HELD as proposed, not separately decided.
+4. **Host pay:** Founding Host $300 / Standard Host $200 per screen/yr (arrears, ≥8 verified hrs/day) is HELD as proposed under the general Structure A approval, not separately spoken to.
+5. **Velvet-carpet bound:** the decision names a cohort but states no seat cap or closing date (the proposal's 10-seat / Mar 1, 2027 bound and the founding renewal lock do not carry over unless the Overlord says so).
+
+**Interim legal line (binding, same date):** until Coast Atlantic Holdings, LLC exists, the entity line in all CoastLoop materials under this desk reads exactly: **"CoastLoop Media, a trade name of Lux Builders, LLC."** Applied to both kits, both one-pagers, the admin prototype, and the public price block. Stripe merchant name unchanged; Cash App remains the rail; nothing live moves.
+
+---
+
 # PART A — PHASE 0 FINDINGS (read-only inventory)
 
 ## 0a. The pricing surface today

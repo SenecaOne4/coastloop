@@ -1,17 +1,18 @@
-# CoastLoop Broker Kit — MVP-presentable (DRAFT, Nov 20, 2026)
-**Status: PRESENTABLE DRAFT. Prices shown are Structure A founding terms, PENDING Seneca's final approval — do not quote as live until management confirms the decision landed. Nothing in this kit is sent to any broker until Seneca says yes.**
+# CoastLoop Broker Kit — MVP-presentable (Nov 20, 2026)
+**Status: TERMS DECIDED — Structure A approved Nov 20, 2026 with Seneca's velvet-carpet terms (first year $1,000/yr for new clients; standard $2,999/yr). Nothing in this kit is sent to any broker until Seneca says yes (outreach gate unchanged).**
 
 ## What a broker is selling (one paragraph, approved language)
 CoastLoop puts a local business on the TV screens inside other local businesses — spas, restaurants, waiting rooms, bars — across the Grand Strand. CoastLoop *creates* the 15-second ad to a luxury standard, delivers it to commissioned screens, and proves every play: playback is recorded per screen, per play. No additional hardware for anyone — venues use their own TV, advertisers never touch equipment. The network is vetted: not every business gets on.
 
-## The founding offer a broker can talk about (pending final approval)
-- **Founding Annual — $1,000/yr prepaid.** First 10 paying advertisers, closes Mar 1, 2027. First renewal at the same price. Includes: 1 produced 15s campaign, creative review before launch, standard rotation in the Grand Strand zone, monthly verified-plays report, Brand Library.
-- **Full Package (flagship) — $2,999/yr** (Founding window $2,499): everything, handled — annual base + Priority/Refresh + a second campaign at launch + concierge onboarding. Max 2 flagship launches/month (render capacity is real — say it proudly, it's scarcity with a reason).
-- **Priority + Refresh add-on — $100/mo** (quarterly billed): 2 creative refreshes/yr, priority rotation, screen-level verified-hours reporting.
-- Monthly billing: quarterly only while payments are manual. Do not promise autopay or monthly credit-card billing — it does not exist yet.
+## The offer a broker can talk about (DECIDED terms, Nov 20, 2026)
+- **First year — $1,000/yr prepaid for new clients** (the velvet-carpet rate). Includes: 1 produced 15s campaign, creative review before launch, standard rotation in the Grand Strand zone, monthly verified-plays report, Brand Library.
+- **Standard rate — $2,999/yr.** The standard annual price, and the rate the first-year cohort steps to at renewal. Stated in writing at sale — no surprises, no hidden step-up.
+- **Full Package (flagship) — $2,999/yr** *(HELD as proposed — its composition was priced off the old standard base and is under reconciliation with management; do not quote flagship until the reconciled composition lands)*.
+- **Priority + Refresh add-on — $100/mo** (quarterly billed; HELD as proposed): 2 creative refreshes/yr, priority rotation, screen-level verified-hours reporting.
+- Monthly package: the live $100/mo monthly line is HELD unchanged (under flag to management). Do not promise autopay or monthly credit-card billing — it does not exist yet.
 
 ## Broker economics — exactly how you get paid
-- **15% of collected cash** on every campaign you source. Commission is calculated on money *collected*, never on bookings or invoices. Example: $1,000 annual collected → **$150 earned**. Flagship $2,999 → **$450 earned**.
+- **15% of collected cash** on every campaign you source. Commission is calculated on money *collected*, never on bookings or invoices. Example: $1,000 first-year collected → **$150 earned**. Standard $2,999 collected → **$450 earned**.
 - Your rate is snapshotted onto each campaign when it's created — a later rate change never rewrites an old campaign.
 - Your Broker Desk shows three numbers, always current: **Earned** (on collected cash), **Scheduled** (payouts created/approved, in flight), **Paid**. Owed to you = Earned − Paid − Scheduled. No double-pay is possible; the system blocks over-payment.
 - Payouts are manual at launch (Cash App or bank, per the payment details on your broker profile) and recorded in your Desk with a payment reference. Status flow: due → approved → paid. You get a notification at every step, and an email when a payout is marked paid.
@@ -38,3 +39,7 @@ Other brokers' books, CoastLoop's margins or creative costs, portfolio/internal 
 - *Can I bring a venue (screen host) instead of an advertiser?* Yes — tell us; hosts are a separate track (venues are paid for verified uptime, never charged). Host deals are credited to your book as sourced relationships; host terms are set by CoastLoop directly.
 - *Who makes the ad?* CoastLoop, always. Clients approve before launch; they don't supply finished ads.
 - *What does the advertiser actually get shown as proof?* Verified plays recorded by screen, reported monthly (screen-level verified-hours detail on the add-on/flagship).
+
+
+---
+*CoastLoop Media, a trade name of Lux Builders, LLC · Grand Strand, SC*
