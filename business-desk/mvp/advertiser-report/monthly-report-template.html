@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CoastLoop — Monthly Verified Delivery Report</title>
+<style>
+body{margin:0;background:#0a0a0a;color:#f2ead8;font-family:Georgia,'Times New Roman',serif}
+.wrap{max-width:780px;margin:0 auto;padding:44px 28px}
+.eyebrow{letter-spacing:.35em;color:#c9a227;font-size:12px;text-transform:uppercase}
+h1{font-size:34px;font-weight:500;margin:12px 0 4px}
+h2{color:#c9a227;font-size:19px;font-weight:500;margin:30px 0 8px}
+p,li,td,th{font-size:16px;line-height:1.55;color:#e8dfc8}
+.gold{color:#c9a227}.small{font-size:13px;color:#9a8f74;letter-spacing:.06em}
+.grid{display:flex;gap:14px;flex-wrap:wrap;margin:16px 0}
+.card{border:1px solid #3a3220;background:#111;padding:16px 20px;min-width:150px}
+.num{font-size:30px;color:#c9a227}
+table{width:100%;border-collapse:collapse}
+td,th{border-bottom:1px solid #2c2617;padding:8px 6px;text-align:left}
+.sample{border:1px dashed #c9a227;color:#c9a227;padding:8px 12px;font-size:13px;letter-spacing:.1em;text-align:center}
+</style></head><body><div class="wrap">
+<!-- TEMPLATE: {{business_name}} {{period_label}} {{campaign_name}} {{total_plays}} {{total_hours}} {{screen_rows}} {{generated_date}} -->
+<div class="eyebrow">CoastLoop · Monthly Verified Delivery Report</div>
+<h1>{{business_name}}</h1>
+<p class="small">CAMPAIGN: {{campaign_name}} · PERIOD: {{period_label}} · EVERY PLAY BELOW WAS RECORDED BY THE SCREEN THAT PLAYED IT</p>
+
+<div class="grid">
+<div class="card"><div class="num">{{total_plays}}</div><div>Verified plays</div></div>
+<div class="card"><div class="num">{{total_hours}}</div><div>Verified hours on screen</div></div>
+</div>
+
+<h2>By screen</h2>
+<table>
+<tr><th>Screen</th><th>Plays</th><th>Verified hours</th><th>Last play</th></tr>
+{{screen_rows}}
+</table>
+
+<h2>How to read this report</h2>
+<p>Every play of your ad is recorded by the screen itself and totalled server-side — the same verified-hours ledger CoastLoop uses to pay its venue hosts. Nothing here is estimated, projected, or sampled. If a screen was dark, it recorded nothing, and nothing is what it shows.</p>
+
+<p class="small">REPORT GENERATED {{generated_date}} · CoastLoop Media is a trade name of myprelistingreport.com LLC.</p>
+</div></body></html>

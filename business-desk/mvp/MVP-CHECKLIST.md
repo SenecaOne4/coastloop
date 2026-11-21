@@ -1,4 +1,10 @@
-# Business Desk — MVP-presentable checklist (Nov 20, 2026, Overlord override)
+# Business Desk (LEDGER) — MVP-presentable checklist (Nov 20, 2026, Overlord override)
+
+## Standing procedure (wired in, binding on this desk)
+- **FLOODY IS THE CONSULT (Seneca's order, Nov 21, 2026):** when something this desk is doing does not work, consult the Floody chat (`83cfaa17-9dd2-4441-88d2-d83e1c70fefb`) BEFORE burning more time on it. Failing repeatedly without consulting is itself the execution failure. Applies to delivery-proof work first: if a finished piece's properties don't read as CLASS 1 says they should, the question + evidence goes to the Admiral early — no theory-iterating at the desk. Applies equally to desk tooling/build failures.
+- **Timing law (Overlord, Nov 21):** deadlines at bot speed — deliver in minutes or name the blocker in minutes.
+- **Working-tool rule (Seneca, Nov 21):** when a working tool already exists on the machine, use it; extend what works before proving what might.
+- **Watch doctrine (Nov 21):** LEDGER is the named watch for hero segment 3 + finish/delivery; delivery proof = segments joined via finish script + Real-ESRGAN x4plus upscale path + 3840×2160 finish + real file/size/frames move (CLASS 1 facts).
 
 ## Phase 2 — Broker Desk
 - [x] Broker kit (this folder, broker-kit/): offer, economics, Desk journey, never-visible list, talk track, FAQ — MVP-PRESENTABLE (draft-watermarked pending pricing decision)
