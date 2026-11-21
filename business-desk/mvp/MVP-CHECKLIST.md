@@ -25,7 +25,7 @@
 - [x] Kits UN-WATERMARKED; decided terms set in Broker Kit + Venue Kit + both one-pagers
 - [x] Public price block produced (PUBLIC-PRICE-BLOCK.md) — $1,000 always labelled first-year, $2,999 always on the same surface; NOT yet live on the site (deploy on management's go)
 - [x] Paper reconciled (DECISION section at top of the pricing paper) with 5 one-line flags: monthly HELD at live $100/mo; flagship composition collision (re-base before quoting); add-on HELD; host pay HELD; velvet-carpet bound unstated
-- [x] Interim legal line applied everywhere under this desk: "CoastLoop Media, a trade name of Lux Builders, LLC." (both kits, both one-pagers, admin prototype, price block)
+- [x] Interim legal line applied everywhere under this desk — CORRECTED Nov 20, 19:36 (Lux umbrella reversed): "CoastLoop Media is a trade name of myprelistingreport.com LLC." (both kits, both one-pagers, admin prototype, price block both versions; the Lux line applied at 19:37 was superseded and fully replaced)
 
 ## Still standing (override confirms)
 - Payment rail: Seneca's decision — untouched (Cash App remains the rail; Stripe merchant name unchanged)

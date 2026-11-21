@@ -8,7 +8,7 @@
 > Included: we create your 15-second ad to the CoastLoop standard, you approve it before it plays, standard rotation on Grand Strand screens, every play recorded by screen, monthly verified-plays report, and your Brand Library retained.
 > No hardware. No additional equipment. Payment by Cash App — your campaign activates when payment is confirmed.
 >
-> CoastLoop Media, a trade name of Lux Builders, LLC.
+> CoastLoop Media is a trade name of myprelistingreport.com LLC.
 
 ## HTML version (house style, drop-in)
 
@@ -25,7 +25,7 @@
     <li>Brand Library retained</li>
   </ul>
   <p>No hardware. No additional equipment. Payment by Cash App — your campaign activates when payment is confirmed.</p>
-  <p class="cl-legal">CoastLoop Media, a trade name of Lux Builders, LLC.</p>
+  <p class="cl-legal">CoastLoop Media is a trade name of myprelistingreport.com LLC.</p>
 </section>
 ```
 

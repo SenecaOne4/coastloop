@@ -40,4 +40,4 @@ Keep the screen on during agreed hours, don't cover or move it without telling u
 
 
 ---
-*CoastLoop Media, a trade name of Lux Builders, LLC · Grand Strand, SC*
+*CoastLoop Media is a trade name of myprelistingreport.com LLC · Grand Strand, SC*

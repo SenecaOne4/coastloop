@@ -23,7 +23,7 @@
 4. **Host pay:** Founding Host $300 / Standard Host $200 per screen/yr (arrears, ≥8 verified hrs/day) is HELD as proposed under the general Structure A approval, not separately spoken to.
 5. **Velvet-carpet bound:** the decision names a cohort but states no seat cap or closing date (the proposal's 10-seat / Mar 1, 2027 bound and the founding renewal lock do not carry over unless the Overlord says so).
 
-**Interim legal line (binding, same date):** until Coast Atlantic Holdings, LLC exists, the entity line in all CoastLoop materials under this desk reads exactly: **"CoastLoop Media, a trade name of Lux Builders, LLC."** Applied to both kits, both one-pagers, the admin prototype, and the public price block. Stripe merchant name unchanged; Cash App remains the rail; nothing live moves.
+**Interim legal line (binding, same date; CORRECTED 19:36 EST — the Lux umbrella was REVERSED by Seneca via the Overlord):** the entity line in all CoastLoop materials under this desk reads exactly: **"CoastLoop Media is a trade name of myprelistingreport.com LLC."** Rationale: the spare entity itself carries the target name as a trade name for $0 (SC has no DBA filing for LLCs); a $110 rename converts it to the legal name when cash lands. The earlier Lux Builders, LLC line (applied 19:37, superseded minutes later) has been replaced in both kits, both one-pagers, the admin prototype, and the public price block (both versions). Stripe merchant name unchanged; Cash App remains the rail; nothing live moves.
 
 ---
 

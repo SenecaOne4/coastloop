@@ -42,4 +42,4 @@ Other brokers' books, CoastLoop's margins or creative costs, portfolio/internal 
 
 
 ---
-*CoastLoop Media, a trade name of Lux Builders, LLC · Grand Strand, SC*
+*CoastLoop Media is a trade name of myprelistingreport.com LLC · Grand Strand, SC*
